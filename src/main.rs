@@ -1,6 +1,8 @@
 use std::{env, sync::LazyLock};
 
 mod api;
+// TODO research why we need it here
+mod models;
 
 use actix_web::{
     App, HttpServer,
