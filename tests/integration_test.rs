@@ -1,18 +1,37 @@
+use std::sync::Arc;
+
 use actix_web::{
     App,
     http::{StatusCode, header::ContentType},
     middleware::Logger,
-    test,
+    test, web,
 };
 
 use sqlx::SqlitePool;
 // TODO is it appropriate way?
-use wallabag_rs::api::entries;
+use wallabag_rs::{
+    api::{app_state_init, entries},
+    storage::repository::{EntryRepository, SqliteEntryRepository, SqliteTagRepository},
+};
 
-#[actix_web::test]
-async fn get_entries() {
+// TODO should be executed once before tests
+fn init() {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("trace"));
-    let app = test::init_service(App::new().wrap(Logger::default()).service(entries)).await;
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn get_entries(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(entries),
+    )
+    .await;
 
     let req = test::TestRequest::default()
         .uri("/api/entries")
@@ -24,7 +43,7 @@ async fn get_entries() {
 
 #[sqlx::test(migrations = "./migrations", fixtures("entries"))]
 async fn get_entries_from_db(pool: SqlitePool) -> sqlx::Result<()> {
-    let row: (String,) = sqlx::query_as("SELECT title from entries")
+    let row: (String,) = sqlx::query_as("SELECT * from entries")
         .fetch_one(&pool)
         .await?;
 

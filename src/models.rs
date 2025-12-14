@@ -3,62 +3,64 @@ use serde::Serialize;
 use serde_with::{BoolFromInt, serde_as};
 use url::Url;
 
+// TODO investigate the good default traits to derive
 #[serde_as]
-#[derive(Serialize, sqlx::FromRow)]
+#[derive(Serialize)]
 pub struct Entry {
-    id: i32,
-    url: Url,
-    hashed_url: Option<String>,
-    given_url: Option<Url>,
-    hashed_given_url: Option<String>,
-    title: String,
-    content: String,
+    pub id: i32,
+    pub url: Url,
+    pub hashed_url: Option<String>,
+    pub given_url: Option<Url>,
+    pub hashed_given_url: Option<String>,
+    pub title: String,
+    pub content: String,
     #[serde_as(as = "BoolFromInt")]
-    is_archived: bool,
-    archived_at: Option<DateTime<Utc>>,
+    pub is_archived: bool,
+    pub archived_at: Option<DateTime<Utc>>,
     #[serde_as(as = "BoolFromInt")]
-    is_starred: bool,
-    starred_at: Option<DateTime<Utc>>,
-    tags: Vec<Tag>,
-    created_at: DateTime<Utc>,
-    update_at: DateTime<Utc>,
-    annotations: Option<Vec<Annotation>>,
-    mimetype: Option<String>,
-    language: Option<String>,
-    reading_time: i32,
-    domain_name: String,
-    preview_picture: Option<String>,
-    origin_url: Option<Url>,
-    published_at: Option<DateTime<Utc>>,
-    published_by: Option<String>,
-    is_public: Option<bool>,
-    uid: Option<String>,
+    pub is_starred: bool,
+    pub starred_at: Option<DateTime<Utc>>,
+    pub tags: Vec<Tag>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub annotations: Option<Vec<Annotation>>,
+    pub mimetype: Option<String>,
+    pub language: Option<String>,
+    pub reading_time: i32,
+    pub domain_name: String,
+    pub preview_picture: Option<String>,
+    pub origin_url: Option<Url>,
+    pub published_at: Option<DateTime<Utc>>,
+    pub published_by: Option<String>,
+    pub is_public: Option<bool>,
+    pub uid: Option<String>,
 }
 
-#[derive(sqlx::FromRow, Serialize)]
+#[derive(Serialize)]
 pub struct Annotation {
-    id: i32,
-    annotator_schema_version: String,
-    text: String,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    quote: String,
-    ranges: Vec<Range>,
+    pub id: i32,
+    pub annotator_schema_version: String,
+    pub text: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub quote: String,
+    pub ranges: Vec<Range>,
 }
 
-#[derive(sqlx::FromRow, Serialize)]
+#[derive(Serialize)]
 pub struct Range {
-    start: String,
-    end: String,
+    pub id: i32,
+    pub start: String,
+    pub end: String,
     #[serde(rename(serialize = "startOffset"))]
-    start_offset: i64,
+    pub start_offset: i64,
     #[serde(rename(serialize = "endOffset"))]
-    end_offset: i64,
+    pub end_offset: i64,
 }
 
-#[derive(sqlx::FromRow, Serialize)]
+#[derive(Serialize)]
 pub struct Tag {
-    id: i32,
-    label: String,
-    slug: String,
+    pub id: i32,
+    pub label: String,
+    pub slug: String,
 }
