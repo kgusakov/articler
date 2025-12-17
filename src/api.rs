@@ -1,12 +1,8 @@
-use std::{
-    env, i32,
-    sync::{Arc, LazyLock},
-};
-
 use crate::{
     models::Entry,
     storage::repository::{
-        EntryRepository, SqliteEntryRepository, SqliteTagRepository, TagRepository,
+        AllEntriesParams, EntryRepository, SqliteEntryRepository, SqliteTagRepository,
+        TagRepository,
     },
 };
 use actix_web::{
@@ -17,7 +13,12 @@ use actix_web::{
     web::{self, Json, Path},
 };
 use serde::{Deserialize, Serialize};
+use serde_with::BoolFromInt;
+use serde_with::StringWithSeparator;
+use serde_with::formats::CommaSeparator;
+use serde_with::serde_as;
 use sqlx::{Pool, Sqlite};
+use std::sync::Arc;
 use url::Url;
 
 pub struct AppState {
@@ -55,25 +56,29 @@ pub async fn entries(
     // TODO implement all needed request filters and etc
     let entries = data
         .entry_repository
-        .find_all(i32::MAX, 0)
+        .find_all(AllEntriesParams {
+            ..Default::default()
+        })
         .await
         .map_err(ErrorInternalServerError)?;
 
     let url = Url::parse("https://example.com").map_err(ErrorInternalServerError)?;
 
-    Ok(web::Json(Entries {
-        page: 1,
-        limit: 30,
-        pages: 1,
-        total: entries.len(),
-        embedded: Embedded { items: entries },
-        links: Links {
-            _self: Link { href: url.clone() },
-            first: Link { href: url.clone() },
-            last: Link { href: url.clone() },
-            next: Link { href: url.clone() },
-        },
-    }))
+    todo!();
+
+    // Ok(web::Json(Entries {
+    //     page: 1,
+    //     limit: 30,
+    //     pages: 1,
+    //     total: entries.len(),
+    //     embedded: Embedded { items: entries },
+    //     links: Links {
+    //         _self: Link { href: url.clone() },
+    //         first: Link { href: url.clone() },
+    //         last: Link { href: url.clone() },
+    //         next: Link { href: url.clone() },
+    //     },
+    // }))
 }
 
 #[derive(Serialize)]
@@ -91,23 +96,50 @@ struct Entries {
     links: Links,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug, PartialEq)]
+enum FindSortEnum {
+    #[serde(rename(deserialize = "created"))]
+    Created,
+    #[serde(rename(deserialize = "updated"))]
+    Updated,
+    #[serde(rename(deserialize = "archived"))]
+    Archived,
+}
+
+#[derive(Deserialize, Debug, PartialEq)]
+enum FindSortOrder {
+    #[serde(rename(deserialize = "asc"))]
+    Asc,
+    #[serde(rename(deserialize = "desc"))]
+    Desc,
+}
+
+#[derive(Deserialize, Debug, PartialEq)]
+enum Detail {
+    #[serde(rename(deserialize = "metadata"))]
+    Metadata,
+    #[serde(rename(deserialize = "full"))]
+    Full,
+}
+
+#[serde_as]
+#[derive(Deserialize, Debug, PartialEq)]
 struct EntriesRequest {
-    archive: Option<i32>,
-    starred: Option<i32>,
-    // TODO: must be a enum of created, updated, archived
-    sort: Option<String>,
-    // TODO: must be a enum of asc, desc
-    order: Option<String>,
+    #[serde_as(as = "Option<BoolFromInt>")]
+    archive: Option<bool>,
+    #[serde_as(as = "Option<BoolFromInt>")]
+    starred: Option<bool>,
+    sort: Option<FindSortEnum>,
+    order: Option<FindSortOrder>,
     page: Option<i32>,
-    #[serde(rename(serialize = "perPage"))]
+    #[serde(rename(deserialize = "perPage"))]
     per_page: Option<i32>,
-    // TODO: must be an array of comma separated strings
-    tags: Option<String>,
-    since: Option<i32>,
-    public: Option<i32>,
-    //TODO: must be an enum of metadata, full
-    detail: Option<String>,
+    #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
+    tags: Option<Vec<String>>,
+    since: Option<u32>,
+    #[serde_as(as = "Option<BoolFromInt>")]
+    public: Option<bool>,
+    detail: Option<Detail>,
     domain_name: Option<String>,
 }
 
@@ -126,4 +158,44 @@ struct Links {
 #[derive(Serialize)]
 struct Link {
     href: Url,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::api::{Detail, EntriesRequest, FindSortEnum, FindSortOrder};
+
+    #[test]
+    fn test() {
+        assert_eq!(
+            EntriesRequest {
+                archive: Some(true),
+                starred: Some(false),
+                sort: Some(FindSortEnum::Created),
+                order: Some(FindSortOrder::Asc),
+                page: Some(0),
+                per_page: Some(10),
+                tags: Some(vec!["api".to_string(), "rest".to_string()]),
+                since: Some(0),
+                public: Some(true),
+                detail: Some(Detail::Full),
+                domain_name: Some("example.com".to_string())
+            },
+            serde_json::from_str::<EntriesRequest>(
+                r#"{
+                    "archive":1,
+                    "starred":0,
+                    "sort":"created",
+                    "order":"asc",
+                    "page":0,
+                    "perPage":10,
+                    "tags":"api,rest",
+                    "since":0,
+                    "public":1,
+                    "detail":"full",
+                    "domain_name":"example.com"
+                    }"#,
+            )
+            .unwrap()
+        );
+    }
 }
