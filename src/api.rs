@@ -1,8 +1,8 @@
 use crate::{
-    models::Entry,
+    models::{Entry, Tag},
     storage::repository::{
-        AllEntriesParams, EntryRepository, SqliteEntryRepository, SqliteTagRepository,
-        TagRepository,
+        AllEntriesParams, EntryRepository, EntryRow, SqliteEntryRepository, SqliteTagRepository,
+        TagRepository, TagRow,
     },
 };
 use actix_web::{
@@ -12,14 +12,16 @@ use actix_web::{
     get,
     web::{self, Json, Path},
 };
+use anyhow::anyhow;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_with::BoolFromInt;
 use serde_with::StringWithSeparator;
 use serde_with::formats::CommaSeparator;
 use serde_with::serde_as;
 use sqlx::{Pool, Sqlite};
-use std::sync::Arc;
-use url::Url;
+use std::{error::Error, str::FromStr, sync::Arc};
+use url::{ParseError, Url};
 
 pub struct AppState {
     tag_repository: Arc<dyn TagRepository>,
@@ -62,23 +64,28 @@ pub async fn entries(
         .await
         .map_err(ErrorInternalServerError)?;
 
-    let url = Url::parse("https://example.com").map_err(ErrorInternalServerError)?;
+    let mut ents = vec![];
 
-    todo!();
+    for (e, tags) in entries {
+        let mapped_tags: Vec<Tag> = tags.into_iter().map(|tr| tr.into()).collect();
+        ents.push(Entry::try_from((e, mapped_tags)).map_err(ErrorInternalServerError)?);
+    }
 
-    // Ok(web::Json(Entries {
-    //     page: 1,
-    //     limit: 30,
-    //     pages: 1,
-    //     total: entries.len(),
-    //     embedded: Embedded { items: entries },
-    //     links: Links {
-    //         _self: Link { href: url.clone() },
-    //         first: Link { href: url.clone() },
-    //         last: Link { href: url.clone() },
-    //         next: Link { href: url.clone() },
-    //     },
-    // }))
+    let url = Url::from_str("http://example.com").unwrap();
+
+    Ok(web::Json(Entries {
+        page: 1,
+        limit: 30,
+        pages: 1,
+        total: ents.len(),
+        embedded: Embedded { items: ents },
+        links: Links {
+            _self: Link { href: url.clone() },
+            first: Link { href: url.clone() },
+            last: Link { href: url.clone() },
+            next: Link { href: url.clone() },
+        },
+    }))
 }
 
 #[derive(Serialize)]
@@ -94,6 +101,71 @@ struct Entries {
     total: usize,
     embedded: Embedded,
     links: Links,
+}
+
+fn try_parse_url(s: Option<String>) -> Result<Option<Url>, ParseError> {
+    s.map(|u| Url::parse(&u)).transpose()
+}
+
+fn try_parse_timestamp_opt(s: Option<i64>) -> anyhow::Result<Option<DateTime<Utc>>> {
+    match s {
+        Some(t) => match DateTime::from_timestamp_secs(t) {
+            Some(r) => Ok(Some(r)),
+            None => Err(anyhow!("Can't parse timestamp")),
+        },
+        None => Ok(None),
+    }
+}
+
+fn try_parse_timestamp(s: i64) -> anyhow::Result<DateTime<Utc>> {
+    match DateTime::from_timestamp_secs(s) {
+        Some(r) => Ok(r),
+        None => Err(anyhow!("Can't parse timestamp")),
+    }
+}
+
+impl From<TagRow> for Tag {
+    fn from(value: TagRow) -> Self {
+        Self {
+            id: value.id,
+            label: value.label,
+            slug: value.slug,
+        }
+    }
+}
+
+impl TryFrom<(EntryRow, Vec<Tag>)> for Entry {
+    type Error = anyhow::Error;
+
+    fn try_from((e, tags): (EntryRow, Vec<Tag>)) -> Result<Self, Self::Error> {
+        Ok(Entry {
+            id: e.id,
+            url: Url::parse(&e.url)?,
+            hashed_url: e.hashed_url,
+            given_url: try_parse_url(e.given_url)?,
+            hashed_given_url: e.hashed_given_url,
+            title: e.title,
+            content: e.content,
+            is_archived: e.is_archived,
+            archived_at: try_parse_timestamp_opt(e.archived_at)?,
+            is_starred: e.is_starred,
+            starred_at: try_parse_timestamp_opt(e.starred_at)?,
+            tags: tags,
+            created_at: try_parse_timestamp(e.created_at)?,
+            updated_at: try_parse_timestamp(e.updated_at)?,
+            annotations: None,
+            mimetype: e.mimetype,
+            language: e.language,
+            reading_time: e.reading_time,
+            domain_name: e.domain_name,
+            preview_picture: try_parse_url(e.preview_picture)?,
+            origin_url: try_parse_url(e.origin_url)?,
+            published_at: try_parse_timestamp_opt(e.published_at)?,
+            published_by: e.published_by,
+            is_public: e.is_public,
+            uid: e.uid,
+        })
+    }
 }
 
 #[derive(Deserialize, Debug, PartialEq)]

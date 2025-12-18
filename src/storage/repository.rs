@@ -2,10 +2,9 @@ use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use crate::{
     api::entries,
-    models::{Annotation, Entry, Range, Tag},
+    models::{Entry, Range, Tag},
 };
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use indexmap::{
     IndexMap,
     map::{OccupiedEntry, VacantEntry},
@@ -15,11 +14,12 @@ use sqlx::{
     prelude::*,
     sqlite::{SqliteRow, SqliteTypeInfo, SqliteValueRef},
 };
-use url::Url;
 
 const ENTRIES_TABLE: &str = "entries";
 const TAGS_TABLE: &str = "tags";
 const ENTRIES_TAG_TABLE: &str = "entry_tags";
+const ANNOTATIONS_TABLE: &str = "annotations";
+const ANNOTATION_RANGES_TABLE: &str = "annotation_ranges";
 
 pub struct TagRow {
     pub id: i32,
@@ -66,36 +66,13 @@ pub trait TagRepository: Send + Sync {}
 #[async_trait]
 impl TagRepository for SqliteTagRepository {}
 
-struct DbUrl(Url);
-
-impl Type<Sqlite> for DbUrl {
-    fn type_info() -> SqliteTypeInfo {
-        <String as Type<Sqlite>>::type_info()
-    }
-}
-
-impl<'r> Decode<'r, Sqlite> for DbUrl {
-    fn decode(value: SqliteValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
-        let text = <String as Decode<Sqlite>>::decode(value)?;
-        Url::parse(&text).map_err(Into::into).map(DbUrl)
-    }
-}
-
-impl Into<Url> for DbUrl {
-    fn into(self) -> Url {
-        self.0
-    }
-}
-
 impl<'r> FromRow<'r, SqliteRow> for EntryRow {
     fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, SqlxError> {
         Ok(EntryRow {
             id: row.try_get("id")?,
-            url: row.try_get::<DbUrl, _>("url")?.into(),
+            url: row.try_get("url")?,
             hashed_url: row.try_get("hashed_url")?,
-            given_url: row
-                .try_get::<Option<DbUrl>, _>("given_url")
-                .map(|u| u.map(|_u| Into::<Url>::into(_u)))?,
+            given_url: row.try_get("given_url")?,
             hashed_given_url: row.try_get("hashed_given_url")?,
             title: row.try_get("title")?,
             content: row.try_get("content")?,
@@ -109,12 +86,8 @@ impl<'r> FromRow<'r, SqliteRow> for EntryRow {
             language: row.try_get("language")?,
             reading_time: row.try_get("reading_time")?,
             domain_name: row.try_get("domain_name")?,
-            preview_picture: row
-                .try_get::<Option<DbUrl>, _>("preview_picture")
-                .map(|u| u.map(|_u| Into::<Url>::into(_u)))?,
-            origin_url: row
-                .try_get::<Option<DbUrl>, _>("origin_url")
-                .map(|u| u.map(|_u| Into::<Url>::into(_u)))?,
+            preview_picture: row.try_get("preview_picture")?,
+            origin_url: row.try_get("origin_url")?,
             published_at: row.try_get("published_at")?,
             published_by: row.try_get("published_by")?,
             is_public: row.try_get("is_public")?,
@@ -123,16 +96,24 @@ impl<'r> FromRow<'r, SqliteRow> for EntryRow {
     }
 }
 
-impl Annotation {
+pub struct AnnotationRow {
+    pub id: i32,
+    pub annotator_schema_version: String,
+    pub text: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub quote: String,
+}
+
+impl AnnotationRow {
     pub fn from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Self, SqlxError> {
-        Ok(Annotation {
+        Ok(AnnotationRow {
             id: row.try_get("id")?,
             annotator_schema_version: row.try_get("annotator_schema_version")?,
             text: row.try_get("text")?,
             created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
             quote: row.try_get("quote")?,
-            ranges: vec![],
         })
     }
 }
@@ -176,34 +157,28 @@ pub struct CreateEntry {
 #[derive(Debug)]
 pub struct EntryRow {
     pub id: i32,
-    pub url: Url,
+    pub url: String,
     pub hashed_url: Option<String>,
-    pub given_url: Option<Url>,
+    pub given_url: Option<String>,
     pub hashed_given_url: Option<String>,
     pub title: String,
     pub content: String,
     pub is_archived: bool,
-    pub archived_at: Option<DateTime<Utc>>,
+    pub archived_at: Option<i64>,
     pub is_starred: bool,
-    pub starred_at: Option<DateTime<Utc>>,
-    pub created_at: Option<DateTime<Utc>>,
-    pub updated_at: Option<DateTime<Utc>>,
+    pub starred_at: Option<i64>,
+    pub created_at: i64,
+    pub updated_at: i64,
     pub mimetype: Option<String>,
     pub language: Option<String>,
     pub reading_time: i32,
     pub domain_name: String,
-    pub preview_picture: Option<Url>,
-    pub origin_url: Option<Url>,
-    pub published_at: Option<DateTime<Utc>>,
+    pub preview_picture: Option<String>,
+    pub origin_url: Option<String>,
+    pub published_at: Option<i64>,
     pub published_by: Option<String>,
     pub is_public: Option<bool>,
     pub uid: Option<String>,
-}
-
-pub struct EntryRowWithRelations {
-    pub entry: EntryRow,
-    pub tags: Vec<TagRow>,
-    pub annotations: Vec<Annotation>,
 }
 
 #[derive(Debug)]
@@ -265,7 +240,7 @@ pub struct AllEntriesParams {
     pub order: Option<SortOrder>,
     pub page: Option<i32>,
     pub tags: Option<Vec<String>>,
-    pub since: Option<DateTime<Utc>>,
+    pub since: Option<i64>,
     pub public: Option<bool>,
     pub detail: Option<Detail>,
     pub domain_name: Option<String>,
@@ -276,7 +251,7 @@ pub trait EntryRepository: Send + Sync {
     async fn find_all(
         &self,
         params: AllEntriesParams,
-    ) -> Result<Vec<EntryRowWithRelations>, SqlxError>;
+    ) -> Result<Vec<(EntryRow, Vec<TagRow>)>, SqlxError>;
 }
 
 #[derive(Clone)]
@@ -296,12 +271,12 @@ impl EntryRepository for SqliteEntryRepository {
     async fn find_all(
         &self,
         params: AllEntriesParams,
-    ) -> Result<Vec<EntryRowWithRelations>, SqlxError> {
+    ) -> Result<Vec<(EntryRow, Vec<TagRow>)>, SqlxError> {
         let mut q_builder = QueryBuilder::new(format!(
             r#"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {} as e
             LEFT JOIN {} et on et.entry_id = e.id
             LEFT JOIN {} t on t.id = et.tag_id"#,
-            ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE
+            ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE,
         ));
         q_builder.push(" WHERE 1=1");
 
@@ -324,7 +299,7 @@ impl EntryRepository for SqliteEntryRepository {
 
         if let Some(d) = params.since {
             w_separated.push(" AND update_at = ?");
-            w_separated.push_bind(d.timestamp());
+            w_separated.push_bind(d);
         }
 
         if let Some(column) = params.sort {
@@ -375,11 +350,7 @@ impl EntryRepository for SqliteEntryRepository {
                 });
             }
 
-            entrs_with_relations.push(EntryRowWithRelations {
-                entry: EntryRow::from_row(e.1[0])?,
-                tags: tags,
-                annotations: vec![],
-            });
+            entrs_with_relations.push((EntryRow::from_row(e.1[0])?, tags));
         }
 
         Ok(entrs_with_relations)
@@ -415,13 +386,13 @@ mod tests {
             .unwrap();
         assert_eq!(1, entries.len());
         assert_eq!(
-            Url::parse("https://example.com/article/rust-web-backend/url").unwrap(),
-            entries[0].entry.url
+            "https://example.com/article/rust-web-backend/url",
+            entries[0].0.url
         );
         assert_eq!(
             vec!["rust", "web-development", "backend", "tutorial"],
             entries[0]
-                .tags
+                .1
                 .iter()
                 .map(|v| v.slug.clone())
                 .collect::<Vec<String>>()

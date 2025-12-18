@@ -28,7 +28,7 @@ pub struct Entry {
     pub language: Option<String>,
     pub reading_time: i32,
     pub domain_name: String,
-    pub preview_picture: Option<String>,
+    pub preview_picture: Option<Url>,
     pub origin_url: Option<Url>,
     pub published_at: Option<DateTime<Utc>>,
     pub published_by: Option<String>,
