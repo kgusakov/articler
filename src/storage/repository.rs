@@ -1,18 +1,12 @@
-use std::{collections::HashMap, fmt::Display, sync::Arc};
+use std::{fmt::Display, sync::Arc};
 
-use crate::{
-    api::entries,
-    models::{Entry, Range, Tag},
-};
+use crate::models::Range;
 use async_trait::async_trait;
-use indexmap::{
-    IndexMap,
-    map::{OccupiedEntry, VacantEntry},
-};
+use indexmap::IndexMap;
 use sqlx::{
-    Decode, Error as SqlxError, QueryBuilder, Row, Sqlite, SqlitePool,
+    Error as SqlxError, QueryBuilder, Row, SqlitePool,
     prelude::*,
-    sqlite::{SqliteRow, SqliteTypeInfo, SqliteValueRef},
+    sqlite::SqliteRow,
 };
 
 const ENTRIES_TABLE: &str = "entries";

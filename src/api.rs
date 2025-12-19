@@ -8,7 +8,7 @@ use crate::{
 use actix_web::{
     App, HttpServer,
     dev::Server,
-    error::{self, ErrorInternalServerError},
+    error::ErrorInternalServerError,
     get,
     web::{self, Json, Path},
 };
@@ -20,7 +20,7 @@ use serde_with::StringWithSeparator;
 use serde_with::formats::CommaSeparator;
 use serde_with::serde_as;
 use sqlx::{Pool, Sqlite};
-use std::{error::Error, str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc};
 use url::{ParseError, Url};
 
 pub struct AppState {
