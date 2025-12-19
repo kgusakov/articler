@@ -79,7 +79,7 @@ pub async fn entries(
         pages: 1,
         total: ents.len(),
         embedded: Embedded { items: ents },
-        links: Links {
+        _links: Links {
             _self: Link { href: url.clone() },
             first: Link { href: url.clone() },
             last: Link { href: url.clone() },
@@ -94,13 +94,13 @@ struct Embedded {
 }
 
 #[derive(Serialize)]
-struct Entries {
+pub struct Entries {
     page: i32,
     limit: i32,
     pages: i32,
     total: usize,
     embedded: Embedded,
-    links: Links,
+    _links: Links,
 }
 
 fn try_parse_url(s: Option<String>) -> Result<Option<Url>, ParseError> {
@@ -196,7 +196,7 @@ enum Detail {
 
 #[serde_as]
 #[derive(Deserialize, Debug, PartialEq)]
-struct EntriesRequest {
+pub struct EntriesRequest {
     #[serde_as(as = "Option<BoolFromInt>")]
     archive: Option<bool>,
     #[serde_as(as = "Option<BoolFromInt>")]
@@ -217,13 +217,10 @@ struct EntriesRequest {
 
 #[derive(Serialize)]
 struct Links {
-    #[serde(flatten)]
+    #[serde(rename(serialize = "self"))]
     _self: Link,
-    #[serde(flatten)]
     first: Link,
-    #[serde(flatten)]
     last: Link,
-    #[serde(flatten)]
     next: Link,
 }
 
