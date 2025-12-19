@@ -733,6 +733,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "float-cmp"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b09cf3155332e944990140d967ff5eceb70df778b34f77d8075db46e4704e6d8"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "flume"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1752,6 +1761,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-json-assert"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1868f55385c1cbda8c62aec205ab5874536f3492e11456e04265509848fe982"
+dependencies = [
+ "float-cmp",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2407,6 +2427,7 @@ dependencies = [
  "indexmap 2.12.1",
  "rand 0.9.2",
  "serde",
+ "serde-json-assert",
  "serde_json",
  "serde_with",
  "sqlx",

@@ -24,45 +24,42 @@ INSERT INTO entries (
     uid
 ) VALUES (
     1,
-    'https://example.com/article/rust-web-backend/url',
-    'a3f5e8d9c2b1a0f4e7d6c5b4a3f2e1d0',
-    'https://example.com/article/rust-web-backend/given_url',
-    'a3f5e8d9c2b1a0f4e7d6c5b4a3f2e1d0',
-    'Building Web Backends with Rust',
-    'This comprehensive guide covers building modern web backends using Rust, actix-web, and sqlx. Learn about async programming, database integration, and best practices for production-ready applications.',
+    'https://a.com/1',
+    'hash1',
+    'https://a.com/g1',
+    'ghash1',
+    'title1',
+    'content1',
     0,
     NULL,
     1,
-    1702220400,  -- 2024-12-10 15:30:00 UTC
-    1701428400,  -- 2024-12-01 10:00:00 UTC
-    1702220400,  -- 2024-12-10 15:30:00 UTC
+    1702220400,
+    1701428400,
+    1702220400,
     'text/html',
     'en',
     8,
-    'example.com',
-    'https://example.com/images/rust-backend-preview.jpg',
-    'https://example.com/article/rust-web-backend/origin',
-    1701424800,  -- 2024-12-01 09:00:00 UTC
-    'John Doe',
+    'a.com',
+    'https://a.com/pic1.jpg',
+    'https://a.com/o1',
+    1701424800,
+    'author1',
     0,
     NULL
 );
 
--- Insert tags
 INSERT INTO tags (id, label, slug) VALUES
-    (1, 'Rust', 'rust'),
-    (2, 'Web Development', 'web-development'),
-    (3, 'Backend', 'backend'),
-    (4, 'Tutorial', 'tutorial');
+    (1, 'label1', 'slug1'),
+    (2, 'label2', 'slug2'),
+    (3, 'label3', 'slug3'),
+    (4, 'label4', 'slug4');
 
--- Link tags to the entry (many-to-many relationship)
 INSERT INTO entry_tags (entry_id, tag_id) VALUES
-    (1, 1),  -- Rust
-    (1, 2),  -- Web Development
-    (1, 3),  -- Backend
-    (1, 4);  -- Tutorial
+    (1, 1),
+    (1, 2),
+    (1, 3),
+    (1, 4);
 
--- Insert annotations for the entry
 INSERT INTO annotations (
     id,
     entry_id,
@@ -72,23 +69,9 @@ INSERT INTO annotations (
     updated_at,
     quote
 ) VALUES
-    (1,
-     1,
-     'v1.0',
-     'Important section about async/await patterns in Rust',
-     1701787200,  -- 2024-12-05 14:20:00 UTC
-     1701787200,  -- 2024-12-05 14:20:00 UTC
-     'Async programming is a cornerstone of modern web backends'),
-    
-    (2,
-     1,
-     'v1.0',
-     'Great example of sqlx usage with compile-time checked queries',
-     1701855300,  -- 2024-12-06 09:15:00 UTC
-     1701855300,  -- 2024-12-06 09:15:00 UTC
-     'The sqlx library provides compile-time verification of SQL queries');
+    (1, 1, 'v1', 'Note about async', 1701787200, 1701787200, 'Async is key'),
+    (2, 1, 'v1', 'Example of sqlx', 1701855300, 1701855300, 'Sqlx checks queries');
 
--- Insert ranges for the first annotation
 INSERT INTO annotation_ranges (
     annotation_id,
     start,
@@ -96,10 +79,9 @@ INSERT INTO annotation_ranges (
     start_offset,
     end_offset
 ) VALUES
-    (1, '/div[1]/p[3]', '/div[1]/p[3]', 0, 52),
-    (1, '/div[1]/p[4]', '/div[1]/p[4]', 0, 28);
+    (1, '/d[1]/p[3]', '/d[1]/p[3]', 0, 52),
+    (1, '/d[1]/p[4]', '/d[1]/p[4]', 0, 28);
 
--- Insert ranges for the second annotation
 INSERT INTO annotation_ranges (
     annotation_id,
     start,
@@ -107,5 +89,4 @@ INSERT INTO annotation_ranges (
     start_offset,
     end_offset
 ) VALUES
-    (2, '/div[2]/pre[1]', '/div[2]/pre[1]', 0, 65);
-
+    (2, '/d[2]/pre[1]', '/d[2]/pre[1]', 0, 65);
