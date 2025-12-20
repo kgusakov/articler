@@ -2,23 +2,16 @@ use std::sync::{Arc, Once};
 
 use actix_web::{
     App,
-    body::MessageBody,
-    http::{StatusCode, header::ContentType},
     middleware::Logger,
     test,
-    web::{self, Bytes},
+    web::{self},
 };
 
 use serde_json::Value;
 use serde_json_assert::assert_json_eq;
 use sqlx::SqlitePool;
 // TODO is it appropriate way?
-use wallabag_rs::{
-    api::{Entries, EntriesRequest, app_state_init, entries},
-    storage::repository::{
-        AllEntriesParams, EntryRepository, SqliteEntryRepository, SqliteTagRepository,
-    },
-};
+use wallabag_rs::api::{app_state_init, entries};
 
 static INIT: Once = Once::new();
 
