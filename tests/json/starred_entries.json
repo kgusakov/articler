@@ -1,0 +1,133 @@
+{
+    "page": 1,
+    "limit": 30,
+    "pages": 1,
+    "total": 3,
+    "embedded": {
+        "items": [
+            {
+                "id": 3,
+                "url": "https://c.com/3",
+                "hashed_url": "hash3",
+                "given_url": "https://c.com/g3",
+                "hashed_given_url": "ghash3",
+                "title": "title3",
+                "content": "content3",
+                "is_archived": 0,
+                "archived_at": null,
+                "is_starred": 1,
+                "starred_at": "2023-12-06T09:35:00Z",
+                "tags": [
+                    {
+                        "id": 0,
+                        "label": "",
+                        "slug": ""
+                    }
+                ],
+                "created_at": "2023-12-01T11:03:20Z",
+                "updated_at": "2023-12-10T15:03:20Z",
+                "annotations": null,
+                "mimetype": "text/html",
+                "language": "en",
+                "reading_time": 12,
+                "domain_name": "c.com",
+                "preview_picture": "https://c.com/pic3.jpg",
+                "origin_url": "https://c.com/o3",
+                "published_at": "2023-12-01T10:03:20Z",
+                "published_by": "author3",
+                "is_public": false,
+                "uid": null
+            },
+            {
+                "id": 4,
+                "url": "https://d.com/4",
+                "hashed_url": "hash4",
+                "given_url": "https://d.com/g4",
+                "hashed_given_url": "ghash4",
+                "title": "title4",
+                "content": "content4",
+                "is_archived": 1,
+                "archived_at": "2023-12-05T14:41:40Z",
+                "is_starred": 1,
+                "starred_at": "2023-12-06T09:36:40Z",
+                "tags": [
+                    {
+                        "id": 3,
+                        "label": "label3",
+                        "slug": "slug3"
+                    },
+                    {
+                        "id": 4,
+                        "label": "label4",
+                        "slug": "slug4"
+                    }
+                ],
+                "created_at": "2023-12-01T11:05:00Z",
+                "updated_at": "2023-12-10T15:05:00Z",
+                "annotations": null,
+                "mimetype": "text/html",
+                "language": "en",
+                "reading_time": 15,
+                "domain_name": "d.com",
+                "preview_picture": "https://d.com/pic4.jpg",
+                "origin_url": "https://d.com/o4",
+                "published_at": "2023-12-01T10:05:00Z",
+                "published_by": "author4",
+                "is_public": false,
+                "uid": null
+            },
+            {
+                "id": 6,
+                "url": "https://f.com/6",
+                "hashed_url": "hash6",
+                "given_url": "https://f.com/g6",
+                "hashed_given_url": "ghash6",
+                "title": "title6",
+                "content": "content6",
+                "is_archived": 1,
+                "archived_at": "2023-12-05T14:43:20Z",
+                "is_starred": 1,
+                "starred_at": "2023-12-06T09:38:20Z",
+                "tags": [
+                    {
+                        "id": 5,
+                        "label": "label5",
+                        "slug": "slug5"
+                    },
+                    {
+                        "id": 6,
+                        "label": "label6",
+                        "slug": "slug6"
+                    }
+                ],
+                "created_at": "2023-12-01T11:08:20Z",
+                "updated_at": "2023-12-10T15:08:20Z",
+                "annotations": null,
+                "mimetype": "text/html",
+                "language": "en",
+                "reading_time": 20,
+                "domain_name": "f.com",
+                "preview_picture": "https://f.com/pic6.jpg",
+                "origin_url": "https://f.com/o6",
+                "published_at": "2023-12-01T10:08:20Z",
+                "published_by": "author6",
+                "is_public": true,
+                "uid": null
+            }
+        ]
+    },
+    "_links": {
+        "self": {
+            "href": "http://example.com/"
+        },
+        "first": {
+            "href": "http://example.com/"
+        },
+        "last": {
+            "href": "http://example.com/"
+        },
+        "next": {
+            "href": "http://example.com/"
+        }
+    }
+}
