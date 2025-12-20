@@ -178,12 +178,24 @@ enum FindSortEnum {
     Archived,
 }
 
+impl Default for FindSortEnum {
+    fn default() -> Self {
+        FindSortEnum::Created
+    }
+}
+
 #[derive(Deserialize, Debug, PartialEq)]
 enum FindSortOrder {
     #[serde(rename(deserialize = "asc"))]
     Asc,
     #[serde(rename(deserialize = "desc"))]
     Desc,
+}
+
+impl Default for FindSortOrder {
+    fn default() -> Self {
+        FindSortOrder::Desc
+    }
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -194,6 +206,20 @@ enum Detail {
     Full,
 }
 
+impl Default for Detail {
+    fn default() -> Self {
+        Detail::Full
+    }
+}
+
+fn default_page() -> i32 {
+    1
+}
+
+fn default_per_page() -> i32 {
+    30
+}
+
 #[serde_as]
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct EntriesRequest {
@@ -201,17 +227,23 @@ pub struct EntriesRequest {
     archive: Option<bool>,
     #[serde_as(as = "Option<BoolFromInt>")]
     starred: Option<bool>,
-    sort: Option<FindSortEnum>,
-    order: Option<FindSortOrder>,
-    page: Option<i32>,
+    #[serde(default)]
+    sort: FindSortEnum,
+    #[serde(default)]
+    order: FindSortOrder,
+    #[serde(default = "default_page")]
+    page: i32,
     #[serde(rename(deserialize = "perPage"))]
-    per_page: Option<i32>,
+    #[serde(default = "default_per_page")]
+    per_page: i32,
     #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
     tags: Option<Vec<String>>,
-    since: Option<u32>,
+    #[serde(default)]
+    since: u32,
     #[serde_as(as = "Option<BoolFromInt>")]
     public: Option<bool>,
-    detail: Option<Detail>,
+    #[serde(default)]
+    detail: Detail,
     domain_name: Option<String>,
 }
 
@@ -239,14 +271,14 @@ mod tests {
             EntriesRequest {
                 archive: Some(true),
                 starred: Some(false),
-                sort: Some(FindSortEnum::Created),
-                order: Some(FindSortOrder::Asc),
-                page: Some(0),
-                per_page: Some(10),
+                sort: FindSortEnum::Created,
+                order: FindSortOrder::Asc,
+                page: 0,
+                per_page: 10,
                 tags: Some(vec!["api".to_string(), "rest".to_string()]),
-                since: Some(0),
+                since: 0,
                 public: Some(true),
-                detail: Some(Detail::Full),
+                detail: Detail::Full,
                 domain_name: Some("example.com".to_string())
             },
             serde_json::from_str::<EntriesRequest>(

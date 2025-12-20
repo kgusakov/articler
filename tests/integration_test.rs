@@ -43,7 +43,7 @@ async fn get_entries(pool: SqlitePool) {
         .uri("/api/entries")
         .set_json(
             r#"{
-                    "archive":1,
+                    "archive":0,
                     "starred":0,
                     "sort":"created",
                     "order":"asc",
