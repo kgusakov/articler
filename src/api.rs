@@ -56,7 +56,6 @@ pub async fn entries(
     data: web::Data<AppState>,
     request: Query<EntriesRequest>,
 ) -> actix_web::Result<Json<Entries>> {
-    assert!(request.archive.unwrap() == true);
     // TODO implement all needed request filters and etc
     let entries = data
         .entry_repository
