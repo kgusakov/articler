@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 
 use actix_web::{
     App,
@@ -20,9 +20,13 @@ use wallabag_rs::{
     },
 };
 
+static INIT: Once = Once::new();
+
 // TODO should be executed once before tests
 fn init() {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("trace"));
+    INIT.call_once(|| {
+        env_logger::init_from_env(env_logger::Env::new().default_filter_or("trace"));
+    });
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("entries"))]
