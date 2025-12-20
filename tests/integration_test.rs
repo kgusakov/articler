@@ -22,7 +22,6 @@ use wallabag_rs::{
 
 static INIT: Once = Once::new();
 
-// TODO should be executed once before tests
 fn init() {
     INIT.call_once(|| {
         env_logger::init_from_env(env_logger::Env::new().default_filter_or("trace"));
