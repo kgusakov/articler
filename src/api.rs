@@ -1,8 +1,8 @@
 use crate::{
     models::{Entry, Tag},
     storage::repository::{
-        AllEntriesParams, EntryRepository, EntryRow, SqliteEntryRepository, SqliteTagRepository,
-        TagRepository, TagRow,
+        self, AllEntriesParams, EntryRepository, EntryRow, SortColumn, SortOrder,
+        SqliteEntryRepository, SqliteTagRepository, TagRepository, TagRow,
     },
 };
 use actix_web::{
@@ -10,7 +10,8 @@ use actix_web::{
     dev::Server,
     error::ErrorInternalServerError,
     get,
-    web::{self, Json, Path},
+    mime::Params,
+    web::{self, Json, Path, Query},
 };
 use anyhow::anyhow;
 use chrono::{DateTime, Utc};
@@ -53,13 +54,24 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
 #[get("/api/entries")]
 pub async fn entries(
     data: web::Data<AppState>,
-    request: Path<EntriesRequest>,
+    request: Query<EntriesRequest>,
 ) -> actix_web::Result<Json<Entries>> {
+    assert!(request.archive.unwrap() == true);
     // TODO implement all needed request filters and etc
     let entries = data
         .entry_repository
+        // TODO remove clones
         .find_all(AllEntriesParams {
-            ..Default::default()
+            archive: request.archive,
+            starred: request.starred,
+            sort: Some(request.sort.clone().into()),
+            order: Some(request.order.clone().into()),
+            page: Some(request.page),
+            tags: request.tags.clone(),
+            since: Some(request.since),
+            public: request.public,
+            detail: Some(request.detail.clone().into()),
+            domain_name: request.domain_name.clone(),
         })
         .await
         .map_err(ErrorInternalServerError)?;
@@ -168,7 +180,7 @@ impl TryFrom<(EntryRow, Vec<Tag>)> for Entry {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 enum FindSortEnum {
     #[serde(rename(deserialize = "created"))]
     Created,
@@ -184,7 +196,17 @@ impl Default for FindSortEnum {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+impl Into<SortColumn> for FindSortEnum {
+    fn into(self) -> SortColumn {
+        match self {
+            FindSortEnum::Created => SortColumn::Created,
+            FindSortEnum::Updated => SortColumn::Updated,
+            FindSortEnum::Archived => SortColumn::Archived,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 enum FindSortOrder {
     #[serde(rename(deserialize = "asc"))]
     Asc,
@@ -198,7 +220,16 @@ impl Default for FindSortOrder {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+impl Into<SortOrder> for FindSortOrder {
+    fn into(self) -> SortOrder {
+        match self {
+            FindSortOrder::Asc => SortOrder::Asc,
+            FindSortOrder::Desc => SortOrder::Desc,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, PartialEq, Clone)]
 enum Detail {
     #[serde(rename(deserialize = "metadata"))]
     Metadata,
@@ -209,6 +240,15 @@ enum Detail {
 impl Default for Detail {
     fn default() -> Self {
         Detail::Full
+    }
+}
+
+impl Into<repository::Detail> for Detail {
+    fn into(self) -> repository::Detail {
+        match self {
+            Detail::Full => repository::Detail::Full,
+            Detail::Metadata => repository::Detail::Metadata,
+        }
     }
 }
 
@@ -239,7 +279,7 @@ pub struct EntriesRequest {
     #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
     tags: Option<Vec<String>>,
     #[serde(default)]
-    since: u32,
+    since: i64,
     #[serde_as(as = "Option<BoolFromInt>")]
     public: Option<bool>,
     #[serde(default)]

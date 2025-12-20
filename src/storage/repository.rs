@@ -4,9 +4,7 @@ use crate::models::Range;
 use async_trait::async_trait;
 use indexmap::IndexMap;
 use sqlx::{
-    Error as SqlxError, QueryBuilder, Row, SqlitePool,
-    prelude::*,
-    sqlite::SqliteRow,
+    Error as SqlxError, Execute, QueryBuilder, Row, SqlitePool, prelude::*, sqlite::SqliteRow,
 };
 
 const ENTRIES_TABLE: &str = "entries";
@@ -191,7 +189,7 @@ pub struct UpdateEntry {
     pub is_public: Option<bool>,
 }
 
-enum SortColumn {
+pub enum SortColumn {
     Created,
     Updated,
     Archived,
@@ -207,7 +205,7 @@ impl Display for SortColumn {
     }
 }
 
-enum SortOrder {
+pub enum SortOrder {
     Asc,
     Desc,
 }
@@ -221,7 +219,8 @@ impl Display for SortOrder {
     }
 }
 
-enum Detail {
+#[derive(PartialEq)]
+pub enum Detail {
     Metadata,
     Full,
 }
@@ -267,50 +266,46 @@ impl EntryRepository for SqliteEntryRepository {
         params: AllEntriesParams,
     ) -> Result<Vec<(EntryRow, Vec<TagRow>)>, SqlxError> {
         let mut q_builder = QueryBuilder::new(format!(
-            r#"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {} as e
-            LEFT JOIN {} et on et.entry_id = e.id
-            LEFT JOIN {} t on t.id = et.tag_id"#,
+            r#"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {} as e LEFT JOIN {} et on et.entry_id = e.id LEFT JOIN {} t on t.id = et.tag_id"#,
             ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE,
         ));
         q_builder.push(" WHERE 1=1");
 
-        let mut w_separated = q_builder.separated(",");
-
         if let Some(a) = params.archive {
-            w_separated.push(" AND is_archived = ?");
-            w_separated.push_bind(a);
+            q_builder.push(" AND is_archived = ");
+            q_builder.push_bind(a);
         }
 
         if let Some(s) = params.starred {
-            w_separated.push(" AND is_starred = ?");
-            w_separated.push_bind(s);
+            q_builder.push(" AND is_starred = ");
+            q_builder.push_bind(s);
         }
 
         if let Some(p) = params.public {
-            w_separated.push(" AND is_public = ?");
-            w_separated.push_bind(p);
+            q_builder.push(" AND is_public = ");
+            q_builder.push_bind(p);
         }
 
         if let Some(d) = params.since {
-            w_separated.push(" AND update_at = ?");
-            w_separated.push_bind(d);
+            q_builder.push(" AND updated_at > ");
+            q_builder.push_bind(d);
         }
 
         if let Some(column) = params.sort {
-            q_builder.push(" ORDER BY ?");
+            q_builder.push(" ORDER BY ");
             q_builder.push_bind(column.to_string());
 
             if let Some(order) = params.order {
-                q_builder.push(" ?");
-                q_builder.push_bind(order.to_string());
+                q_builder.push(" ");
+                q_builder.push(order.to_string());
             }
         }
 
-        if let Some(_) = params.page {
+        if params.page != Some(1) {
             todo!("Paging is not supported yet");
         }
 
-        if let Some(_) = params.detail {
+        if params.detail != Some(Detail::Full) {
             todo!("Detail is not supported yet");
         }
 
@@ -322,6 +317,7 @@ impl EntryRepository for SqliteEntryRepository {
             todo!("Tags is not supported yet");
         }
 
+        // dbg!(q_builder.build().sql());
         let raw_rows = q_builder.build().fetch_all(self.pool.as_ref()).await?;
 
         let mut entrs = IndexMap::<i32, Vec<&SqliteRow>>::new();

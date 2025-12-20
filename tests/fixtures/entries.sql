@@ -1,3 +1,4 @@
+-- Insert entries
 INSERT INTO entries (
     id,
     url,
@@ -22,7 +23,9 @@ INSERT INTO entries (
     published_by,
     is_public,
     uid
-) VALUES (
+) VALUES 
+-- Entry 1: Not archived, not starred, not public, NO TAGS
+(
     1,
     'https://a.com/1',
     'hash1',
@@ -32,8 +35,8 @@ INSERT INTO entries (
     'content1',
     0,
     NULL,
-    1,
-    1702220400,
+    0,
+    NULL,
     1701428400,
     1702220400,
     'text/html',
@@ -46,20 +49,157 @@ INSERT INTO entries (
     'author1',
     0,
     NULL
+),
+-- Entry 2: Archived, not starred, not public, HAS TAGS
+(
+    2,
+    'https://b.com/2',
+    'hash2',
+    'https://b.com/g2',
+    'ghash2',
+    'title2',
+    'content2',
+    1,
+    1701787200,
+    0,
+    NULL,
+    1701428500,
+    1702220500,
+    'text/html',
+    'en',
+    5,
+    'b.com',
+    'https://b.com/pic2.jpg',
+    'https://b.com/o2',
+    1701424900,
+    'author2',
+    0,
+    NULL
+),
+-- Entry 3: Not archived, starred, not public, NO TAGS
+(
+    3,
+    'https://c.com/3',
+    'hash3',
+    'https://c.com/g3',
+    'ghash3',
+    'title3',
+    'content3',
+    0,
+    NULL,
+    1,
+    1701855300,
+    1701428600,
+    1702220600,
+    'text/html',
+    'en',
+    12,
+    'c.com',
+    'https://c.com/pic3.jpg',
+    'https://c.com/o3',
+    1701425000,
+    'author3',
+    0,
+    NULL
+),
+-- Entry 4: Archived and starred, not public, HAS TAGS
+(
+    4,
+    'https://d.com/4',
+    'hash4',
+    'https://d.com/g4',
+    'ghash4',
+    'title4',
+    'content4',
+    1,
+    1701787300,
+    1,
+    1701855400,
+    1701428700,
+    1702220700,
+    'text/html',
+    'en',
+    15,
+    'd.com',
+    'https://d.com/pic4.jpg',
+    'https://d.com/o4',
+    1701425100,
+    'author4',
+    0,
+    NULL
+),
+-- Entry 5: Not archived, not starred, public, NO TAGS
+(
+    5,
+    'https://e.com/5',
+    'hash5',
+    'https://e.com/g5',
+    'ghash5',
+    'title5',
+    'content5',
+    0,
+    NULL,
+    0,
+    NULL,
+    1701428800,
+    1702220800,
+    'text/html',
+    'en',
+    10,
+    'e.com',
+    'https://e.com/pic5.jpg',
+    'https://e.com/o5',
+    1701425200,
+    'author5',
+    1,
+    NULL
+),
+-- Entry 6: Archived, starred, and public, HAS TAGS
+(
+    6,
+    'https://f.com/6',
+    'hash6',
+    'https://f.com/g6',
+    'ghash6',
+    'title6',
+    'content6',
+    1,
+    1701787400,
+    1,
+    1701855500,
+    1701428900,
+    1702220900,
+    'text/html',
+    'en',
+    20,
+    'f.com',
+    'https://f.com/pic6.jpg',
+    'https://f.com/o6',
+    1701425300,
+    'author6',
+    1,
+    NULL
 );
 
+-- Insert tags
 INSERT INTO tags (id, label, slug) VALUES
     (1, 'label1', 'slug1'),
     (2, 'label2', 'slug2'),
     (3, 'label3', 'slug3'),
-    (4, 'label4', 'slug4');
+    (4, 'label4', 'slug4'),
+    (5, 'label5', 'slug5'),
+    (6, 'label6', 'slug6');
 
+-- Link tags to entries (only entries 2, 4, and 6 have tags)
 INSERT INTO entry_tags (entry_id, tag_id) VALUES
-    (1, 1),
-    (1, 2),
-    (1, 3),
-    (1, 4);
+    (2, 1),
+    (2, 2),
+    (4, 3),
+    (4, 4),
+    (6, 5),
+    (6, 6);
 
+-- Insert annotations for different entries
 INSERT INTO annotations (
     id,
     entry_id,
@@ -70,8 +210,12 @@ INSERT INTO annotations (
     quote
 ) VALUES
     (1, 1, 'v1', 'Note about async', 1701787200, 1701787200, 'Async is key'),
-    (2, 1, 'v1', 'Example of sqlx', 1701855300, 1701855300, 'Sqlx checks queries');
+    (2, 1, 'v1', 'Example of sqlx', 1701855300, 1701855300, 'Sqlx checks queries'),
+    (3, 3, 'v1', 'Important point', 1701787300, 1701787300, 'This is crucial'),
+    (4, 4, 'v1', 'See also reference', 1701855400, 1701855400, 'Related concept'),
+    (5, 6, 'v1', 'Public highlight', 1701787500, 1701787500, 'Worth sharing');
 
+-- Insert ranges for annotations
 INSERT INTO annotation_ranges (
     annotation_id,
     start,
@@ -80,13 +224,8 @@ INSERT INTO annotation_ranges (
     end_offset
 ) VALUES
     (1, '/d[1]/p[3]', '/d[1]/p[3]', 0, 52),
-    (1, '/d[1]/p[4]', '/d[1]/p[4]', 0, 28);
-
-INSERT INTO annotation_ranges (
-    annotation_id,
-    start,
-    end,
-    start_offset,
-    end_offset
-) VALUES
-    (2, '/d[2]/pre[1]', '/d[2]/pre[1]', 0, 65);
+    (1, '/d[1]/p[4]', '/d[1]/p[4]', 0, 28),
+    (2, '/d[2]/pre[1]', '/d[2]/pre[1]', 0, 65),
+    (3, '/d[1]/p[1]', '/d[1]/p[1]', 0, 40),
+    (4, '/d[2]/p[5]', '/d[2]/p[5]', 10, 85),
+    (5, '/d[3]/p[2]', '/d[3]/p[2]', 5, 95);
