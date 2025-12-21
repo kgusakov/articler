@@ -7,7 +7,7 @@ use url::Url;
 #[serde_as]
 #[derive(Serialize)]
 pub struct Entry {
-    pub id: i32,
+    pub id: i64,
     pub url: Url,
     pub hashed_url: Option<String>,
     pub given_url: Option<Url>,
@@ -26,7 +26,7 @@ pub struct Entry {
     pub annotations: Option<Vec<Annotation>>,
     pub mimetype: Option<String>,
     pub language: Option<String>,
-    pub reading_time: i32,
+    pub reading_time: i64,
     pub domain_name: String,
     pub preview_picture: Option<Url>,
     pub origin_url: Option<Url>,

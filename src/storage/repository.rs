@@ -148,7 +148,7 @@ pub struct CreateEntry {
 
 #[derive(Debug)]
 pub struct EntryRow {
-    pub id: i32,
+    pub id: i64,
     pub url: String,
     pub hashed_url: Option<String>,
     pub given_url: Option<String>,
@@ -163,7 +163,7 @@ pub struct EntryRow {
     pub updated_at: i64,
     pub mimetype: Option<String>,
     pub language: Option<String>,
-    pub reading_time: i32,
+    pub reading_time: i64,
     pub domain_name: String,
     pub preview_picture: Option<String>,
     pub origin_url: Option<String>,
@@ -231,7 +231,8 @@ pub struct AllEntriesParams {
     pub starred: Option<bool>,
     pub sort: Option<SortColumn>,
     pub order: Option<SortOrder>,
-    pub page: Option<i32>,
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
     pub tags: Option<Vec<String>>,
     pub since: Option<i64>,
     pub public: Option<bool>,
@@ -243,8 +244,10 @@ pub struct AllEntriesParams {
 pub trait EntryRepository: Send + Sync {
     async fn find_all(
         &self,
-        params: AllEntriesParams,
+        params: &AllEntriesParams,
     ) -> Result<Vec<(EntryRow, Vec<TagRow>)>, SqlxError>;
+
+    async fn count(&self, params: &AllEntriesParams) -> Result<i64, SqlxError>;
 }
 
 #[derive(Clone)]
@@ -263,13 +266,15 @@ impl<'a> SqliteEntryRepository {
 impl EntryRepository for SqliteEntryRepository {
     async fn find_all(
         &self,
-        params: AllEntriesParams,
+        params: &AllEntriesParams,
     ) -> Result<Vec<(EntryRow, Vec<TagRow>)>, SqlxError> {
         let mut q_builder = QueryBuilder::new(format!(
-            r#"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {} as e LEFT JOIN {} et on et.entry_id = e.id LEFT JOIN {} t on t.id = et.tag_id"#,
-            ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE,
+            r#"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {} as e LEFT JOIN {} et on et.entry_id = e.id LEFT JOIN {} t on t.id = et.tag_id
+            WHERE e.id in (
+                SELECT id FROM {}
+                WHERE 1=1"#,
+            ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE, ENTRIES_TABLE
         ));
-        q_builder.push(" WHERE 1=1");
 
         if let Some(a) = params.archive {
             q_builder.push(" AND is_archived = ");
@@ -291,18 +296,35 @@ impl EntryRepository for SqliteEntryRepository {
             q_builder.push_bind(d);
         }
 
-        if let Some(column) = params.sort {
+        if let Some(column) = &params.sort {
             q_builder.push(" ORDER BY ");
             q_builder.push_bind(column.to_string());
 
-            if let Some(order) = params.order {
+            if let Some(order) = &params.order {
                 q_builder.push(" ");
                 q_builder.push(order.to_string());
             }
         }
 
-        if params.page != Some(1) {
-            todo!("Paging is not supported yet");
+        if let Some(pp) = params.per_page {
+            q_builder.push(" LIMIT ");
+            q_builder.push_bind(pp);
+
+            if let Some(p) = params.page {
+                q_builder.push(" OFFSET ");
+                q_builder.push_bind((p - 1) * pp);
+            }
+        }
+        q_builder.push(")");
+
+        if let Some(column) = &params.sort {
+            q_builder.push(" ORDER BY ");
+            q_builder.push_bind(column.to_string());
+
+            if let Some(order) = &params.order {
+                q_builder.push(" ");
+                q_builder.push(order.to_string());
+            }
         }
 
         if params.detail != Some(Detail::Full) {
@@ -344,5 +366,62 @@ impl EntryRepository for SqliteEntryRepository {
         }
 
         Ok(entrs_with_relations)
+    }
+
+    async fn count(&self, params: &AllEntriesParams) -> Result<i64, SqlxError> {
+        // TODO rewrite this funny stupid count
+        let mut q_builder = QueryBuilder::new(format!(
+            r#"SELECT COUNT(DISTINCT e.id) FROM {} as e LEFT JOIN {} et on et.entry_id = e.id LEFT JOIN {} t on t.id = et.tag_id"#,
+            ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE,
+        ));
+        q_builder.push(" WHERE 1=1");
+
+        if let Some(a) = params.archive {
+            q_builder.push(" AND is_archived = ");
+            q_builder.push_bind(a);
+        }
+
+        if let Some(s) = params.starred {
+            q_builder.push(" AND is_starred = ");
+            q_builder.push_bind(s);
+        }
+
+        if let Some(p) = params.public {
+            q_builder.push(" AND is_public = ");
+            q_builder.push_bind(p);
+        }
+
+        if let Some(d) = params.since {
+            q_builder.push(" AND updated_at > ");
+            q_builder.push_bind(d);
+        }
+
+        if let Some(column) = &params.sort {
+            q_builder.push(" ORDER BY ");
+            q_builder.push_bind(column.to_string());
+
+            if let Some(order) = &params.order {
+                q_builder.push(" ");
+                q_builder.push(order.to_string());
+            }
+        }
+
+        if params.detail != Some(Detail::Full) {
+            todo!("Detail is not supported yet");
+        }
+
+        if let Some(_) = params.domain_name {
+            todo!("Domain name is not supported yet");
+        }
+
+        if let Some(_) = params.tags {
+            todo!("Tags is not supported yet");
+        }
+
+        Ok(q_builder
+            .build()
+            .fetch_one(self.pool.as_ref())
+            .await?
+            .get(0))
     }
 }

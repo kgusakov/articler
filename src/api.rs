@@ -56,22 +56,24 @@ pub async fn entries(
     data: web::Data<AppState>,
     request: Query<EntriesRequest>,
 ) -> actix_web::Result<Json<Entries>> {
+    let params = AllEntriesParams {
+        archive: request.archive,
+        starred: request.starred,
+        sort: Some(request.sort.clone().into()),
+        order: Some(request.order.clone().into()),
+        page: Some(request.page),
+        per_page: Some(request.per_page),
+        tags: request.tags.clone(),
+        since: Some(request.since),
+        public: request.public,
+        detail: Some(request.detail.clone().into()),
+        domain_name: request.domain_name.clone(),
+    };
     // TODO implement all needed request filters and etc
     let entries = data
         .entry_repository
         // TODO remove clones
-        .find_all(AllEntriesParams {
-            archive: request.archive,
-            starred: request.starred,
-            sort: Some(request.sort.clone().into()),
-            order: Some(request.order.clone().into()),
-            page: Some(request.page),
-            tags: request.tags.clone(),
-            since: Some(request.since),
-            public: request.public,
-            detail: Some(request.detail.clone().into()),
-            domain_name: request.domain_name.clone(),
-        })
+        .find_all(&params)
         .await
         .map_err(ErrorInternalServerError)?;
 
@@ -84,11 +86,17 @@ pub async fn entries(
 
     let url = Url::from_str("http://example.com").unwrap();
 
+    let count_without_paging = data
+        .entry_repository
+        .count(&params)
+        .await
+        .map_err(ErrorInternalServerError)?;
+
     Ok(web::Json(Entries {
-        page: 1,
-        limit: 30,
-        pages: 1,
-        total: ents.len(),
+        page: request.page,
+        limit: request.per_page,
+        pages: (count_without_paging as f64 / request.per_page as f64).ceil() as i64,
+        total: count_without_paging as i64,
         embedded: Embedded { items: ents },
         _links: Links {
             _self: Link { href: url.clone() },
@@ -106,10 +114,10 @@ struct Embedded {
 
 #[derive(Serialize)]
 pub struct Entries {
-    page: i32,
-    limit: i32,
-    pages: i32,
-    total: usize,
+    page: i64,
+    limit: i64,
+    pages: i64,
+    total: i64,
     embedded: Embedded,
     _links: Links,
 }
@@ -251,11 +259,11 @@ impl Into<repository::Detail> for Detail {
     }
 }
 
-fn default_page() -> i32 {
+fn default_page() -> i64 {
     1
 }
 
-fn default_per_page() -> i32 {
+fn default_per_page() -> i64 {
     30
 }
 
@@ -271,10 +279,10 @@ pub struct EntriesRequest {
     #[serde(default)]
     order: FindSortOrder,
     #[serde(default = "default_page")]
-    page: i32,
+    page: i64,
     #[serde(rename(deserialize = "perPage"))]
     #[serde(default = "default_per_page")]
-    per_page: i32,
+    per_page: i64,
     #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
     tags: Option<Vec<String>>,
     #[serde(default)]

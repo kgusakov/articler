@@ -50,6 +50,35 @@ async fn get_entries(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn get_entries_with_pages(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(entries),
+    )
+    .await;
+
+    let req = test::TestRequest::default()
+        .uri("/api/entries?page=2&perPage=1")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    dbg!(serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap());
+
+    let expected: Value = serde_json::from_str(include_str!("json/entries_paging.json")).unwrap();
+
+    assert_json_eq!(
+        expected,
+        serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
 async fn get_entries_archived(pool: SqlitePool) {
     init();
 
