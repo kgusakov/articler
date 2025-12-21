@@ -1,0 +1,62 @@
+{
+    "page": 2,
+    "limit": 1,
+    "pages": 6,
+    "total": 6,
+    "embedded": {
+        "items": [
+            {
+                "id": 2,
+                "url": "https://b.com/2",
+                "hashed_url": "hash2",
+                "given_url": "https://b.com/g2",
+                "hashed_given_url": "ghash2",
+                "title": "title2",
+                "content": "content2",
+                "is_archived": 1,
+                "archived_at": "2023-12-05T14:40:00Z",
+                "is_starred": 0,
+                "starred_at": null,
+                "tags": [
+                    {
+                        "id": 1,
+                        "label": "label1",
+                        "slug": "slug1"
+                    },
+                    {
+                        "id": 2,
+                        "label": "label2",
+                        "slug": "slug2"
+                    }
+                ],
+                "created_at": "2023-12-01T11:01:40Z",
+                "updated_at": "2023-12-10T15:01:40Z",
+                "annotations": null,
+                "mimetype": "text/html",
+                "language": "en",
+                "reading_time": 5,
+                "domain_name": "b.com",
+                "preview_picture": "https://b.com/pic2.jpg",
+                "origin_url": "https://b.com/o2",
+                "published_at": "2023-12-01T10:01:40Z",
+                "published_by": "author2",
+                "is_public": false,
+                "uid": null
+            }
+        ]
+    },
+    "_links": {
+        "self": {
+            "href": "http://example.com/"
+        },
+        "first": {
+            "href": "http://example.com/"
+        },
+        "last": {
+            "href": "http://example.com/"
+        },
+        "next": {
+            "href": "http://example.com/"
+        }
+    }
+}
