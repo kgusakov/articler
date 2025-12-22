@@ -223,7 +223,7 @@ enum FindSortOrder {
 
 impl Default for FindSortOrder {
     fn default() -> Self {
-        FindSortOrder::Desc
+        FindSortOrder::Asc
     }
 }
 

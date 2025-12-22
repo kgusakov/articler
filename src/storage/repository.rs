@@ -319,7 +319,7 @@ impl EntryRepository for SqliteEntryRepository {
 
         if let Some(column) = &params.sort {
             q_builder.push(" ORDER BY ");
-            q_builder.push_bind(column.to_string());
+            q_builder.push(column.to_string());
 
             if let Some(order) = &params.order {
                 q_builder.push(" ");
@@ -327,19 +327,27 @@ impl EntryRepository for SqliteEntryRepository {
             }
         }
 
+        // TODO implement detail filtering
         if params.detail != Some(Detail::Full) {
-            todo!("Detail is not supported yet");
+            return Err(SqlxError::Decode(
+                "Detail metadata mode is not supported yet".into(),
+            ));
         }
 
+        // TODO implement domain_name filtering
         if let Some(_) = params.domain_name {
-            todo!("Domain name is not supported yet");
+            return Err(SqlxError::Decode(
+                "Domain filtering is not supported yet".into(),
+            ));
         }
 
+        // TODO implement tags filtering
         if let Some(_) = params.tags {
-            todo!("Tags is not supported yet");
+            return Err(SqlxError::Decode(
+                "Tags filtering is not supported yet".into(),
+            ));
         }
 
-        // dbg!(q_builder.build().sql());
         let raw_rows = q_builder.build().fetch_all(self.pool.as_ref()).await?;
 
         let mut entrs = IndexMap::<i32, Vec<&SqliteRow>>::new();
@@ -396,26 +404,25 @@ impl EntryRepository for SqliteEntryRepository {
             q_builder.push_bind(d);
         }
 
-        if let Some(column) = &params.sort {
-            q_builder.push(" ORDER BY ");
-            q_builder.push_bind(column.to_string());
-
-            if let Some(order) = &params.order {
-                q_builder.push(" ");
-                q_builder.push(order.to_string());
-            }
-        }
-
+        // TODO implement detail filtering
         if params.detail != Some(Detail::Full) {
-            todo!("Detail is not supported yet");
+            return Err(SqlxError::Decode(
+                "Detail metadata mode is not supported yet".into(),
+            ));
         }
 
+        // TODO implement domain_name filtering
         if let Some(_) = params.domain_name {
-            todo!("Domain name is not supported yet");
+            return Err(SqlxError::Decode(
+                "Domain filtering is not supported yet".into(),
+            ));
         }
 
+        // TODO implement tags filtering
         if let Some(_) = params.tags {
-            todo!("Tags is not supported yet");
+            return Err(SqlxError::Decode(
+                "Tags filtering is not supported yet".into(),
+            ));
         }
 
         Ok(q_builder
