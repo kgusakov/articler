@@ -4,7 +4,7 @@ use crate::models::Range;
 use async_trait::async_trait;
 use indexmap::IndexMap;
 use sqlx::{
-    Error as SqlxError, Execute, QueryBuilder, Row, SqlitePool, prelude::*, sqlite::SqliteRow,
+    Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*, sqlite::SqliteRow,
 };
 
 const ENTRIES_TABLE: &str = "entries";

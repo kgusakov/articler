@@ -22,6 +22,34 @@ fn init() {
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn get_entries_json(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(entries),
+    )
+    .await;
+
+    let req = test::TestRequest::default()
+        .uri("/api/entries.json")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+
+    let expected: Value = serde_json::from_str(include_str!("json/entries.json")).unwrap();
+
+    assert_json_eq!(
+        expected,
+        serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
 async fn get_entries(pool: SqlitePool) {
     init();
 

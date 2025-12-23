@@ -9,9 +9,8 @@ use actix_web::{
     App, HttpServer,
     dev::Server,
     error::ErrorInternalServerError,
-    get,
-    mime::Params,
-    web::{self, Json, Path, Query},
+    get, routes,
+    web::{self, Json, Query},
 };
 use anyhow::anyhow;
 use chrono::{DateTime, Utc};
@@ -51,7 +50,9 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
 }
 
 // TODO /api pref should be moved as a base prefix
+#[routes]
 #[get("/api/entries")]
+#[get("/api/entries.json")]
 pub async fn entries(
     data: web::Data<AppState>,
     request: Query<EntriesRequest>,
@@ -59,20 +60,19 @@ pub async fn entries(
     let params = AllEntriesParams {
         archive: request.archive,
         starred: request.starred,
-        sort: Some(request.sort.clone().into()),
-        order: Some(request.order.clone().into()),
+        sort: Some(request.sort.into()),
+        order: Some(request.order.into()),
         page: Some(request.page),
         per_page: Some(request.per_page),
         tags: request.tags.clone(),
         since: Some(request.since),
         public: request.public,
-        detail: Some(request.detail.clone().into()),
+        detail: Some(request.detail.into()),
         domain_name: request.domain_name.clone(),
     };
     // TODO implement all needed request filters and etc
     let entries = data
         .entry_repository
-        // TODO remove clones
         .find_all(&params)
         .await
         .map_err(ErrorInternalServerError)?;
@@ -84,6 +84,7 @@ pub async fn entries(
         ents.push(Entry::try_from((e, mapped_tags)).map_err(ErrorInternalServerError)?);
     }
 
+    // TODO implement actual urls generating
     let url = Url::from_str("http://example.com").unwrap();
 
     let count_without_paging = data
@@ -187,7 +188,7 @@ impl TryFrom<(EntryRow, Vec<Tag>)> for Entry {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
 enum FindSortEnum {
     #[serde(rename(deserialize = "created"))]
     Created,
@@ -213,7 +214,7 @@ impl Into<SortColumn> for FindSortEnum {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
 enum FindSortOrder {
     #[serde(rename(deserialize = "asc"))]
     Asc,
@@ -236,7 +237,7 @@ impl Into<SortOrder> for FindSortOrder {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
 enum Detail {
     #[serde(rename(deserialize = "metadata"))]
     Metadata,
