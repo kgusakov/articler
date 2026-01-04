@@ -2,16 +2,18 @@ use std::sync::{Arc, Once};
 
 use actix_web::{
     App,
+    cookie::time::UtcDateTime,
     middleware::Logger,
     test,
     web::{self},
 };
 
+use chrono::{DateTime, Utc};
 use serde_json::Value;
-use serde_json_assert::assert_json_eq;
+use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
 // TODO is it appropriate way?
-use wallabag_rs::api::{app_state_init, entries};
+use wallabag_rs::api::{app_state_init, entries, post_entries};
 
 static INIT: Once = Once::new();
 
@@ -223,4 +225,60 @@ async fn get_entries_public(pool: SqlitePool) {
         expected,
         serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
     );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn test_post_entries(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(post_entries),
+    )
+    .await;
+
+    let req = test::TestRequest::post()
+        .uri("/api/entries.json")
+        .set_payload("url=https://example.com/article&archive=0&starred=0")
+        .insert_header(("content-type", "application/x-www-form-urlencoded"))
+        .to_request();
+
+    let before_call_time = Utc::now();
+    let resp = test::call_and_read_body(&app, req).await;
+    let after_call_time = Utc::now();
+
+    let expected = serde_json::from_str::<Value>(include_str!("json/create_entry.json")).unwrap();
+
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
+
+    assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+fn assert_json_date_between(
+    before: &DateTime<Utc>,
+    after: &DateTime<Utc>,
+    date_json_field: &str,
+    json: &Value,
+) {
+    if let Value::Object(m) = json {
+        let date_str = m.get(date_json_field).unwrap().as_str().unwrap();
+        let date = DateTime::parse_from_rfc3339(date_str)
+            .unwrap()
+            .with_timezone(&Utc);
+        assert!(date.timestamp() >= before.timestamp() && date.timestamp() <= after.timestamp());
+    } else {
+        panic!("{} is expected, but not found", date_json_field);
+    }
 }

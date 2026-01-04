@@ -1,17 +1,28 @@
-use std::{fmt::Display, sync::Arc};
+use std::{backtrace::Backtrace, fmt::Display, sync::Arc};
 
 use crate::models::Range;
 use async_trait::async_trait;
 use indexmap::IndexMap;
-use sqlx::{
-    Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*, sqlite::SqliteRow,
-};
+use sqlx::{Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*, sqlite::SqliteRow};
+use thiserror::Error;
 
 const ENTRIES_TABLE: &str = "entries";
 const TAGS_TABLE: &str = "tags";
 const ENTRIES_TAG_TABLE: &str = "entry_tags";
 const ANNOTATIONS_TABLE: &str = "annotations";
 const ANNOTATION_RANGES_TABLE: &str = "annotation_ranges";
+const SQLITE_LIMIT_VARIABLE_NUMBER: usize = 999;
+
+type Result<T> = std::result::Result<T, DbError>;
+
+#[derive(Error, Debug)]
+pub enum DbError {
+    // TODO produce ugly wrapped SqliteError(Database(SqliteError { code: 1, message: "no such column: et.tag_id" }))
+    #[error(transparent)]
+    SqliteRepositoryError(#[from] SqlxError),
+    #[error("Repository error: {0}")]
+    RepositoryError(String),
+}
 
 pub struct TagRow {
     pub id: i32,
@@ -19,8 +30,8 @@ pub struct TagRow {
     pub slug: String,
 }
 
-impl TagRow {
-    pub fn from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Self, SqlxError> {
+impl<'r> FromRow<'r, SqliteRow> for TagRow {
+    fn from_row(row: &'r SqliteRow) -> std::result::Result<TagRow, SqlxError> {
         Ok(TagRow {
             id: row.try_get("id")?,
             label: row.try_get("label")?,
@@ -52,14 +63,82 @@ impl SqliteTagRepository {
     }
 }
 
-#[async_trait]
-pub trait TagRepository: Send + Sync {}
+// TODO implement transactions per web request
 
 #[async_trait]
-impl TagRepository for SqliteTagRepository {}
+pub trait TagRepository: Send + Sync {
+    async fn create_and_link_tags(
+        &self,
+        entry_id: i64,
+        tags: Vec<CreateTag>,
+    ) -> Result<Vec<TagRow>>;
+}
+
+#[async_trait]
+impl TagRepository for SqliteTagRepository {
+    /* Return Vec of tags, which was linked to entry_id. Vec consists of ALL tags, even tags, which was already linked before and included in tags argument. */
+    async fn create_and_link_tags(
+        &self,
+        entry_id: i64,
+        tags: Vec<CreateTag>,
+    ) -> Result<Vec<TagRow>> {
+        // Check SQLite variable limit (2 variables per tag: label and slug)
+        if tags.len() > SQLITE_LIMIT_VARIABLE_NUMBER / 2 {
+            return Err(DbError::RepositoryError(
+                format!(
+                    "Too many tags: {} exceeds limit of {}",
+                    tags.len(),
+                    SQLITE_LIMIT_VARIABLE_NUMBER / 2
+                )
+                .into(),
+            ));
+        }
+
+        let mut tag_builder = QueryBuilder::new("INSERT INTO tags (label, slug) ");
+        tag_builder.push_values(tags.iter(), |mut b, tag| {
+            // TODO can we remove cloning?
+            b.push_bind(tag.label.clone()).push_bind(tag.slug.clone());
+        });
+        tag_builder.push(" ON CONFLICT DO NOTHING");
+        tag_builder.build().execute(self.pool.as_ref()).await?;
+
+        let mut insert_query = QueryBuilder::new(format!(
+            r#"
+        INSERT INTO {}
+        SELECT id as tag_id, ? as entry_id FROM {} WHERE label IN ("#,
+            ENTRIES_TAG_TABLE, TAGS_TABLE
+        ));
+        insert_query.push_bind(entry_id);
+        let mut separated = insert_query.separated(", ");
+        for tag in &tags {
+            // TODO remove clone()?
+            separated.push_bind(tag.label.clone());
+        }
+        separated.push_unseparated(
+            r#")
+            ON CONFLICT DO NOTHING"#,
+        );
+
+        insert_query.build().execute(self.pool.as_ref()).await?;
+
+        let mut get_tags = QueryBuilder::new(format!("SELECT * from {}", TAGS_TABLE));
+
+        let mut tags_separated = get_tags.separated(", ");
+        for tag in &tags {
+            // TODO remove clone()?
+            tags_separated.push_bind(tag.label.clone());
+        }
+        tags_separated.push_unseparated(")");
+
+        Ok(get_tags
+            .build_query_as::<TagRow>()
+            .fetch_all(self.pool.as_ref())
+            .await?)
+    }
+}
 
 impl<'r> FromRow<'r, SqliteRow> for EntryRow {
-    fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, SqlxError> {
+    fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> std::result::Result<EntryRow, SqlxError> {
         Ok(EntryRow {
             id: row.try_get("id")?,
             url: row.try_get("url")?,
@@ -98,7 +177,7 @@ pub struct AnnotationRow {
 }
 
 impl AnnotationRow {
-    pub fn from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Self, SqlxError> {
+    pub fn from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Self> {
         Ok(AnnotationRow {
             id: row.try_get("id")?,
             annotator_schema_version: row.try_get("annotator_schema_version")?,
@@ -111,7 +190,7 @@ impl AnnotationRow {
 }
 
 impl Range {
-    pub fn from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Self, SqlxError> {
+    pub fn from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Self> {
         Ok(Range {
             id: row.try_get("id")?,
             start: row.try_get("start")?,
@@ -125,19 +204,45 @@ impl Range {
 #[derive(Debug)]
 pub struct CreateEntry {
     pub url: String,
-    pub hashed_url: Option<String>,
-    pub given_url: Option<String>,
-    pub hashed_given_url: Option<String>,
+    pub hashed_url: String,
+    pub given_url: String,
+    pub hashed_given_url: String,
     pub title: String,
     pub content: String,
     pub is_archived: bool,
     pub archived_at: Option<i64>,
     pub is_starred: bool,
     pub starred_at: Option<i64>,
+    pub created_at: i64,
+    pub update_at: i64,
     pub mimetype: Option<String>,
     pub language: Option<String>,
     pub reading_time: i32,
     pub domain_name: String,
+    pub preview_picture: Option<String>,
+    pub origin_url: Option<String>,
+    pub published_at: Option<i64>,
+    pub published_by: Option<String>,
+    pub is_public: Option<bool>,
+    pub uid: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct UpdateEntry {
+    pub hashed_url: Option<String>,
+    pub given_url: Option<String>,
+    pub hashed_given_url: Option<String>,
+    pub title: Option<String>,
+    pub content: Option<String>,
+    pub is_archived: Option<bool>,
+    pub archived_at: Option<i64>,
+    pub is_starred: Option<bool>,
+    pub starred_at: Option<i64>,
+    pub created_at: Option<i64>,
+    pub update_at: i64,
+    pub mimetype: Option<String>,
+    pub language: Option<String>,
+    pub reading_time: Option<i32>,
     pub preview_picture: Option<String>,
     pub origin_url: Option<String>,
     pub published_at: Option<i64>,
@@ -171,22 +276,6 @@ pub struct EntryRow {
     pub published_by: Option<String>,
     pub is_public: Option<bool>,
     pub uid: Option<String>,
-}
-
-#[derive(Debug)]
-pub struct UpdateEntry {
-    pub url: Option<String>,
-    pub title: Option<String>,
-    pub content: Option<String>,
-    pub is_archived: Option<bool>,
-    pub archived_at: Option<i64>,
-    pub is_starred: Option<bool>,
-    pub starred_at: Option<i64>,
-    pub mimetype: Option<String>,
-    pub language: Option<String>,
-    pub reading_time: Option<i32>,
-    pub preview_picture: Option<String>,
-    pub is_public: Option<bool>,
 }
 
 pub enum SortColumn {
@@ -226,7 +315,7 @@ pub enum Detail {
 }
 
 #[derive(Default)]
-pub struct AllEntriesParams {
+pub struct EntriesCriteria {
     pub archive: Option<bool>,
     pub starred: Option<bool>,
     pub sort: Option<SortColumn>,
@@ -242,12 +331,15 @@ pub struct AllEntriesParams {
 
 #[async_trait]
 pub trait EntryRepository: Send + Sync {
-    async fn find_all(
-        &self,
-        params: &AllEntriesParams,
-    ) -> Result<Vec<(EntryRow, Vec<TagRow>)>, SqlxError>;
+    async fn find_all(&self, params: &EntriesCriteria) -> Result<Vec<(EntryRow, Vec<TagRow>)>>;
 
-    async fn count(&self, params: &AllEntriesParams) -> Result<i64, SqlxError>;
+    async fn count(&self, params: &EntriesCriteria) -> Result<i64>;
+
+    async fn create(
+        &self,
+        params: CreateEntry,
+        tags: Vec<CreateTag>,
+    ) -> Result<(EntryRow, Vec<TagRow>)>;
 }
 
 #[derive(Clone)]
@@ -264,10 +356,7 @@ impl<'a> SqliteEntryRepository {
 
 #[async_trait]
 impl EntryRepository for SqliteEntryRepository {
-    async fn find_all(
-        &self,
-        params: &AllEntriesParams,
-    ) -> Result<Vec<(EntryRow, Vec<TagRow>)>, SqlxError> {
+    async fn find_all(&self, params: &EntriesCriteria) -> Result<Vec<(EntryRow, Vec<TagRow>)>> {
         let mut q_builder = QueryBuilder::new(format!(
             r#"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {} as e LEFT JOIN {} et on et.entry_id = e.id LEFT JOIN {} t on t.id = et.tag_id
             WHERE e.id in (
@@ -329,21 +418,21 @@ impl EntryRepository for SqliteEntryRepository {
 
         // TODO implement detail filtering
         if params.detail != Some(Detail::Full) {
-            return Err(SqlxError::Decode(
+            return Err(DbError::RepositoryError(
                 "Detail metadata mode is not supported yet".into(),
             ));
         }
 
         // TODO implement domain_name filtering
         if let Some(_) = params.domain_name {
-            return Err(SqlxError::Decode(
+            return Err(DbError::RepositoryError(
                 "Domain filtering is not supported yet".into(),
             ));
         }
 
         // TODO implement tags filtering
         if let Some(_) = params.tags {
-            return Err(SqlxError::Decode(
+            return Err(DbError::RepositoryError(
                 "Tags filtering is not supported yet".into(),
             ));
         }
@@ -376,7 +465,7 @@ impl EntryRepository for SqliteEntryRepository {
         Ok(entrs_with_relations)
     }
 
-    async fn count(&self, params: &AllEntriesParams) -> Result<i64, SqlxError> {
+    async fn count(&self, params: &EntriesCriteria) -> Result<i64> {
         // TODO rewrite this funny stupid count
         let mut q_builder = QueryBuilder::new(format!(
             r#"SELECT COUNT(DISTINCT e.id) FROM {} as e LEFT JOIN {} et on et.entry_id = e.id LEFT JOIN {} t on t.id = et.tag_id"#,
@@ -406,21 +495,21 @@ impl EntryRepository for SqliteEntryRepository {
 
         // TODO implement detail filtering
         if params.detail != Some(Detail::Full) {
-            return Err(SqlxError::Decode(
+            return Err(DbError::RepositoryError(
                 "Detail metadata mode is not supported yet".into(),
             ));
         }
 
         // TODO implement domain_name filtering
         if let Some(_) = params.domain_name {
-            return Err(SqlxError::Decode(
+            return Err(DbError::RepositoryError(
                 "Domain filtering is not supported yet".into(),
             ));
         }
 
         // TODO implement tags filtering
         if let Some(_) = params.tags {
-            return Err(SqlxError::Decode(
+            return Err(DbError::RepositoryError(
                 "Tags filtering is not supported yet".into(),
             ));
         }
@@ -430,5 +519,75 @@ impl EntryRepository for SqliteEntryRepository {
             .fetch_one(self.pool.as_ref())
             .await?
             .get(0))
+    }
+
+    async fn create(
+        &self,
+        entry: CreateEntry,
+        tags: Vec<CreateTag>,
+    ) -> Result<(EntryRow, Vec<TagRow>)> {
+        let now = chrono::Utc::now().timestamp();
+
+        // Insert entry
+        let id = sqlx::query_scalar!(
+                r#"
+                INSERT INTO entries (
+                    url, hashed_url, given_url, hashed_given_url, title, content, is_archived, archived_at,
+                    is_starred, starred_at, created_at, updated_at, mimetype,
+                    language, reading_time, domain_name, preview_picture,
+                    origin_url, published_at, published_by, is_public, uid
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
+                "#,
+                entry.url,
+                entry.hashed_url,
+                entry.given_url,
+                entry.hashed_given_url,
+                entry.title,
+                entry.content,
+                entry.is_archived,
+                entry.archived_at,
+                entry.is_starred,
+                entry.starred_at,
+                now,
+                now,
+                entry.mimetype,
+                entry.language,
+                entry.reading_time,
+                entry.domain_name,
+                entry.preview_picture,
+                entry.origin_url,
+                entry.published_at,
+                entry.published_by,
+                entry.is_public,
+                entry.uid,
+            )
+            .fetch_one(self.pool.as_ref())
+            .await?;
+
+        // Handle tags if provided
+        if !tags.is_empty() {
+            self.tag_repo.create_and_link_tags(id, tags).await?;
+        }
+
+        // Fetch the created entry
+        let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
+            .bind(id)
+            .fetch_one(self.pool.as_ref())
+            .await?;
+
+        let tags = sqlx::query_as::<_, TagRow>(&format!(
+            r#"
+            SELECT * FROM {} as et
+            LEFT JOIN {} t on t.id = et.tag_id 
+            WHERE et.entry_id = ?
+            "#,
+            ENTRIES_TAG_TABLE, TAGS_TABLE
+        ))
+        .bind(entry.id)
+        .fetch_all(self.pool.as_ref())
+        .await?;
+
+        Ok((entry, tags))
     }
 }

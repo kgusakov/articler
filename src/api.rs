@@ -1,52 +1,129 @@
 use crate::{
+    helpers::hash_str,
     models::{Entry, Tag},
     storage::repository::{
-        self, AllEntriesParams, EntryRepository, EntryRow, SortColumn, SortOrder,
-        SqliteEntryRepository, SqliteTagRepository, TagRepository, TagRow,
+        self, CreateEntry, CreateTag, EntriesCriteria, EntryRepository, EntryRow, SortColumn,
+        SortOrder, SqliteEntryRepository, SqliteTagRepository, TagRepository, TagRow,
     },
 };
 use actix_web::{
     App, HttpServer,
     dev::Server,
     error::ErrorInternalServerError,
-    get, routes,
+    get, post, routes,
     web::{self, Json, Query},
 };
 use anyhow::anyhow;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
+use core::arch;
 use serde::{Deserialize, Serialize};
 use serde_with::BoolFromInt;
 use serde_with::StringWithSeparator;
 use serde_with::formats::CommaSeparator;
 use serde_with::serde_as;
-use sqlx::{Pool, Sqlite};
-use std::{str::FromStr, sync::Arc};
+use slug::slugify;
+use sqlx::{FromRow, Pool, Sqlite};
+use std::{fs::read, ops::Add, str::FromStr, sync::Arc};
 use url::{ParseError, Url};
 
-pub struct AppState {
-    tag_repository: Arc<dyn TagRepository>,
-    entry_repository: Arc<dyn EntryRepository>,
-}
+// TODO post with the same url is not supported
+#[post("/api/entries.json")]
+pub async fn post_entries(
+    data: web::Data<AppState>,
+    request: web::Form<AddEntry>,
+) -> actix_web::Result<Json<AddEntryResponse>> {
+    //
+    // Check if url already exist:
+    //    - if exist update the current entry
+    //    - if not - create new one
+    //
+    // In both case if title and/or content is not set - both will be retrieved from the internet again
+    let request = request.into_inner();
 
-pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
-    let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
+    // TODO must be received by scrapper
+    let title = "Title";
+    // TODO must be received by scrapper
+    let content = "Content";
+    // TODO must be received by scrapper
+    let mimetype = "text/html";
+    // TODO must be calculated
+    let reading_time = 0;
+    // TODO url without domain must be handled in an appropriate way
+    let domain_name = request.url.domain().unwrap_or("");
+    // TODO must be calculated for public is_public == true
+    let uid = "".to_string();
 
-    AppState {
-        tag_repository: tag_repo.clone(),
-        entry_repository: Arc::new(SqliteEntryRepository::new(pool.clone(), tag_repo.clone())),
-    }
-}
+    let now = Utc::now().timestamp();
 
-pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
-    let app_data = web::Data::new(app_state);
+    let archived = request.archive.unwrap_or(false);
+    let starred = request.starred.unwrap_or(false);
 
-    Ok(HttpServer::new(move || {
-        App::new()
-            .app_data(app_data.clone())
-            .service(web::scope("/").service(entries))
-    })
-    .bind(format!("0.0.0.0:{}", port))?
-    .run())
+    // TODO can we remove all these ugly to_string?
+    let create_entry = CreateEntry {
+        // TODO actually here we must have url without redirects already
+        url: request.url.to_string(),
+        hashed_url: hash_str(request.url.as_str()),
+        given_url: request.url.to_string(),
+        hashed_given_url: hash_str(request.url.as_str()),
+        title: request.title.unwrap_or(title.to_string()),
+        content: request.content.unwrap_or(content.to_string()),
+        is_archived: archived,
+        archived_at: if archived { Some(now) } else { None },
+        is_starred: starred,
+        starred_at: if starred { Some(now) } else { None },
+        created_at: now,
+        update_at: now,
+        mimetype: Some(mimetype.to_string()),
+        language: request.language,
+        reading_time: reading_time,
+        domain_name: domain_name.to_string(),
+        preview_picture: request.preview_picture.map(|u| u.to_string()),
+        origin_url: request.origin_url.map(|u| u.to_string()),
+        published_at: request.published_at.map(|v| v.timestamp()),
+        published_by: request.authours.map(|a| a.join(",")),
+        is_public: request.public,
+        uid: request.public.filter(|p| *p).map(|b| uid),
+    };
+
+    let tag_to_create_tag = |label: String| -> CreateTag {
+        CreateTag {
+            label: label.clone(),
+            slug: slugify(label),
+        }
+    };
+
+    let create_tags = request
+        .tags
+        .map(|_tags| {
+            _tags
+                .into_iter()
+                .map(tag_to_create_tag)
+                .collect::<Vec<CreateTag>>()
+        })
+        // TODO if it is not new entry - we will force empty tags. It should be fixed when this method will support not only entry creations
+        .unwrap_or(vec![]);
+
+    // TODO for create
+    let (entry_row, tag_rows) = data
+        .entry_repository
+        .create(create_entry, create_tags)
+        .await
+        .map_err(ErrorInternalServerError)?;
+
+    let tags = tag_rows.into_iter().map(|tr| Tag::from(tr)).collect();
+
+    // TODO replace by real url
+    let self_url = Url::parse("https://example.com").map_err(ErrorInternalServerError)?;
+
+    Ok(web::Json(AddEntryResponse {
+        entry: Entry::try_from((entry_row, tags)).map_err(ErrorInternalServerError)?,
+        _links: Links {
+            _self: Link { href: self_url },
+            first: None,
+            last: None,
+            next: None,
+        },
+    }))
 }
 
 // TODO /api pref should be moved as a base prefix
@@ -57,18 +134,20 @@ pub async fn entries(
     data: web::Data<AppState>,
     request: Query<EntriesRequest>,
 ) -> actix_web::Result<Json<Entries>> {
-    let params = AllEntriesParams {
+    let request = request.into_inner();
+
+    let params = EntriesCriteria {
         archive: request.archive,
         starred: request.starred,
         sort: Some(request.sort.into()),
         order: Some(request.order.into()),
         page: Some(request.page),
         per_page: Some(request.per_page),
-        tags: request.tags.clone(),
+        tags: request.tags,
         since: Some(request.since),
         public: request.public,
         detail: Some(request.detail.into()),
-        domain_name: request.domain_name.clone(),
+        domain_name: request.domain_name,
     };
     // TODO implement all needed request filters and etc
     let entries = data
@@ -101,11 +180,44 @@ pub async fn entries(
         embedded: Embedded { items: ents },
         _links: Links {
             _self: Link { href: url.clone() },
-            first: Link { href: url.clone() },
-            last: Link { href: url.clone() },
-            next: Link { href: url.clone() },
+            first: Some(Link { href: url.clone() }),
+            last: Some(Link { href: url.clone() }),
+            next: Some(Link { href: url.clone() }),
         },
     }))
+}
+
+pub struct AppState {
+    tag_repository: Arc<dyn TagRepository>,
+    entry_repository: Arc<dyn EntryRepository>,
+}
+
+pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
+    let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
+
+    AppState {
+        tag_repository: tag_repo.clone(),
+        entry_repository: Arc::new(SqliteEntryRepository::new(pool.clone(), tag_repo.clone())),
+    }
+}
+
+pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
+    let app_data = web::Data::new(app_state);
+
+    Ok(HttpServer::new(move || {
+        App::new()
+            .app_data(app_data.clone())
+            .service(web::scope("/").service(entries))
+    })
+    .bind(format!("0.0.0.0:{}", port))?
+    .run())
+}
+
+#[derive(Serialize)]
+pub struct AddEntryResponse {
+    #[serde(flatten)]
+    entry: Entry,
+    _links: Links,
 }
 
 #[derive(Serialize)]
@@ -158,6 +270,7 @@ impl TryFrom<(EntryRow, Vec<Tag>)> for Entry {
     type Error = anyhow::Error;
 
     fn try_from((e, tags): (EntryRow, Vec<Tag>)) -> Result<Self, Self::Error> {
+        dbg!(&e.given_url);
         Ok(Entry {
             id: e.id,
             url: Url::parse(&e.url)?,
@@ -269,6 +382,32 @@ fn default_per_page() -> i64 {
 }
 
 #[serde_as]
+#[derive(Deserialize, PartialEq, Debug)]
+pub struct AddEntry {
+    // If not set - title will be retrieved by scrapping
+    pub title: Option<String>,
+    // If not set - content will be retrieved by scrapping
+    pub content: Option<String>,
+    pub tags: Option<Vec<String>>,
+    #[serde_as(as = "Option<BoolFromInt>")]
+    pub archive: Option<bool>,
+    #[serde_as(as = "Option<BoolFromInt>")]
+    pub starred: Option<bool>,
+    // Will be set as given url for the entry
+    // If there will be some redirects, result url will be set as entry url
+    pub url: Url,
+    pub language: Option<String>,
+    pub published_at: Option<DateTime<Utc>>,
+    pub preview_picture: Option<Url>,
+    pub authours: Option<Vec<String>>,
+    // Generate public link for the url or not
+    #[serde_as(as = "Option<BoolFromInt>")]
+    pub public: Option<bool>,
+    // Origin url for the entry (from where user found it).
+    pub origin_url: Option<String>,
+}
+
+#[serde_as]
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct EntriesRequest {
     #[serde_as(as = "Option<BoolFromInt>")]
@@ -299,9 +438,12 @@ pub struct EntriesRequest {
 struct Links {
     #[serde(rename(serialize = "self"))]
     _self: Link,
-    first: Link,
-    last: Link,
-    next: Link,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    first: Option<Link>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last: Option<Link>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    next: Option<Link>,
 }
 
 #[derive(Serialize)]

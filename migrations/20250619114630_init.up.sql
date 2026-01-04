@@ -2,9 +2,9 @@
 CREATE TABLE IF NOT EXISTS entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     url TEXT NOT NULL,
-    hashed_url TEXT,
-    given_url TEXT,
-    hashed_given_url TEXT,
+    hashed_url TEXT NOT NULL,
+    given_url TEXT NOT NULL,
+    hashed_given_url TEXT NOT NULL,
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     is_archived BOOLEAN NOT NULL DEFAULT 0,
