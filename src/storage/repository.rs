@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, fmt::Display, sync::Arc};
+use std::{fmt::Display, sync::Arc};
 
 use crate::models::Range;
 use async_trait::async_trait;
@@ -103,25 +103,21 @@ impl TagRepository for SqliteTagRepository {
         tag_builder.build().execute(self.pool.as_ref()).await?;
 
         let mut insert_query = QueryBuilder::new(format!(
-            r#"
-        INSERT INTO {}
-        SELECT id as tag_id, ? as entry_id FROM {} WHERE label IN ("#,
-            ENTRIES_TAG_TABLE, TAGS_TABLE
+            r#"INSERT INTO {} SELECT "#,
+            ENTRIES_TAG_TABLE
         ));
-        insert_query.push_bind(entry_id);
+        insert_query.push(entry_id);
+        insert_query.push(format!(" as entry_id, id as tag_id FROM {} WHERE label IN (", TAGS_TABLE));
         let mut separated = insert_query.separated(", ");
         for tag in &tags {
             // TODO remove clone()?
             separated.push_bind(tag.label.clone());
         }
-        separated.push_unseparated(
-            r#")
-            ON CONFLICT DO NOTHING"#,
-        );
+        separated.push_unseparated(") ON CONFLICT DO NOTHING");
 
         insert_query.build().execute(self.pool.as_ref()).await?;
 
-        let mut get_tags = QueryBuilder::new(format!("SELECT * from {}", TAGS_TABLE));
+        let mut get_tags = QueryBuilder::new(format!("SELECT * from {} WHERE label IN (", TAGS_TABLE));
 
         let mut tags_separated = get_tags.separated(", ");
         for tag in &tags {
@@ -578,8 +574,8 @@ impl EntryRepository for SqliteEntryRepository {
 
         let tags = sqlx::query_as::<_, TagRow>(&format!(
             r#"
-            SELECT * FROM {} as et
-            LEFT JOIN {} t on t.id = et.tag_id 
+            SELECT t.* FROM {} as et
+            LEFT JOIN {} t on t.id = et.tag_id
             WHERE et.entry_id = ?
             "#,
             ENTRIES_TAG_TABLE, TAGS_TABLE

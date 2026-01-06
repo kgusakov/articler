@@ -9,9 +9,11 @@ use actix_web::{
 };
 
 use chrono::{DateTime, Utc};
+use proptest::prelude::*;
 use serde_json::Value;
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
+use urlencoding::encode;
 // TODO is it appropriate way?
 use wallabag_rs::api::{app_state_init, entries, post_entries};
 
@@ -227,7 +229,7 @@ async fn get_entries_public(pool: SqlitePool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+#[sqlx::test(migrations = "./migrations")]
 async fn test_post_entries(pool: SqlitePool) {
     init();
 
@@ -243,7 +245,7 @@ async fn test_post_entries(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/api/entries.json")
-        .set_payload("url=https://example.com/article&archive=0&starred=0")
+        .set_payload("url=https://example.com/article&archive=0&starred=0&tags=label1,label2")
         .insert_header(("content-type", "application/x-www-form-urlencoded"))
         .to_request();
 

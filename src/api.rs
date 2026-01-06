@@ -10,20 +10,19 @@ use actix_web::{
     App, HttpServer,
     dev::Server,
     error::ErrorInternalServerError,
-    get, post, routes,
+    post, routes,
     web::{self, Json, Query},
 };
 use anyhow::anyhow;
-use chrono::{DateTime, Local, Utc};
-use core::arch;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_with::BoolFromInt;
 use serde_with::StringWithSeparator;
 use serde_with::formats::CommaSeparator;
 use serde_with::serde_as;
 use slug::slugify;
-use sqlx::{FromRow, Pool, Sqlite};
-use std::{fs::read, ops::Add, str::FromStr, sync::Arc};
+use sqlx::{Pool, Sqlite};
+use std::{str::FromStr, sync::Arc};
 use url::{ParseError, Url};
 
 // TODO post with the same url is not supported
@@ -82,7 +81,7 @@ pub async fn post_entries(
         published_at: request.published_at.map(|v| v.timestamp()),
         published_by: request.authours.map(|a| a.join(",")),
         is_public: request.public,
-        uid: request.public.filter(|p| *p).map(|b| uid),
+        uid: request.public.filter(|p| *p).map(|_b| uid),
     };
 
     let tag_to_create_tag = |label: String| -> CreateTag {
@@ -208,6 +207,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
         App::new()
             .app_data(app_data.clone())
             .service(web::scope("/").service(entries))
+            .service(web::scope("/").service(post_entries))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run())
@@ -388,6 +388,7 @@ pub struct AddEntry {
     pub title: Option<String>,
     // If not set - content will be retrieved by scrapping
     pub content: Option<String>,
+    #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
     pub tags: Option<Vec<String>>,
     #[serde_as(as = "Option<BoolFromInt>")]
     pub archive: Option<bool>,
