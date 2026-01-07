@@ -32,7 +32,6 @@ pub struct Entry {
     pub origin_url: Option<Url>,
     pub published_at: Option<DateTime<Utc>>,
     pub published_by: Option<Vec<String>>,
-    #[serde_as(as = "Option<BoolFromInt>")]
     pub is_public: Option<bool>,
     pub uid: Option<String>,
 }

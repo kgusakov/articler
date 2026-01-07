@@ -31,7 +31,7 @@
                 ],
                 "created_at": "2023-12-01T11:01:40Z",
                 "updated_at": "2023-12-10T15:00:00Z",
-                "annotations": null,
+                "annotations": [],
                 "mimetype": "text/html",
                 "language": "en",
                 "reading_time": 5,
@@ -39,7 +39,9 @@
                 "preview_picture": "https://b.com/pic2.jpg",
                 "origin_url": "https://b.com/o2",
                 "published_at": "2023-12-01T10:01:40Z",
-                "published_by": "author2",
+                "published_by": [
+                    "author2"
+                ],
                 "is_public": false,
                 "uid": null
             },
@@ -69,7 +71,7 @@
                 ],
                 "created_at": "2023-12-01T11:05:00Z",
                 "updated_at": "2023-12-10T15:01:40Z",
-                "annotations": null,
+                "annotations": [],
                 "mimetype": "text/html",
                 "language": "en",
                 "reading_time": 15,
@@ -77,7 +79,9 @@
                 "preview_picture": "https://d.com/pic4.jpg",
                 "origin_url": "https://d.com/o4",
                 "published_at": "2023-12-01T10:05:00Z",
-                "published_by": "author4",
+                "published_by": [
+                    "author4"
+                ],
                 "is_public": false,
                 "uid": null
             },
@@ -107,7 +111,7 @@
                 ],
                 "created_at": "2023-12-01T11:08:20Z",
                 "updated_at": "2023-12-10T15:03:20Z",
-                "annotations": null,
+                "annotations": [],
                 "mimetype": "text/html",
                 "language": "en",
                 "reading_time": 20,
@@ -115,7 +119,9 @@
                 "preview_picture": "https://f.com/pic6.jpg",
                 "origin_url": "https://f.com/o6",
                 "published_at": "2023-12-01T10:08:20Z",
-                "published_by": "author6",
+                "published_by": [
+                    "author6"
+                ],
                 "is_public": true,
                 "uid": null
             },
@@ -140,7 +146,7 @@
                 ],
                 "created_at": "2023-12-01T11:00:00Z",
                 "updated_at": "2023-12-10T15:05:00Z",
-                "annotations": null,
+                "annotations": [],
                 "mimetype": "text/html",
                 "language": "en",
                 "reading_time": 8,
@@ -148,7 +154,9 @@
                 "preview_picture": "https://a.com/pic1.jpg",
                 "origin_url": "https://a.com/o1",
                 "published_at": "2023-12-01T10:00:00Z",
-                "published_by": "author1",
+                "published_by": [
+                    "author1"
+                ],
                 "is_public": false,
                 "uid": null
             },
@@ -173,7 +181,7 @@
                 ],
                 "created_at": "2023-12-01T11:06:40Z",
                 "updated_at": "2023-12-10T15:06:40Z",
-                "annotations": null,
+                "annotations": [],
                 "mimetype": "text/html",
                 "language": "en",
                 "reading_time": 10,
@@ -181,7 +189,9 @@
                 "preview_picture": "https://e.com/pic5.jpg",
                 "origin_url": "https://e.com/o5",
                 "published_at": "2023-12-01T10:06:40Z",
-                "published_by": "author5",
+                "published_by": [
+                    "author5"
+                ],
                 "is_public": true,
                 "uid": null
             },
@@ -206,7 +216,7 @@
                 ],
                 "created_at": "2023-12-01T11:03:20Z",
                 "updated_at": "2023-12-10T15:08:20Z",
-                "annotations": null,
+                "annotations": [],
                 "mimetype": "text/html",
                 "language": "en",
                 "reading_time": 12,
@@ -214,7 +224,9 @@
                 "preview_picture": "https://c.com/pic3.jpg",
                 "origin_url": "https://c.com/o3",
                 "published_at": "2023-12-01T10:03:20Z",
-                "published_by": "author3",
+                "published_by": [
+                    "author3"
+                ],
                 "is_public": false,
                 "uid": null
             }
