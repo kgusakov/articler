@@ -311,7 +311,7 @@ async fn delete_entry_expect_id(pool: SqlitePool) {
     .await;
 
     let req = test::TestRequest::delete()
-        .uri("/api/entries/entry.json?entry=1&expect=id")
+        .uri("/api/entries/1.json?expect=id")
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -346,7 +346,7 @@ async fn delete_entry_expect_full(pool: SqlitePool) {
     .await;
 
     let req = test::TestRequest::delete()
-        .uri("/api/entries/entry.json?entry=2&expect=full")
+        .uri("/api/entries/2.json?expect=full")
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -380,7 +380,7 @@ async fn delete_entry_not_found(pool: SqlitePool) {
     .await;
 
     let req = test::TestRequest::delete()
-        .uri("/api/entries/entry.json?entry=999&expect=id")
+        .uri("/api/entries/999.json?expect=id")
         .to_request();
 
     let resp = test::call_service(&app, req).await;

@@ -3,11 +3,13 @@ use serde::Serialize;
 use serde_with::{BoolFromInt, serde_as};
 use url::Url;
 
+type Id = i64;
+
 // TODO investigate the good default traits to derive
 #[serde_as]
 #[derive(Serialize)]
 pub struct Entry {
-    pub id: i64,
+    pub id: Id,
     pub url: Url,
     pub hashed_url: Option<String>,
     pub given_url: Option<Url>,
@@ -26,7 +28,7 @@ pub struct Entry {
     pub annotations: Vec<Annotation>,
     pub mimetype: Option<String>,
     pub language: Option<String>,
-    pub reading_time: i64,
+    pub reading_time: i32,
     pub domain_name: String,
     pub preview_picture: Option<Url>,
     pub origin_url: Option<Url>,
@@ -38,7 +40,7 @@ pub struct Entry {
 
 #[derive(Serialize)]
 pub struct Annotation {
-    pub id: i32,
+    pub id: Id,
     pub annotator_schema_version: String,
     pub text: String,
     pub created_at: DateTime<Utc>,
@@ -49,7 +51,7 @@ pub struct Annotation {
 
 #[derive(Serialize)]
 pub struct Range {
-    pub id: i32,
+    pub id: Id,
     pub start: String,
     pub end: String,
     #[serde(rename(serialize = "startOffset"))]
@@ -60,7 +62,7 @@ pub struct Range {
 
 #[derive(Serialize)]
 pub struct Tag {
-    pub id: i32,
+    pub id: Id,
     pub label: String,
     pub slug: String,
 }

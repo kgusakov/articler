@@ -1,6 +1,7 @@
 use std::{fmt::Display, sync::Arc};
 
 use crate::models::Range;
+use actix_web::cookie::time::Time;
 use async_trait::async_trait;
 use indexmap::IndexMap;
 use sqlx::{Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*, sqlite::SqliteRow};
@@ -15,6 +16,9 @@ const SQLITE_LIMIT_VARIABLE_NUMBER: usize = 999;
 
 type Result<T> = std::result::Result<T, DbError>;
 type FullEntry = (EntryRow, Vec<TagRow>);
+type Id = i64;
+type Timestamp = i64;
+type ReadingTIme = i32;
 
 #[derive(Error, Debug)]
 pub enum DbError {
@@ -26,7 +30,7 @@ pub enum DbError {
 }
 
 pub struct TagRow {
-    pub id: i32,
+    pub id: Id,
     pub label: String,
     pub slug: String,
 }
@@ -68,11 +72,8 @@ impl SqliteTagRepository {
 
 #[async_trait]
 pub trait TagRepository: Send + Sync {
-    async fn create_and_link_tags(
-        &self,
-        entry_id: i64,
-        tags: Vec<CreateTag>,
-    ) -> Result<Vec<TagRow>>;
+    async fn create_and_link_tags(&self, entry_id: Id, tags: Vec<CreateTag>)
+    -> Result<Vec<TagRow>>;
 }
 
 #[async_trait]
@@ -80,10 +81,9 @@ impl TagRepository for SqliteTagRepository {
     /* Return Vec of tags, which was linked to entry_id. Vec consists of ALL tags, even tags, which was already linked before and included in tags argument. */
     async fn create_and_link_tags(
         &self,
-        entry_id: i64,
+        entry_id: Id,
         tags: Vec<CreateTag>,
     ) -> Result<Vec<TagRow>> {
-        // Check SQLite variable limit (2 variables per tag: label and slug)
         if tags.len() > SQLITE_LIMIT_VARIABLE_NUMBER / 2 {
             return Err(DbError::RepositoryError(
                 format!(
@@ -167,11 +167,11 @@ impl<'r> FromRow<'r, SqliteRow> for EntryRow {
 }
 
 pub struct AnnotationRow {
-    pub id: i32,
+    pub id: Id,
     pub annotator_schema_version: String,
     pub text: String,
-    pub created_at: i64,
-    pub updated_at: i64,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
     pub quote: String,
 }
 
@@ -209,18 +209,18 @@ pub struct CreateEntry {
     pub title: String,
     pub content: String,
     pub is_archived: bool,
-    pub archived_at: Option<i64>,
+    pub archived_at: Option<Timestamp>,
     pub is_starred: bool,
-    pub starred_at: Option<i64>,
-    pub created_at: i64,
-    pub update_at: i64,
+    pub starred_at: Option<Timestamp>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
     pub mimetype: Option<String>,
     pub language: Option<String>,
     pub reading_time: i32,
     pub domain_name: String,
     pub preview_picture: Option<String>,
     pub origin_url: Option<String>,
-    pub published_at: Option<i64>,
+    pub published_at: Option<Timestamp>,
     pub published_by: Option<String>,
     pub is_public: Option<bool>,
     pub uid: Option<String>,
@@ -228,23 +228,19 @@ pub struct CreateEntry {
 
 #[derive(Debug)]
 pub struct UpdateEntry {
-    pub hashed_url: Option<String>,
-    pub given_url: Option<String>,
-    pub hashed_given_url: Option<String>,
+    pub id: Id,
     pub title: Option<String>,
     pub content: Option<String>,
     pub is_archived: Option<bool>,
-    pub archived_at: Option<i64>,
+    pub archived_at: Option<Timestamp>,
     pub is_starred: Option<bool>,
-    pub starred_at: Option<i64>,
-    pub created_at: Option<i64>,
-    pub update_at: i64,
-    pub mimetype: Option<String>,
+    pub starred_at: Option<Timestamp>,
+    pub updated_at: Timestamp,
     pub language: Option<String>,
-    pub reading_time: Option<i32>,
+    pub reading_time: Option<ReadingTIme>,
     pub preview_picture: Option<String>,
     pub origin_url: Option<String>,
-    pub published_at: Option<i64>,
+    pub published_at: Option<Timestamp>,
     pub published_by: Option<String>,
     pub is_public: Option<bool>,
     pub uid: Option<String>,
@@ -252,7 +248,7 @@ pub struct UpdateEntry {
 
 #[derive(Debug)]
 pub struct EntryRow {
-    pub id: i64,
+    pub id: Id,
     pub url: String,
     pub hashed_url: Option<String>,
     pub given_url: Option<String>,
@@ -260,18 +256,18 @@ pub struct EntryRow {
     pub title: String,
     pub content: String,
     pub is_archived: bool,
-    pub archived_at: Option<i64>,
+    pub archived_at: Option<Timestamp>,
     pub is_starred: bool,
-    pub starred_at: Option<i64>,
-    pub created_at: i64,
-    pub updated_at: i64,
+    pub starred_at: Option<Timestamp>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
     pub mimetype: Option<String>,
     pub language: Option<String>,
-    pub reading_time: i64,
+    pub reading_time: ReadingTIme,
     pub domain_name: String,
     pub preview_picture: Option<String>,
     pub origin_url: Option<String>,
-    pub published_at: Option<i64>,
+    pub published_at: Option<Timestamp>,
     pub published_by: Option<String>,
     pub is_public: Option<bool>,
     pub uid: Option<String>,
@@ -322,7 +318,7 @@ pub struct EntriesCriteria {
     pub page: Option<i64>,
     pub per_page: Option<i64>,
     pub tags: Option<Vec<String>>,
-    pub since: Option<i64>,
+    pub since: Option<Timestamp>,
     pub public: Option<bool>,
     pub detail: Option<Detail>,
     pub domain_name: Option<String>,
@@ -340,9 +336,11 @@ pub trait EntryRepository: Send + Sync {
         tags: Vec<CreateTag>,
     ) -> Result<(EntryRow, Vec<TagRow>)>;
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<FullEntry>>;
+    async fn find_by_id(&self, id: Id) -> Result<Option<FullEntry>>;
 
-    async fn delete_by_id(&self, id: i64) -> Result<bool>;
+    async fn update_by_id(&self, id: Id, update: UpdateEntry) -> Result<bool>;
+
+    async fn delete_by_id(&self, id: Id) -> Result<bool>;
 }
 
 #[derive(Clone)]
@@ -531,7 +529,6 @@ impl EntryRepository for SqliteEntryRepository {
     ) -> Result<(EntryRow, Vec<TagRow>)> {
         let now = chrono::Utc::now().timestamp();
 
-        // Insert entry
         let id = sqlx::query_scalar!(
                 r#"
                 INSERT INTO entries (
@@ -568,12 +565,10 @@ impl EntryRepository for SqliteEntryRepository {
             .fetch_one(self.pool.as_ref())
             .await?;
 
-        // Handle tags if provided
         if !tags.is_empty() {
             self.tag_repo.create_and_link_tags(id, tags).await?;
         }
 
-        // Fetch the created entry
         let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
             .bind(id)
             .fetch_one(self.pool.as_ref())
@@ -594,20 +589,17 @@ impl EntryRepository for SqliteEntryRepository {
         Ok((entry, tags))
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<FullEntry>> {
-        // Fetch the entry by ID
+    async fn find_by_id(&self, id: Id) -> Result<Option<FullEntry>> {
         let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
             .bind(id)
             .fetch_optional(self.pool.as_ref())
             .await?;
 
-        // If entry doesn't exist, return None
         let entry = match entry {
             Some(e) => e,
             None => return Ok(None),
         };
 
-        // Fetch tags for the entry
         let tags = sqlx::query_as::<_, TagRow>(&format!(
             r#"
             SELECT t.* FROM {} as et
@@ -630,7 +622,6 @@ impl EntryRepository for SqliteEntryRepository {
             .execute(self.pool.as_ref())
             .await?;
 
-        // Return true if any rows were deleted
         Ok(result.rows_affected() > 0)
     }
 }

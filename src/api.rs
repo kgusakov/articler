@@ -69,7 +69,7 @@ pub async fn post_entries(
         is_starred: starred,
         starred_at: if starred { Some(now) } else { None },
         created_at: now,
-        update_at: now,
+        updated_at: now,
         mimetype: Some(mimetype.to_string()),
         language: request.language,
         reading_time: reading_time,
@@ -200,8 +200,6 @@ impl Default for Expect {
 
 #[derive(Deserialize, Debug)]
 pub struct DeleteEntryRequest {
-    #[serde(rename(deserialize = "entry"))]
-    entry_id: i64,
     #[serde(default)]
     expect: Expect,
 }
@@ -218,18 +216,22 @@ pub enum DeleteEntryResponse {
     },
 }
 
-#[delete("/api/entries/entry.json")]
+#[routes]
+#[delete("/api/entries/{entry_id}")]
+#[delete("/api/entries/{entry_id}.json")]
 pub async fn delete_entry(
     data: web::Data<AppState>,
+    entry_id: web::Path<i64>,
     request: Query<DeleteEntryRequest>,
 ) -> actix_web::Result<Json<DeleteEntryResponse>> {
     let request = request.into_inner();
+    let entry_id = entry_id.into_inner();
 
     match request.expect {
         Expect::Id => {
             let deleted = data
                 .entry_repository
-                .delete_by_id(request.entry_id)
+                .delete_by_id(entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?;
 
@@ -237,14 +239,12 @@ pub async fn delete_entry(
                 return Err(ErrorNotFound("Entry not found"));
             }
 
-            Ok(Json(DeleteEntryResponse::Id {
-                id: request.entry_id,
-            }))
+            Ok(Json(DeleteEntryResponse::Id { id: entry_id }))
         }
         Expect::Full => {
             let full_entry = data
                 .entry_repository
-                .find_by_id(request.entry_id)
+                .find_by_id(entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?;
 
@@ -253,7 +253,7 @@ pub async fn delete_entry(
 
             let deleted = data
                 .entry_repository
-                .delete_by_id(request.entry_id)
+                .delete_by_id(entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?;
 
