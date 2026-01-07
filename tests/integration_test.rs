@@ -19,7 +19,7 @@ use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
 use urlencoding::encode;
 // TODO is it appropriate way?
-use wallabag_rs::api::{app_state_init, entries, post_entries};
+use wallabag_rs::api::{app_state_init, delete_entry, entries, post_entries};
 
 static INIT: Once = Once::new();
 
@@ -292,4 +292,102 @@ fn assert_json_date_between(
     } else {
         panic!("{} is expected, but not found", date_json_field);
     }
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn delete_entry_expect_id(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+    let app_state = app_state_init(a_pool.clone());
+    let entry_rep = app_state.entry_repository.clone();
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state))
+            .wrap(Logger::default())
+            .service(delete_entry),
+    )
+    .await;
+
+    let req = test::TestRequest::delete()
+        .uri("/api/entries/entry.json?entry=1&expect=id")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+
+    let expected: Value = serde_json::from_str(include_str!("json/delete_entry_id.json")).unwrap();
+
+    assert_json_eq!(
+        expected,
+        serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
+    );
+
+    assert!(
+        entry_rep.find_by_id(1).await.unwrap().is_none(),
+        "Entry should be deleted from database"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn delete_entry_expect_full(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+    let app_state = app_state_init(a_pool.clone());
+    let entry_rep = app_state.entry_repository.clone();
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state))
+            .wrap(Logger::default())
+            .service(delete_entry),
+    )
+    .await;
+
+    let req = test::TestRequest::delete()
+        .uri("/api/entries/entry.json?entry=2&expect=full")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+
+    let expected: Value =
+        serde_json::from_str(include_str!("json/delete_entry_full.json")).unwrap();
+
+    assert_json_eq!(
+        expected,
+        serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
+    );
+
+    assert!(
+        entry_rep.find_by_id(2).await.unwrap().is_none(),
+        "Entry should be deleted from database"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn delete_entry_not_found(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(delete_entry),
+    )
+    .await;
+
+    let req = test::TestRequest::delete()
+        .uri("/api/entries/entry.json?entry=999&expect=id")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(
+        resp.status(),
+        404,
+        "Should return 404 for non-existent entry"
+    );
 }

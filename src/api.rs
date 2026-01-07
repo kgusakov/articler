@@ -7,9 +7,9 @@ use crate::{
     },
 };
 use actix_web::{
-    App, HttpServer,
+    App, HttpServer, delete,
     dev::Server,
-    error::ErrorInternalServerError,
+    error::{ErrorInternalServerError, ErrorNotFound},
     post, routes,
     web::{self, Json, Query},
 };
@@ -184,9 +184,94 @@ pub async fn entries(
     }))
 }
 
+#[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
+enum Expect {
+    #[serde(rename(deserialize = "id"))]
+    Id,
+    #[serde(rename(deserialize = "full"))]
+    Full,
+}
+
+impl Default for Expect {
+    fn default() -> Self {
+        Expect::Id
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DeleteEntryRequest {
+    #[serde(rename(deserialize = "entry"))]
+    entry_id: i64,
+    #[serde(default)]
+    expect: Expect,
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum DeleteEntryResponse {
+    Id {
+        id: i64,
+    },
+    Full {
+        #[serde(flatten)]
+        entry: Entry,
+    },
+}
+
+#[delete("/api/entries/entry.json")]
+pub async fn delete_entry(
+    data: web::Data<AppState>,
+    request: Query<DeleteEntryRequest>,
+) -> actix_web::Result<Json<DeleteEntryResponse>> {
+    let request = request.into_inner();
+
+    match request.expect {
+        Expect::Id => {
+            let deleted = data
+                .entry_repository
+                .delete_by_id(request.entry_id)
+                .await
+                .map_err(ErrorInternalServerError)?;
+
+            if !deleted {
+                return Err(ErrorNotFound("Entry not found"));
+            }
+
+            Ok(Json(DeleteEntryResponse::Id {
+                id: request.entry_id,
+            }))
+        }
+        Expect::Full => {
+            let full_entry = data
+                .entry_repository
+                .find_by_id(request.entry_id)
+                .await
+                .map_err(ErrorInternalServerError)?;
+
+            let (entry_row, tag_rows) =
+                full_entry.ok_or_else(|| ErrorNotFound("Entry not found"))?;
+
+            let deleted = data
+                .entry_repository
+                .delete_by_id(request.entry_id)
+                .await
+                .map_err(ErrorInternalServerError)?;
+
+            if !deleted {
+                return Err(ErrorNotFound("Entry not found"));
+            }
+
+            let tags: Vec<Tag> = tag_rows.into_iter().map(|tr| tr.into()).collect();
+            let entry = Entry::try_from((entry_row, tags)).map_err(ErrorInternalServerError)?;
+
+            Ok(Json(DeleteEntryResponse::Full { entry }))
+        }
+    }
+}
+
 pub struct AppState {
-    tag_repository: Arc<dyn TagRepository>,
-    entry_repository: Arc<dyn EntryRepository>,
+    pub tag_repository: Arc<dyn TagRepository>,
+    pub entry_repository: Arc<dyn EntryRepository>,
 }
 
 pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
@@ -206,6 +291,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .app_data(app_data.clone())
             .service(web::scope("/").service(entries))
             .service(web::scope("/").service(post_entries))
+            .service(web::scope("/").service(delete_entry))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run())

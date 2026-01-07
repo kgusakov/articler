@@ -14,6 +14,7 @@ const ANNOTATION_RANGES_TABLE: &str = "annotation_ranges";
 const SQLITE_LIMIT_VARIABLE_NUMBER: usize = 999;
 
 type Result<T> = std::result::Result<T, DbError>;
+type FullEntry = (EntryRow, Vec<TagRow>);
 
 #[derive(Error, Debug)]
 pub enum DbError {
@@ -102,12 +103,13 @@ impl TagRepository for SqliteTagRepository {
         tag_builder.push(" ON CONFLICT DO NOTHING");
         tag_builder.build().execute(self.pool.as_ref()).await?;
 
-        let mut insert_query = QueryBuilder::new(format!(
-            r#"INSERT INTO {} SELECT "#,
-            ENTRIES_TAG_TABLE
-        ));
+        let mut insert_query =
+            QueryBuilder::new(format!(r#"INSERT INTO {} SELECT "#, ENTRIES_TAG_TABLE));
         insert_query.push(entry_id);
-        insert_query.push(format!(" as entry_id, id as tag_id FROM {} WHERE label IN (", TAGS_TABLE));
+        insert_query.push(format!(
+            " as entry_id, id as tag_id FROM {} WHERE label IN (",
+            TAGS_TABLE
+        ));
         let mut separated = insert_query.separated(", ");
         for tag in &tags {
             // TODO remove clone()?
@@ -117,7 +119,8 @@ impl TagRepository for SqliteTagRepository {
 
         insert_query.build().execute(self.pool.as_ref()).await?;
 
-        let mut get_tags = QueryBuilder::new(format!("SELECT * from {} WHERE label IN (", TAGS_TABLE));
+        let mut get_tags =
+            QueryBuilder::new(format!("SELECT * from {} WHERE label IN (", TAGS_TABLE));
 
         let mut tags_separated = get_tags.separated(", ");
         for tag in &tags {
@@ -336,6 +339,10 @@ pub trait EntryRepository: Send + Sync {
         params: CreateEntry,
         tags: Vec<CreateTag>,
     ) -> Result<(EntryRow, Vec<TagRow>)>;
+
+    async fn find_by_id(&self, id: i64) -> Result<Option<FullEntry>>;
+
+    async fn delete_by_id(&self, id: i64) -> Result<bool>;
 }
 
 #[derive(Clone)]
@@ -585,5 +592,45 @@ impl EntryRepository for SqliteEntryRepository {
         .await?;
 
         Ok((entry, tags))
+    }
+
+    async fn find_by_id(&self, id: i64) -> Result<Option<FullEntry>> {
+        // Fetch the entry by ID
+        let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
+            .bind(id)
+            .fetch_optional(self.pool.as_ref())
+            .await?;
+
+        // If entry doesn't exist, return None
+        let entry = match entry {
+            Some(e) => e,
+            None => return Ok(None),
+        };
+
+        // Fetch tags for the entry
+        let tags = sqlx::query_as::<_, TagRow>(&format!(
+            r#"
+            SELECT t.* FROM {} as et
+            LEFT JOIN {} t on t.id = et.tag_id
+            WHERE et.entry_id = ?
+            "#,
+            ENTRIES_TAG_TABLE, TAGS_TABLE
+        ))
+        .bind(id)
+        .fetch_all(self.pool.as_ref())
+        .await?;
+
+        Ok(Some((entry, tags)))
+    }
+
+    async fn delete_by_id(&self, id: i64) -> Result<bool> {
+        // Delete the entry by ID (CASCADE will handle related records in entry_tags)
+        let result = sqlx::query("DELETE FROM entries WHERE id = ?")
+            .bind(id)
+            .execute(self.pool.as_ref())
+            .await?;
+
+        // Return true if any rows were deleted
+        Ok(result.rows_affected() > 0)
     }
 }
