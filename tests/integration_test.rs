@@ -1,4 +1,8 @@
-use std::sync::{Arc, Once};
+use std::{
+    borrow::Cow,
+    rc::Rc,
+    sync::{Arc, Once},
+};
 
 use actix_web::{
     App,
@@ -243,9 +247,11 @@ async fn test_post_entries(pool: SqlitePool) {
     )
     .await;
 
+    let payload = "url=https://example.com/article&archive=1&starred=1&tags=label 1,label 2&title=New title&content=New content&language=ru&published_at=2023-12-01T11:00:00Z&preview_picture=https://example.com/pic.jpg&authors=author1,author2&public=1&origin_url=https://example.com/origin/url";
+
     let req = test::TestRequest::post()
         .uri("/api/entries.json")
-        .set_payload("url=https://example.com/article&archive=0&starred=0&tags=label1,label2")
+        .set_payload(payload)
         .insert_header(("content-type", "application/x-www-form-urlencoded"))
         .to_request();
 
@@ -258,9 +264,12 @@ async fn test_post_entries(pool: SqlitePool) {
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
     assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
+    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
 
     assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
     assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "starred_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "archived_at", &result);
 
     assert_json_include!(
         actual: result,

@@ -1,5 +1,5 @@
 use crate::{
-    helpers::hash_str,
+    helpers::{generate_uid, hash_str},
     models::{Entry, Tag},
     storage::repository::{
         self, CreateEntry, CreateTag, EntriesCriteria, EntryRepository, EntryRow, SortColumn,
@@ -49,8 +49,6 @@ pub async fn post_entries(
     let reading_time = 0;
     // TODO url without domain must be handled in an appropriate way
     let domain_name = request.url.domain().unwrap_or("");
-    // TODO must be calculated for public is_public == true
-    let uid = "".to_string();
 
     let now = Utc::now().timestamp();
 
@@ -79,9 +77,9 @@ pub async fn post_entries(
         preview_picture: request.preview_picture.map(|u| u.to_string()),
         origin_url: request.origin_url.map(|u| u.to_string()),
         published_at: request.published_at.map(|v| v.timestamp()),
-        published_by: request.authours.map(|a| a.join(",")),
+        published_by: request.authors.map(|a| a.join(",")),
         is_public: request.public,
-        uid: request.public.filter(|p| *p).map(|_b| uid),
+        uid: request.public.filter(|p| *p).map(|_b| generate_uid()),
     };
 
     let tag_to_create_tag = |label: String| -> CreateTag {
@@ -270,7 +268,6 @@ impl TryFrom<(EntryRow, Vec<Tag>)> for Entry {
     type Error = anyhow::Error;
 
     fn try_from((e, tags): (EntryRow, Vec<Tag>)) -> Result<Self, Self::Error> {
-        dbg!(&e.given_url);
         Ok(Entry {
             id: e.id,
             url: Url::parse(&e.url)?,
@@ -286,7 +283,8 @@ impl TryFrom<(EntryRow, Vec<Tag>)> for Entry {
             tags: tags,
             created_at: try_parse_timestamp(e.created_at)?,
             updated_at: try_parse_timestamp(e.updated_at)?,
-            annotations: None,
+            // TODO implement annotations support
+            annotations: vec![],
             mimetype: e.mimetype,
             language: e.language,
             reading_time: e.reading_time,
@@ -294,7 +292,10 @@ impl TryFrom<(EntryRow, Vec<Tag>)> for Entry {
             preview_picture: try_parse_url(e.preview_picture)?,
             origin_url: try_parse_url(e.origin_url)?,
             published_at: try_parse_timestamp_opt(e.published_at)?,
-            published_by: e.published_by,
+            // TODO this .map(to_string) look ugly
+            published_by: e
+                .published_by
+                .map(|s| s.split(",").map(|s| s.to_string()).collect()),
             is_public: e.is_public,
             uid: e.uid,
         })
@@ -400,7 +401,8 @@ pub struct AddEntry {
     pub language: Option<String>,
     pub published_at: Option<DateTime<Utc>>,
     pub preview_picture: Option<Url>,
-    pub authours: Option<Vec<String>>,
+    #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
+    pub authors: Option<Vec<String>>,
     // Generate public link for the url or not
     #[serde_as(as = "Option<BoolFromInt>")]
     pub public: Option<bool>,

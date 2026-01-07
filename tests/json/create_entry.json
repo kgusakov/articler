@@ -3,24 +3,33 @@
     "hashed_url": "11741d0bc705e8b807b7117cf65808448171ca06",
     "given_url": "https://example.com/article",
     "hashed_given_url": "11741d0bc705e8b807b7117cf65808448171ca06",
-    "title": "Title",
-    "content": "Content",
-    "is_archived": 0,
-    "archived_at": null,
-    "is_starred": 0,
-    "starred_at": null,
-    "tags": [],
-    "annotations": null,
+    "title": "New title",
+    "content": "New content",
+    "is_archived": 1,
+    "is_starred": 1,
+    "tags": [
+        {
+            "label": "label 1",
+            "slug": "label-1"
+        },
+        {
+            "label": "label 2",
+            "slug": "label-2"
+        }
+    ],
+    "annotations": [],
     "mimetype": "text/html",
-    "language": null,
+    "language": "ru",
     "reading_time": 0,
     "domain_name": "example.com",
-    "preview_picture": null,
-    "origin_url": null,
-    "published_at": null,
-    "published_by": null,
-    "is_public": null,
-    "uid": null,
+    "preview_picture": "https://example.com/pic.jpg",
+    "origin_url": "https://example.com/origin/url",
+    "published_at": "2023-12-01T11:00:00Z",
+    "published_by": [
+        "author1",
+        "author2"
+    ],
+    "is_public": 1,
     "_links": {
         "self": {
             "href": "https://example.com/"
