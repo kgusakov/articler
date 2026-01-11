@@ -20,8 +20,8 @@ use sqlx::SqlitePool;
 use urlencoding::encode;
 // TODO is it appropriate way?
 use wallabag_rs::api::{
-    app_state_init, delete_entry, delete_tag_from_entry, entries, get_tags, get_tags_by_entry,
-    patch_entry, post_entries,
+    app_state_init, delete_entry, delete_tag_by_label, delete_tag_from_entry, entries, get_tags,
+    get_tags_by_entry, patch_entry, post_entries,
 };
 
 static INIT: Once = Once::new();
@@ -761,9 +761,7 @@ async fn test_get_all_tags(pool: SqlitePool) {
     )
     .await;
 
-    let req = test::TestRequest::get()
-        .uri("/api/tags")
-        .to_request();
+    let req = test::TestRequest::get().uri("/api/tags").to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
     let expected = serde_json::from_str::<Value>(include_str!("json/get_all_tags.json")).unwrap();
@@ -789,15 +787,17 @@ async fn test_get_all_tags_empty(pool: SqlitePool) {
     )
     .await;
 
-    let req = test::TestRequest::get()
-        .uri("/api/tags")
-        .to_request();
+    let req = test::TestRequest::get().uri("/api/tags").to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
     let tags = result.as_array().unwrap();
-    assert_eq!(tags.len(), 0, "Should return empty array when no tags exist");
+    assert_eq!(
+        tags.len(),
+        0,
+        "Should return empty array when no tags exist"
+    );
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("entries"))]
@@ -820,7 +820,9 @@ async fn delete_tag_from_entry_success(pool: SqlitePool) {
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
-    let expected = serde_json::from_str::<Value>(include_str!("json/delete_tag_from_entry_success.json")).unwrap();
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/delete_tag_from_entry_success.json"))
+            .unwrap();
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
     assert_json_include!(
@@ -849,7 +851,9 @@ async fn delete_nonexistent_tag_from_entry(pool: SqlitePool) {
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
-    let expected = serde_json::from_str::<Value>(include_str!("json/delete_tag_from_entry_unchanged.json")).unwrap();
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/delete_tag_from_entry_unchanged.json"))
+            .unwrap();
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
     // Entry should be returned unchanged with both original tags
@@ -885,4 +889,59 @@ async fn delete_tag_from_nonexistent_entry(pool: SqlitePool) {
         404,
         "Should return 404 for non-existent entry"
     );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn delete_tag_by_label_success(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(delete_tag_by_label),
+    )
+    .await;
+
+    // Delete tag with label "label1"
+    let req = test::TestRequest::delete()
+        .uri("/api/tags?tag=label1")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/delete_tag_by_label_success.json"))
+            .unwrap();
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn delete_nonexistent_tag_by_label(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(delete_tag_by_label),
+    )
+    .await;
+
+    // Try to delete non-existent tag
+    let req = test::TestRequest::delete()
+        .uri("/api/tags?tag=nonexistent")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), 404, "Should return 404 for non-existent tag");
 }

@@ -227,6 +227,30 @@ pub async fn get_tags(data: web::Data<AppState>) -> actix_web::Result<Json<Vec<T
     ))
 }
 
+#[derive(Deserialize)]
+struct TagLabel {
+    #[serde(rename(deserialize = "tag"))]
+    label: String,
+}
+
+#[delete("/api/tags")]
+pub async fn delete_tag_by_label(
+    data: web::Data<AppState>,
+    label: web::Query<TagLabel>,
+) -> actix_web::Result<Json<Tag>> {
+    let result = data
+        .tag_repository
+        .delete_by_label(&label.label)
+        .await
+        .map_err(ErrorInternalServerError)?
+        .map(|tr| tr.into());
+    if let Some(delete_tag) = result {
+        Ok(Json(delete_tag))
+    } else {
+        Err(ErrorNotFound("Tag not found"))
+    }
+}
+
 #[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
 enum Expect {
     #[serde(rename(deserialize = "id"))]
@@ -464,6 +488,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .service(web::scope("/").service(get_tags_by_entry))
             .service(web::scope("/").service(get_tags))
             .service(web::scope("/").service(delete_tag_from_entry))
+            .service(web::scope("/").service(delete_tag_by_label))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run())
