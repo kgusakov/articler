@@ -19,7 +19,7 @@ use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
 use urlencoding::encode;
 // TODO is it appropriate way?
-use wallabag_rs::api::{app_state_init, delete_entry, entries, post_entries};
+use wallabag_rs::api::{app_state_init, delete_entry, entries, patch_entry, post_entries};
 
 static INIT: Once = Once::new();
 
@@ -390,4 +390,270 @@ async fn delete_entry_not_found(pool: SqlitePool) {
         404,
         "Should return 404 for non-existent entry"
     );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn patch_entry_basic_fields(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(patch_entry),
+    )
+    .await;
+
+    let payload = r#"{"title":"Updated Title","content":"Updated Content","language":"fr"}"#;
+
+    let req = test::TestRequest::patch()
+        .uri("/api/entries/1.json")
+        .set_payload(payload)
+        .insert_header(("content-type", "application/json"))
+        .to_request();
+
+    let before_call_time = Utc::now();
+    let resp = test::call_and_read_body(&app, req).await;
+    let after_call_time = Utc::now();
+
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/patch_entry_basic.json")).unwrap();
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn patch_entry_archive_and_star(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(patch_entry),
+    )
+    .await;
+
+    // Archive and star entry 1 (which is not archived and not starred)
+    let payload = r#"{"archive":1,"starred":1}"#;
+
+    let req = test::TestRequest::patch()
+        .uri("/api/entries/1.json")
+        .set_payload(payload)
+        .insert_header(("content-type", "application/json"))
+        .to_request();
+
+    let before_call_time = Utc::now();
+    let resp = test::call_and_read_body(&app, req).await;
+    let after_call_time = Utc::now();
+
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    // TODO if entry already has 1 in these fields - test tests nothing
+    // TODO early the main design goal was to test the whole json
+    assert_eq!(result.get("is_archived").unwrap().as_i64().unwrap(), 1);
+    assert_eq!(result.get("is_starred").unwrap().as_i64().unwrap(), 1);
+
+    assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "archived_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "starred_at", &result);
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn patch_entry_unarchive_and_unstar(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(patch_entry),
+    )
+    .await;
+
+    // Unarchive and unstar entry 4 (which is archived and starred)
+    let payload = r#"{"archive":0,"starred":0}"#;
+
+    let req = test::TestRequest::patch()
+        .uri("/api/entries/4.json")
+        .set_payload(payload)
+        .insert_header(("content-type", "application/json"))
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    // TODO if entry already has 1 in these fields - test tests nothing
+    assert_eq!(result.get("is_archived").unwrap().as_i64().unwrap(), 0);
+    assert_eq!(result.get("is_starred").unwrap().as_i64().unwrap(), 0);
+    assert!(result.get("archived_at").unwrap().is_null());
+    assert!(result.get("starred_at").unwrap().is_null());
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn patch_entry_add_tags(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(patch_entry),
+    )
+    .await;
+
+    // Add tags to entry 1 (which has no tags)
+    let payload = r#"{"tags":"newtag1,newtag2"}"#;
+
+    let req = test::TestRequest::patch()
+        .uri("/api/entries/1.json")
+        .set_payload(payload)
+        .insert_header(("content-type", "application/json"))
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/patch_entry_add_tags.json")).unwrap();
+
+    assert_json_include!(
+        actual: serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap(),
+        expected: expected,
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn patch_entry_replace_tags(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(patch_entry),
+    )
+    .await;
+
+    // Replace tags on entry 2 (which has label1 and label2)
+    let payload = r#"{"tags":"label3,newtag"}"#;
+
+    let req = test::TestRequest::patch()
+        .uri("/api/entries/2.json")
+        .set_payload(payload)
+        .insert_header(("content-type", "application/json"))
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/patch_entry_replace_tags.json")).unwrap();
+
+    assert_json_include!(
+        actual: serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap(),
+        expected: expected,
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn patch_entry_remove_all_tags(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(patch_entry),
+    )
+    .await;
+
+    // Remove all tags from entry 2 (which has label1 and label2)
+    let payload = r#"{"tags":""}"#;
+
+    let req = test::TestRequest::patch()
+        .uri("/api/entries/2.json")
+        .set_payload(payload)
+        .insert_header(("content-type", "application/json"))
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert!(result.get("tags").unwrap().as_array().unwrap().is_empty());
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn patch_entry_not_found(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(patch_entry),
+    )
+    .await;
+
+    let payload = r#"{"title":"Updated"}"#;
+
+    let req = test::TestRequest::patch()
+        .uri("/api/entries/999.json")
+        .set_payload(payload)
+        .insert_header(("content-type", "application/json"))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(
+        resp.status(),
+        404,
+        "Should return 404 for non-existent entry"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn patch_entry_make_public(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(patch_entry),
+    )
+    .await;
+
+    // Make entry 1 public (which is not public)
+    let payload = r#"{"public":1}"#;
+
+    let req = test::TestRequest::patch()
+        .uri("/api/entries/1.json")
+        .set_payload(payload)
+        .insert_header(("content-type", "application/json"))
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert_eq!(result.get("is_public").unwrap().as_bool().unwrap(), true);
+    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
 }

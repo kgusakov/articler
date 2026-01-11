@@ -4,13 +4,14 @@ use crate::{
     storage::repository::{
         self, CreateEntry, CreateTag, EntriesCriteria, EntryRepository, EntryRow, SortColumn,
         SortOrder, SqliteEntryRepository, SqliteTagRepository, TagRepository, TagRow,
+        UpdateEntry as RepositoryUpdateEntry,
     },
 };
 use actix_web::{
     App, HttpServer, delete,
     dev::Server,
     error::{ErrorInternalServerError, ErrorNotFound},
-    post, routes,
+    patch, post, routes,
     web::{self, Json, Query},
 };
 use anyhow::anyhow;
@@ -103,7 +104,7 @@ pub async fn post_entries(
     // TODO for create
     let (entry_row, tag_rows) = data
         .entry_repository
-        .create(create_entry, create_tags)
+        .create(create_entry, &create_tags)
         .await
         .map_err(ErrorInternalServerError)?;
 
@@ -217,8 +218,8 @@ pub enum DeleteEntryResponse {
 }
 
 #[routes]
-#[delete("/api/entries/{entry_id}")]
 #[delete("/api/entries/{entry_id}.json")]
+#[delete("/api/entries/{entry_id}")]
 pub async fn delete_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
@@ -269,6 +270,98 @@ pub async fn delete_entry(
     }
 }
 
+#[routes]
+#[patch("/api/entries/{entry_id}.json")]
+#[patch("/api/entries/{entry_id}")]
+pub async fn patch_entry(
+    data: web::Data<AppState>,
+    entry_id: web::Path<i64>,
+    request: Json<UpdateEntry>,
+) -> actix_web::Result<Json<Entry>> {
+    let entry_id = entry_id.into_inner();
+    let request = request.into_inner();
+
+    let now = Utc::now().timestamp();
+
+    let repo_update = RepositoryUpdateEntry {
+        title: request.title.map(Some),
+        content: request.content.map(Some),
+        is_archived: request.archive.map(Some),
+        archived_at: match request.archive {
+            Some(true) => Some(Some(now)),
+            Some(false) => Some(None),
+            None => None,
+        },
+        is_starred: request.starred.map(Some),
+        starred_at: match request.starred {
+            Some(true) => Some(Some(now)),
+            Some(false) => Some(None),
+            None => None,
+        },
+        updated_at: now,
+        language: request.language.map(Some),
+        reading_time: None,
+        preview_picture: request.preview_picture.map(|u| Some(u.to_string())),
+        origin_url: request.origin_url.map(Some),
+        published_at: request.published_at.map(|dt| Some(dt.timestamp())),
+        published_by: request.authors.map(|authors| Some(authors.join(","))),
+        is_public: request.public.map(Some),
+        // TODO must be not regenerated if already was public?
+        uid: match request.public {
+            Some(true) => Some(Some(generate_uid())),
+            // TODO must be setted to null, but will be ignored by update
+            Some(false) => Some(None),
+            None => None,
+        },
+    };
+
+    let updated = data
+        .entry_repository
+        .update_by_id(entry_id, repo_update)
+        .await
+        .map_err(ErrorInternalServerError)?;
+
+    if !updated {
+        return Err(ErrorNotFound("Entry not found"));
+    }
+
+    if let Some(tags) = request.tags {
+        let full_tags = tags
+            .into_iter()
+            .map(|l| CreateTag {
+                // TODO remove clone
+                label: l.clone(),
+                slug: slugify(l),
+            })
+            .collect();
+
+        data.tag_repository
+            .update_tags_by_entry_id(entry_id, full_tags)
+            .await
+            .map_err(ErrorInternalServerError)?;
+    };
+
+    let (entry_row, tag_rows) = data
+        .entry_repository
+        .find_by_id(entry_id)
+        .await
+        .map_err(ErrorInternalServerError)?
+        .ok_or_else(|| ErrorNotFound("Entry not found"))?;
+
+    let entry_tags = tag_rows
+        .into_iter()
+        .map(|t| Tag {
+            id: t.id,
+            label: t.label,
+            slug: t.slug,
+        })
+        .collect();
+
+    let entry = Entry::try_from((entry_row, entry_tags)).map_err(ErrorInternalServerError)?;
+
+    Ok(Json(entry))
+}
+
 pub struct AppState {
     pub tag_repository: Arc<dyn TagRepository>,
     pub entry_repository: Arc<dyn EntryRepository>,
@@ -291,6 +384,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .app_data(app_data.clone())
             .service(web::scope("/").service(entries))
             .service(web::scope("/").service(post_entries))
+            .service(web::scope("/").service(patch_entry))
             .service(web::scope("/").service(delete_entry))
     })
     .bind(format!("0.0.0.0:{}", port))?
@@ -493,6 +587,27 @@ pub struct AddEntry {
     #[serde_as(as = "Option<BoolFromInt>")]
     pub public: Option<bool>,
     // Origin url for the entry (from where user found it).
+    pub origin_url: Option<String>,
+}
+
+#[serde_as]
+#[derive(Deserialize, PartialEq, Debug)]
+pub struct UpdateEntry {
+    pub title: Option<String>,
+    pub content: Option<String>,
+    #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
+    pub tags: Option<Vec<String>>,
+    #[serde_as(as = "Option<BoolFromInt>")]
+    pub archive: Option<bool>,
+    #[serde_as(as = "Option<BoolFromInt>")]
+    pub starred: Option<bool>,
+    pub language: Option<String>,
+    pub published_at: Option<DateTime<Utc>>,
+    pub preview_picture: Option<Url>,
+    #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
+    pub authors: Option<Vec<String>>,
+    #[serde_as(as = "Option<BoolFromInt>")]
+    pub public: Option<bool>,
     pub origin_url: Option<String>,
 }
 

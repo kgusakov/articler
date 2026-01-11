@@ -3,8 +3,12 @@ use std::{fmt::Display, sync::Arc};
 use crate::models::Range;
 use actix_web::cookie::time::Time;
 use async_trait::async_trait;
+use env_logger::builder;
 use indexmap::IndexMap;
-use sqlx::{Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*, sqlite::SqliteRow};
+use sqlx::{
+    Database, Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*, query,
+    query_builder::Separated, sqlite::SqliteRow,
+};
 use thiserror::Error;
 
 const ENTRIES_TABLE: &str = "entries";
@@ -72,8 +76,19 @@ impl SqliteTagRepository {
 
 #[async_trait]
 pub trait TagRepository: Send + Sync {
-    async fn create_and_link_tags(&self, entry_id: Id, tags: Vec<CreateTag>)
-    -> Result<Vec<TagRow>>;
+    async fn create_and_link_tags(
+        &self,
+        entry_id: Id,
+        tags: &Vec<CreateTag>,
+    ) -> Result<Vec<TagRow>>;
+
+    async fn update_tags_by_entry_id(
+        &self,
+        entry_id: Id,
+        tags: Vec<CreateTag>,
+    ) -> Result<Vec<TagRow>>;
+
+    async fn find_by_entry_id(&self, entry_id: Id) -> Result<Vec<TagRow>>;
 }
 
 #[async_trait]
@@ -82,8 +97,12 @@ impl TagRepository for SqliteTagRepository {
     async fn create_and_link_tags(
         &self,
         entry_id: Id,
-        tags: Vec<CreateTag>,
+        tags: &Vec<CreateTag>,
     ) -> Result<Vec<TagRow>> {
+        if tags.is_empty() {
+            return Ok(vec![]);
+        }
+
         if tags.len() > SQLITE_LIMIT_VARIABLE_NUMBER / 2 {
             return Err(DbError::RepositoryError(
                 format!(
@@ -111,7 +130,7 @@ impl TagRepository for SqliteTagRepository {
             TAGS_TABLE
         ));
         let mut separated = insert_query.separated(", ");
-        for tag in &tags {
+        for tag in tags {
             // TODO remove clone()?
             separated.push_bind(tag.label.clone());
         }
@@ -123,7 +142,7 @@ impl TagRepository for SqliteTagRepository {
             QueryBuilder::new(format!("SELECT * from {} WHERE label IN (", TAGS_TABLE));
 
         let mut tags_separated = get_tags.separated(", ");
-        for tag in &tags {
+        for tag in tags {
             // TODO remove clone()?
             tags_separated.push_bind(tag.label.clone());
         }
@@ -133,6 +152,54 @@ impl TagRepository for SqliteTagRepository {
             .build_query_as::<TagRow>()
             .fetch_all(self.pool.as_ref())
             .await?)
+    }
+
+    async fn update_tags_by_entry_id(
+        &self,
+        entry_id: Id,
+        tags: Vec<CreateTag>,
+    ) -> Result<Vec<TagRow>> {
+        let result_tags = self.create_and_link_tags(entry_id, &tags).await?;
+
+        let mut builder = QueryBuilder::new(format!(
+            "DELETE FROM {} WHERE entry_id = ",
+            ENTRIES_TAG_TABLE
+        ));
+
+        builder.push_bind(entry_id);
+
+        builder.push(format!(
+            r#"
+             AND tag_id NOT IN (
+                SELECT id FROM {} t WHERE t.label IN (
+        "#,
+            TAGS_TABLE
+        ));
+
+        let mut separated = builder.separated(", ");
+        for t in tags.into_iter() {
+            separated.push_bind(t.label);
+        }
+
+        separated.push_unseparated("))");
+
+        builder.build().execute(self.pool.as_ref()).await?;
+
+        Ok(result_tags)
+    }
+
+    async fn find_by_entry_id(&self, entry_id: Id) -> Result<Vec<TagRow>> {
+        // TODO why manual ? + Ok() here needed for type inference?
+        Ok(sqlx::query_as::<_, TagRow>(&format!(
+            r#"
+            SELECT t.* FROM {} t
+            INNER JOIN {} et ON et.entry_id = ? AND et.tag_id = t.id
+        "#,
+            TAGS_TABLE, ENTRIES_TAG_TABLE
+        ))
+        .bind(entry_id)
+        .fetch_all(self.pool.as_ref())
+        .await?)
     }
 }
 
@@ -226,24 +293,28 @@ pub struct CreateEntry {
     pub uid: Option<String>,
 }
 
+// None - don't update anything
+// Some(None) - update to default value
+// Some(Some(v)) - update to v
+type UpdateField<T> = Option<Option<T>>;
+
 #[derive(Debug)]
 pub struct UpdateEntry {
-    pub id: Id,
-    pub title: Option<String>,
-    pub content: Option<String>,
-    pub is_archived: Option<bool>,
-    pub archived_at: Option<Timestamp>,
-    pub is_starred: Option<bool>,
-    pub starred_at: Option<Timestamp>,
+    pub title: UpdateField<String>,
+    pub content: UpdateField<String>,
+    pub is_archived: UpdateField<bool>,
+    pub archived_at: UpdateField<Timestamp>,
+    pub is_starred: UpdateField<bool>,
+    pub starred_at: UpdateField<Timestamp>,
     pub updated_at: Timestamp,
-    pub language: Option<String>,
-    pub reading_time: Option<ReadingTIme>,
-    pub preview_picture: Option<String>,
-    pub origin_url: Option<String>,
-    pub published_at: Option<Timestamp>,
-    pub published_by: Option<String>,
-    pub is_public: Option<bool>,
-    pub uid: Option<String>,
+    pub language: UpdateField<String>,
+    pub reading_time: UpdateField<ReadingTIme>,
+    pub preview_picture: UpdateField<String>,
+    pub origin_url: UpdateField<String>,
+    pub published_at: UpdateField<Timestamp>,
+    pub published_by: UpdateField<String>,
+    pub is_public: UpdateField<bool>,
+    pub uid: UpdateField<String>,
 }
 
 #[derive(Debug)]
@@ -333,7 +404,7 @@ pub trait EntryRepository: Send + Sync {
     async fn create(
         &self,
         params: CreateEntry,
-        tags: Vec<CreateTag>,
+        tags: &Vec<CreateTag>,
     ) -> Result<(EntryRow, Vec<TagRow>)>;
 
     async fn find_by_id(&self, id: Id) -> Result<Option<FullEntry>>;
@@ -525,7 +596,7 @@ impl EntryRepository for SqliteEntryRepository {
     async fn create(
         &self,
         entry: CreateEntry,
-        tags: Vec<CreateTag>,
+        tags: &Vec<CreateTag>,
     ) -> Result<(EntryRow, Vec<TagRow>)> {
         let now = chrono::Utc::now().timestamp();
 
@@ -615,8 +686,93 @@ impl EntryRepository for SqliteEntryRepository {
         Ok(Some((entry, tags)))
     }
 
-    async fn delete_by_id(&self, id: i64) -> Result<bool> {
-        // Delete the entry by ID (CASCADE will handle related records in entry_tags)
+    async fn update_by_id(&self, id: Id, update: UpdateEntry) -> Result<bool> {
+        let mut query_builder = QueryBuilder::new(format!("UPDATE {} SET ", ENTRIES_TABLE));
+
+        let mut separated = query_builder.separated(", ");
+
+        if let Some(title) = update.title {
+            separated.push("title = ");
+            push_bind_or_default(&mut separated, title);
+        }
+
+        if let Some(content) = update.content {
+            separated.push("content = ");
+            push_bind_or_default(&mut separated, content);
+        }
+
+        if let Some(is_archived) = update.is_archived {
+            separated.push("is_archived = ");
+            push_bind_or_default(&mut separated, is_archived);
+        }
+
+        if let Some(archived_at) = update.archived_at {
+            separated.push("archived_at = ");
+            push_bind_or_default(&mut separated, archived_at);
+        }
+
+        if let Some(is_starred) = update.is_starred {
+            separated.push("is_starred = ");
+            push_bind_or_default(&mut separated, is_starred);
+        }
+
+        if let Some(starred_at) = update.starred_at {
+            separated.push("starred_at = ");
+            push_bind_or_default(&mut separated, starred_at);
+        }
+
+        if let Some(language) = update.language {
+            separated.push("language = ");
+            push_bind_or_default(&mut separated, language);
+        }
+
+        if let Some(reading_time) = update.reading_time {
+            separated.push("reading_time = ");
+            push_bind_or_default(&mut separated, reading_time);
+        }
+
+        if let Some(preview_picture) = update.preview_picture {
+            separated.push("preview_picture = ");
+            push_bind_or_default(&mut separated, preview_picture);
+        }
+
+        if let Some(origin_url) = update.origin_url {
+            separated.push("origin_url = ");
+            push_bind_or_default(&mut separated, origin_url);
+        }
+
+        if let Some(published_at) = update.published_at {
+            separated.push("published_at = ");
+            push_bind_or_default(&mut separated, published_at);
+        }
+
+        if let Some(published_by) = update.published_by {
+            separated.push("published_by = ");
+            push_bind_or_default(&mut separated, published_by);
+        }
+
+        if let Some(is_public) = update.is_public {
+            separated.push("is_public = ");
+            push_bind_or_default(&mut separated, is_public);
+        }
+
+        if let Some(uid) = update.uid {
+            separated.push("uid = ");
+            push_bind_or_default(&mut separated, uid);
+        }
+
+        separated.push("updated_at = ");
+        separated.push_bind_unseparated(update.updated_at);
+
+        query_builder.push(" WHERE id = ");
+        query_builder.push_bind(id);
+
+        let result = query_builder.build().execute(self.pool.as_ref()).await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn delete_by_id(&self, id: Id) -> Result<bool> {
         let result = sqlx::query("DELETE FROM entries WHERE id = ?")
             .bind(id)
             .execute(self.pool.as_ref())
@@ -624,4 +780,18 @@ impl EntryRepository for SqliteEntryRepository {
 
         Ok(result.rows_affected() > 0)
     }
+}
+
+fn push_bind_or_default<'qb, 'args, DB, T>(
+    builder: &mut Separated<'qb, 'args, DB, &str>,
+    value: Option<T>,
+) where
+    DB: Database,
+    T: 'args + Encode<'args, DB> + Type<DB>,
+{
+    match value {
+        Some(v) => builder.push_bind_unseparated(v),
+        // SQLite is not support DEFAULT in UPDATE query
+        None => builder.push_unseparated("NULL"),
+    };
 }
