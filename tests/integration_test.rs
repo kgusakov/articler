@@ -907,7 +907,7 @@ async fn delete_tag_by_label_success(pool: SqlitePool) {
 
     // Delete tag with label "label1"
     let req = test::TestRequest::delete()
-        .uri("/api/tags?tag=label1")
+        .uri("/api/tags/label.json?tag=label1")
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -938,7 +938,7 @@ async fn delete_nonexistent_tag_by_label(pool: SqlitePool) {
 
     // Try to delete non-existent tag
     let req = test::TestRequest::delete()
-        .uri("/api/tags?tag=nonexistent")
+        .uri("/api/tags/label.json?tag=nonexistent")
         .to_request();
 
     let resp = test::call_service(&app, req).await;

@@ -214,6 +214,8 @@ pub async fn get_tags_by_entry(
     }
 }
 
+#[routes]
+#[get("/api/tags.json")]
 #[get("/api/tags")]
 pub async fn get_tags(data: web::Data<AppState>) -> actix_web::Result<Json<Vec<Tag>>> {
     Ok(Json(
@@ -233,7 +235,9 @@ struct TagLabel {
     label: String,
 }
 
-#[delete("/api/tags")]
+#[routes]
+#[delete("/api/tags/label.json")]
+#[delete("/api/tags/label")]
 pub async fn delete_tag_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagLabel>,
