@@ -1,0 +1,26 @@
+[
+    {
+        "label": "label1",
+        "slug": "slug1"
+    },
+    {
+        "label": "label2",
+        "slug": "slug2"
+    },
+    {
+        "label": "label3",
+        "slug": "slug3"
+    },
+    {
+        "label": "label4",
+        "slug": "slug4"
+    },
+    {
+        "label": "label5",
+        "slug": "slug5"
+    },
+    {
+        "label": "label6",
+        "slug": "slug6"
+    }
+]

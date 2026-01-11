@@ -89,6 +89,8 @@ pub trait TagRepository: Send + Sync {
     ) -> Result<Vec<TagRow>>;
 
     async fn find_by_entry_id(&self, entry_id: Id) -> Result<Vec<TagRow>>;
+
+    async fn get_all(&self) -> Result<Vec<TagRow>>;
 }
 
 #[async_trait]
@@ -200,6 +202,14 @@ impl TagRepository for SqliteTagRepository {
         .bind(entry_id)
         .fetch_all(self.pool.as_ref())
         .await?)
+    }
+
+    async fn get_all(&self) -> Result<Vec<TagRow>> {
+        Ok(
+            sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {} t", TAGS_TABLE))
+                .fetch_all(self.pool.as_ref())
+                .await?,
+        )
     }
 }
 

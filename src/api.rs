@@ -188,7 +188,7 @@ pub async fn entries(
 }
 
 #[get("/api/entries/{entry_id}/tags")]
-pub async fn get_tags(
+pub async fn get_tags_by_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
@@ -212,6 +212,19 @@ pub async fn get_tags(
     } else {
         Err(ErrorNotFound("Entry not found"))
     }
+}
+
+#[get("/api/tags")]
+pub async fn get_tags(data: web::Data<AppState>) -> actix_web::Result<Json<Vec<Tag>>> {
+    Ok(Json(
+        data.tag_repository
+            .get_all()
+            .await
+            .map_err(ErrorInternalServerError)?
+            .into_iter()
+            .map(|tr| tr.into())
+            .collect(),
+    ))
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
@@ -408,6 +421,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .service(web::scope("/").service(post_entries))
             .service(web::scope("/").service(patch_entry))
             .service(web::scope("/").service(delete_entry))
+            .service(web::scope("/").service(get_tags_by_entry))
             .service(web::scope("/").service(get_tags))
     })
     .bind(format!("0.0.0.0:{}", port))?

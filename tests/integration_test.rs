@@ -20,7 +20,7 @@ use sqlx::SqlitePool;
 use urlencoding::encode;
 // TODO is it appropriate way?
 use wallabag_rs::api::{
-    app_state_init, delete_entry, entries, get_tags, patch_entry, post_entries,
+    app_state_init, delete_entry, entries, get_tags, get_tags_by_entry, patch_entry, post_entries,
 };
 
 static INIT: Once = Once::new();
@@ -670,7 +670,7 @@ async fn get_tags_for_entry_with_tags(pool: SqlitePool) {
         App::new()
             .app_data(web::Data::new(app_state_init(a_pool.clone())))
             .wrap(Logger::default())
-            .service(get_tags),
+            .service(get_tags_by_entry),
     )
     .await;
 
@@ -700,7 +700,7 @@ async fn get_tags_for_entry_without_tags(pool: SqlitePool) {
         App::new()
             .app_data(web::Data::new(app_state_init(a_pool.clone())))
             .wrap(Logger::default())
-            .service(get_tags),
+            .service(get_tags_by_entry),
     )
     .await;
 
@@ -729,7 +729,7 @@ async fn get_tags_for_nonexistent_entry(pool: SqlitePool) {
         App::new()
             .app_data(web::Data::new(app_state_init(a_pool.clone())))
             .wrap(Logger::default())
-            .service(get_tags),
+            .service(get_tags_by_entry),
     )
     .await;
 
@@ -744,4 +744,57 @@ async fn get_tags_for_nonexistent_entry(pool: SqlitePool) {
         404,
         "Should return 404 for non-existent entry"
     );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn test_get_all_tags(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(get_tags),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/tags")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let expected = serde_json::from_str::<Value>(include_str!("json/get_all_tags.json")).unwrap();
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn test_get_all_tags_empty(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(get_tags),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/tags")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    let tags = result.as_array().unwrap();
+    assert_eq!(tags.len(), 0, "Should return empty array when no tags exist");
 }
