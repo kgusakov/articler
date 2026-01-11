@@ -424,6 +424,8 @@ pub trait EntryRepository: Send + Sync {
     async fn update_by_id(&self, id: Id, update: UpdateEntry) -> Result<bool>;
 
     async fn delete_by_id(&self, id: Id) -> Result<bool>;
+
+    async fn delete_tag_by_tag_id(&self, id: Id, tag_id: Id) -> Result<bool>;
 }
 
 #[derive(Clone)]
@@ -559,6 +561,19 @@ impl EntryRepository for SqliteEntryRepository {
         .await?;
 
         Ok(result == 1)
+    }
+
+    async fn delete_tag_by_tag_id(&self, id: Id, tag_id: Id) -> Result<bool> {
+        let result = sqlx::query(&format!(
+            "DELETE FROM {}  WHERE entry_id = ? AND tag_id = ?",
+            ENTRIES_TAG_TABLE
+        ))
+        .bind(id)
+        .bind(tag_id)
+        .execute(self.pool.as_ref())
+        .await?;
+
+        Ok(result.rows_affected() > 0)
     }
 
     async fn count(&self, params: &EntriesCriteria) -> Result<i64> {
@@ -839,5 +854,46 @@ mod tests {
 
         let not_exists = entry_repo.exists_by_id(999).await.unwrap();
         assert!(!not_exists, "Entry 999 should not exist");
+    }
+
+    #[sqlx::test(
+        migrations = "./migrations",
+        fixtures("../../tests/fixtures/entries.sql")
+    )]
+    async fn test_delete_tag_by_tag_id(pool: SqlitePool) {
+        let pool = Arc::new(pool);
+        let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
+        let entry_repo = SqliteEntryRepository::new(pool.clone(), tag_repo.clone());
+
+        // Entry 2 initially has 2 tags (label1/id=1, label2/id=2)
+        let tags_before = tag_repo.find_by_entry_id(2).await.unwrap();
+        assert_eq!(tags_before.len(), 2, "Entry 2 should have 2 tags initially");
+
+        // Delete tag_id=1 from entry 2
+        let deleted = entry_repo.delete_tag_by_tag_id(2, 1).await.unwrap();
+        assert!(
+            deleted,
+            "Should successfully delete existing tag association"
+        );
+
+        // Verify only 1 tag remains
+        let tags_after = tag_repo.find_by_entry_id(2).await.unwrap();
+        assert_eq!(
+            tags_after.len(),
+            1,
+            "Entry 2 should have 1 tag after deletion"
+        );
+        assert_eq!(tags_after[0].id, 2, "Only label2 should remain");
+
+        // Try to delete same tag again - should return false
+        let not_deleted = entry_repo.delete_tag_by_tag_id(2, 1).await.unwrap();
+        assert!(
+            !not_deleted,
+            "Should return false for non-existent association"
+        );
+
+        // Try to delete tag from non-existent entry
+        let not_deleted = entry_repo.delete_tag_by_tag_id(999, 1).await.unwrap();
+        assert!(!not_deleted, "Should return false for non-existent entry");
     }
 }

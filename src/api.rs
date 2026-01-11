@@ -260,6 +260,46 @@ pub enum DeleteEntryResponse {
 }
 
 #[routes]
+#[delete("/api/entries/{entry_id}/tags/{tag_id}.json")]
+#[delete("/api/entries/{entry_id}/tags/{tag_id}")]
+pub async fn delete_tag_from_entry(
+    data: web::Data<AppState>,
+    ids: web::Path<(Id, Id)>,
+) -> actix_web::Result<Json<Entry>> {
+    let (entry_id, tag_id) = ids.into_inner();
+
+    if data
+        .entry_repository
+        .exists_by_id(entry_id)
+        .await
+        .map_err(ErrorInternalServerError)?
+    {
+        data.entry_repository
+            .delete_tag_by_tag_id(entry_id, tag_id)
+            .await
+            .map_err(ErrorInternalServerError)?;
+
+        if let Some((entry_row, tag_rows)) = data
+            .entry_repository
+            .find_by_id(entry_id)
+            .await
+            .map_err(ErrorInternalServerError)?
+        {
+            let tags = tag_rows.into_iter().map(|tr| tr.into()).collect();
+
+            Ok(Json(
+                Entry::try_from((entry_row, tags)).map_err(ErrorInternalServerError)?,
+            ))
+        } else {
+            // TODO needed while transactions is not implemented
+            return Err(ErrorNotFound("Entry not found"));
+        }
+    } else {
+        return Err(ErrorNotFound("Entry not found"));
+    }
+}
+
+#[routes]
 #[delete("/api/entries/{entry_id}.json")]
 #[delete("/api/entries/{entry_id}")]
 pub async fn delete_entry(
@@ -423,6 +463,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .service(web::scope("/").service(delete_entry))
             .service(web::scope("/").service(get_tags_by_entry))
             .service(web::scope("/").service(get_tags))
+            .service(web::scope("/").service(delete_tag_from_entry))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run())
