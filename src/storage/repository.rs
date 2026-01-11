@@ -7,7 +7,7 @@ use env_logger::builder;
 use indexmap::IndexMap;
 use sqlx::{
     Database, Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*, query,
-    query_builder::Separated, sqlite::SqliteRow,
+    query_builder::Separated, query_scalar, sqlite::SqliteRow,
 };
 use thiserror::Error;
 
@@ -409,6 +409,8 @@ pub trait EntryRepository: Send + Sync {
 
     async fn find_by_id(&self, id: Id) -> Result<Option<FullEntry>>;
 
+    async fn exists_by_id(&self, id: Id) -> Result<bool>;
+
     async fn update_by_id(&self, id: Id, update: UpdateEntry) -> Result<bool>;
 
     async fn delete_by_id(&self, id: Id) -> Result<bool>;
@@ -535,6 +537,18 @@ impl EntryRepository for SqliteEntryRepository {
         }
 
         Ok(entrs_with_relations)
+    }
+
+    async fn exists_by_id(&self, id: Id) -> Result<bool> {
+        let result: i32 = sqlx::query_scalar(&format!(
+            "SELECT EXISTS(SELECT 1 FROM {} WHERE id = ?)",
+            ENTRIES_TABLE
+        ))
+        .bind(id)
+        .fetch_one(self.pool.as_ref())
+        .await?;
+
+        Ok(result == 1)
     }
 
     async fn count(&self, params: &EntriesCriteria) -> Result<i64> {
@@ -794,4 +808,26 @@ fn push_bind_or_default<'qb, 'args, DB, T>(
         // SQLite is not support DEFAULT in UPDATE query
         None => builder.push_unseparated("NULL"),
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::SqlitePool;
+
+    #[sqlx::test(
+        migrations = "./migrations",
+        fixtures("../../tests/fixtures/entries.sql")
+    )]
+    async fn test_exists_by_id(pool: SqlitePool) {
+        let pool = Arc::new(pool);
+        let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
+        let entry_repo = SqliteEntryRepository::new(pool.clone(), tag_repo);
+
+        let exists = entry_repo.exists_by_id(1).await.unwrap();
+        assert!(exists, "Entry 1 should exist");
+
+        let not_exists = entry_repo.exists_by_id(999).await.unwrap();
+        assert!(!not_exists, "Entry 999 should not exist");
+    }
 }

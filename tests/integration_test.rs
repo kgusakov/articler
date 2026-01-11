@@ -19,7 +19,9 @@ use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
 use urlencoding::encode;
 // TODO is it appropriate way?
-use wallabag_rs::api::{app_state_init, delete_entry, entries, patch_entry, post_entries};
+use wallabag_rs::api::{
+    app_state_init, delete_entry, entries, get_tags, patch_entry, post_entries,
+};
 
 static INIT: Once = Once::new();
 
@@ -656,4 +658,90 @@ async fn patch_entry_make_public(pool: SqlitePool) {
 
     assert_eq!(result.get("is_public").unwrap().as_bool().unwrap(), true);
     assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn get_tags_for_entry_with_tags(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(get_tags),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/entries/2/tags")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/get_tags_for_entry_with_tags.json"))
+            .unwrap();
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn get_tags_for_entry_without_tags(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(get_tags),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/entries/1/tags")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/get_tags_for_entry_without_tags.json"))
+            .unwrap();
+
+    assert_json_eq!(
+        expected,
+        serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn get_tags_for_nonexistent_entry(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(get_tags),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/entries/999/tags")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(
+        resp.status(),
+        404,
+        "Should return 404 for non-existent entry"
+    );
 }

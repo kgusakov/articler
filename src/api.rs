@@ -11,7 +11,7 @@ use actix_web::{
     App, HttpServer, delete,
     dev::Server,
     error::{ErrorInternalServerError, ErrorNotFound},
-    patch, post, routes,
+    get, patch, post, routes,
     web::{self, Json, Query},
 };
 use anyhow::anyhow;
@@ -25,6 +25,8 @@ use slug::slugify;
 use sqlx::{Pool, Sqlite};
 use std::{str::FromStr, sync::Arc};
 use url::{ParseError, Url};
+
+type Id = i64;
 
 // TODO post with the same url is not supported
 #[post("/api/entries.json")]
@@ -183,6 +185,33 @@ pub async fn entries(
             next: Some(Link { href: url.clone() }),
         },
     }))
+}
+
+#[get("/api/entries/{entry_id}/tags")]
+pub async fn get_tags(
+    data: web::Data<AppState>,
+    entry_id: web::Path<Id>,
+) -> actix_web::Result<Json<Vec<Tag>>> {
+    let entry_id = entry_id.into_inner();
+
+    if data
+        .entry_repository
+        .exists_by_id(entry_id)
+        .await
+        .map_err(ErrorInternalServerError)?
+    {
+        Ok(Json(
+            data.tag_repository
+                .find_by_entry_id(entry_id)
+                .await
+                .map_err(ErrorInternalServerError)?
+                .into_iter()
+                .map(|tr| tr.into())
+                .collect(),
+        ))
+    } else {
+        Err(ErrorNotFound("Entry not found"))
+    }
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
@@ -348,14 +377,7 @@ pub async fn patch_entry(
         .map_err(ErrorInternalServerError)?
         .ok_or_else(|| ErrorNotFound("Entry not found"))?;
 
-    let entry_tags = tag_rows
-        .into_iter()
-        .map(|t| Tag {
-            id: t.id,
-            label: t.label,
-            slug: t.slug,
-        })
-        .collect();
+    let entry_tags = tag_rows.into_iter().map(|t| t.into()).collect();
 
     let entry = Entry::try_from((entry_row, entry_tags)).map_err(ErrorInternalServerError)?;
 
@@ -386,6 +408,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .service(web::scope("/").service(post_entries))
             .service(web::scope("/").service(patch_entry))
             .service(web::scope("/").service(delete_entry))
+            .service(web::scope("/").service(get_tags))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run())
