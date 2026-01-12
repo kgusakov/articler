@@ -94,6 +94,8 @@ pub trait TagRepository: Send + Sync {
 
     async fn delete_by_label(&self, label: &str) -> Result<Option<TagRow>>;
 
+    async fn delete_by_id(&self, id: Id) -> Result<Option<TagRow>>;
+
     async fn delete_all_by_label(&self, labels: &Vec<String>) -> Result<Vec<TagRow>>;
 }
 
@@ -241,6 +243,16 @@ impl TagRepository for SqliteTagRepository {
             .build_query_as::<TagRow>()
             .fetch_all(self.pool.as_ref())
             .await?)
+    }
+
+    async fn delete_by_id(&self, id: Id) -> Result<Option<TagRow>> {
+        Ok(sqlx::query_as::<_, TagRow>(&format!(
+            "DELETE FROM {} WHERE id = ? RETURNING *",
+            TAGS_TABLE
+        ))
+        .bind(id)
+        .fetch_optional(self.pool.as_ref())
+        .await?)
     }
 }
 
@@ -1079,5 +1091,113 @@ mod tests {
         // Verify count unchanged
         let unchanged_tags = tag_repo.get_all().await.unwrap();
         assert_eq!(unchanged_tags.len(), 1, "Should still have 1 tag");
+    }
+
+    #[sqlx::test(
+        migrations = "./migrations",
+        fixtures("../../tests/fixtures/entries.sql")
+    )]
+    async fn test_tag_delete_by_id(pool: SqlitePool) {
+        let pool = Arc::new(pool);
+        let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
+
+        // Verify initial 6 tags from fixtures
+        let initial_tags = tag_repo.get_all().await.unwrap();
+        assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
+
+        // Find tag with label "label1" to get its ID
+        let tag_to_delete = initial_tags
+            .iter()
+            .find(|t| t.label == "label1")
+            .expect("label1 should exist in fixtures");
+        let tag_id = tag_to_delete.id;
+
+        // Delete tag by ID
+        let deleted_tag = tag_repo.delete_by_id(tag_id).await.unwrap();
+        assert!(deleted_tag.is_some(), "Should return deleted tag");
+        let deleted = deleted_tag.unwrap();
+        assert_eq!(deleted.id, tag_id, "Deleted tag should have correct ID");
+        assert_eq!(
+            deleted.label, "label1",
+            "Deleted tag should have label 'label1'"
+        );
+        assert_eq!(
+            deleted.slug, "slug1",
+            "Deleted tag should have slug 'slug1'"
+        );
+
+        // Verify only 5 tags remain
+        let remaining_tags = tag_repo.get_all().await.unwrap();
+        assert_eq!(remaining_tags.len(), 5, "Should have 5 tags after deletion");
+
+        // Verify the deleted tag is not in remaining tags
+        assert!(
+            !remaining_tags.iter().any(|t| t.id == tag_id),
+            "Deleted tag should not be in remaining tags"
+        );
+
+        // Verify CASCADE behavior: entry 2 should lose label1 but keep label2
+        let entry_tags = tag_repo.find_by_entry_id(2).await.unwrap();
+        assert_eq!(
+            entry_tags.len(),
+            1,
+            "Entry 2 should have 1 tag after cascade"
+        );
+        assert_eq!(
+            entry_tags[0].label, "label2",
+            "Entry 2 should only have label2"
+        );
+
+        // Try deleting non-existent tag by ID
+        let not_deleted = tag_repo.delete_by_id(999).await.unwrap();
+        assert!(
+            not_deleted.is_none(),
+            "Should return None for non-existent ID"
+        );
+
+        // Verify count unchanged after failed deletion
+        let final_tags = tag_repo.get_all().await.unwrap();
+        assert_eq!(
+            final_tags.len(),
+            5,
+            "Should still have 5 tags after failed deletion"
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "./migrations",
+        fixtures("../../tests/fixtures/entries.sql")
+    )]
+    async fn test_entry_delete_by_id(pool: SqlitePool) {
+        let pool = Arc::new(pool);
+        let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
+        let entry_repo = SqliteEntryRepository::new(pool.clone(), tag_repo.clone());
+
+        // Verify entry 1 exists
+        let entry_before = entry_repo.find_by_id(1).await.unwrap();
+        assert!(entry_before.is_some(), "Entry 1 should exist");
+
+        // Delete entry 1
+        let deleted = entry_repo.delete_by_id(1).await.unwrap();
+        assert!(deleted, "Should return true when entry is deleted");
+
+        // Verify entry 1 no longer exists
+        let entry_after = entry_repo.find_by_id(1).await.unwrap();
+        assert!(
+            entry_after.is_none(),
+            "Entry 1 should not exist after deletion"
+        );
+
+        // Try deleting the same entry again
+        let not_deleted = entry_repo.delete_by_id(1).await.unwrap();
+        assert!(!not_deleted, "Should return false when entry doesn't exist");
+
+        // Try deleting non-existent entry
+        let not_deleted = entry_repo.delete_by_id(999).await.unwrap();
+        assert!(!not_deleted, "Should return false for non-existent entry");
+
+        // Verify entry 2 still exists (wasn't affected)
+        let entry_2 = entry_repo.find_by_id(2).await.unwrap();
+        assert!(entry_2.is_some(), "Entry 2 should still exist");
     }
 }

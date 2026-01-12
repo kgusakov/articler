@@ -236,6 +236,26 @@ struct TagLabel {
 }
 
 #[routes]
+#[delete("/api/tag/{tag_id}.json")]
+#[delete("/api/tag/{tag_id}")]
+pub async fn delete_tag_by_id(
+    data: web::Data<AppState>,
+    tag_id: web::Path<Id>,
+) -> actix_web::Result<Json<Tag>> {
+    let result = data
+        .tag_repository
+        .delete_by_id(tag_id.into_inner())
+        .await
+        .map_err(ErrorInternalServerError)?
+        .map(|tr| tr.into());
+    if let Some(delete_tag) = result {
+        Ok(Json(delete_tag))
+    } else {
+        Err(ErrorNotFound("Tag not found"))
+    }
+}
+
+#[routes]
 #[delete("/api/tag/label.json")]
 #[delete("/api/tag/label")]
 pub async fn delete_tag_by_label(
@@ -519,6 +539,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .service(web::scope("/").service(get_tags_by_entry))
             .service(web::scope("/").service(get_tags))
             .service(web::scope("/").service(delete_tag_from_entry))
+            .service(web::scope("/").service(delete_tag_by_id))
             .service(web::scope("/").service(delete_tag_by_label))
             .service(web::scope("/").service(delete_tags_by_label))
     })

@@ -20,7 +20,7 @@ use sqlx::SqlitePool;
 use urlencoding::encode;
 // TODO is it appropriate way?
 use wallabag_rs::api::{
-    app_state_init, delete_entry, delete_tag_by_label, delete_tags_by_label,
+    app_state_init, delete_entry, delete_tag_by_id, delete_tag_by_label, delete_tags_by_label,
     delete_tag_from_entry, entries, get_tags, get_tags_by_entry, patch_entry, post_entries,
 };
 
@@ -1067,4 +1067,59 @@ async fn delete_tags_by_label_empty(pool: SqlitePool) {
         0,
         "Should return empty array for empty tags parameter"
     );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn delete_tag_by_id_success(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(delete_tag_by_id),
+    )
+    .await;
+
+    // Delete tag with id=1 (label1)
+    let req = test::TestRequest::delete()
+        .uri("/api/tag/1.json")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/delete_tag_by_id_success.json"))
+            .unwrap();
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn delete_tag_by_id_not_found(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(delete_tag_by_id),
+    )
+    .await;
+
+    // Try to delete non-existent tag
+    let req = test::TestRequest::delete()
+        .uri("/api/tag/999.json")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), 404, "Should return 404 for non-existent tag");
 }
