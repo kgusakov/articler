@@ -93,6 +93,8 @@ pub trait TagRepository: Send + Sync {
     async fn get_all(&self) -> Result<Vec<TagRow>>;
 
     async fn delete_by_label(&self, label: &str) -> Result<Option<TagRow>>;
+
+    async fn delete_all_by_label(&self, labels: &Vec<String>) -> Result<Vec<TagRow>>;
 }
 
 #[async_trait]
@@ -222,6 +224,23 @@ impl TagRepository for SqliteTagRepository {
         .bind(label)
         .fetch_optional(self.pool.as_ref())
         .await?)
+    }
+
+    async fn delete_all_by_label(&self, labels: &Vec<String>) -> Result<Vec<TagRow>> {
+        let mut builder =
+            QueryBuilder::new(&format!("DELETE FROM {} WHERE label IN (", TAGS_TABLE));
+
+        let mut labels_separated = builder.separated(", ");
+        for label in labels {
+            // TODO remove clone()?
+            labels_separated.push_bind(label.clone());
+        }
+        labels_separated.push_unseparated(") RETURNING *");
+
+        Ok(builder
+            .build_query_as::<TagRow>()
+            .fetch_all(self.pool.as_ref())
+            .await?)
     }
 }
 
@@ -925,8 +944,14 @@ mod tests {
         let deleted_tag = tag_repo.delete_by_label("label1").await.unwrap();
         assert!(deleted_tag.is_some(), "Should return deleted tag");
         let deleted = deleted_tag.unwrap();
-        assert_eq!(deleted.label, "label1", "Deleted tag should have label 'label1'");
-        assert_eq!(deleted.slug, "slug1", "Deleted tag should have slug 'slug1'");
+        assert_eq!(
+            deleted.label, "label1",
+            "Deleted tag should have label 'label1'"
+        );
+        assert_eq!(
+            deleted.slug, "slug1",
+            "Deleted tag should have slug 'slug1'"
+        );
 
         // Verify only 5 tags remain
         let tags_after = tag_repo.get_all().await.unwrap();
@@ -934,15 +959,125 @@ mod tests {
 
         // Verify CASCADE behavior: entry 2 should lose label1 but keep label2
         let entry_tags = tag_repo.find_by_entry_id(2).await.unwrap();
-        assert_eq!(entry_tags.len(), 1, "Entry 2 should have 1 tag after cascade");
-        assert_eq!(entry_tags[0].label, "label2", "Entry 2 should only have label2");
+        assert_eq!(
+            entry_tags.len(),
+            1,
+            "Entry 2 should have 1 tag after cascade"
+        );
+        assert_eq!(
+            entry_tags[0].label, "label2",
+            "Entry 2 should only have label2"
+        );
 
         // Try deleting non-existent label
         let not_deleted = tag_repo.delete_by_label("nonexistent").await.unwrap();
-        assert!(not_deleted.is_none(), "Should return None for non-existent label");
+        assert!(
+            not_deleted.is_none(),
+            "Should return None for non-existent label"
+        );
 
         // Verify count unchanged after failed deletion
         let final_tags = tag_repo.get_all().await.unwrap();
-        assert_eq!(final_tags.len(), 5, "Should still have 5 tags after failed deletion");
+        assert_eq!(
+            final_tags.len(),
+            5,
+            "Should still have 5 tags after failed deletion"
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "./migrations",
+        fixtures("../../tests/fixtures/entries.sql")
+    )]
+    async fn test_delete_all_by_label(pool: SqlitePool) {
+        let pool = Arc::new(pool);
+        let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
+
+        // Verify initial 6 tags from fixtures
+        let initial_tags = tag_repo.get_all().await.unwrap();
+        assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
+
+        // Delete multiple tags: label1, label2, label3
+        let labels_to_delete = vec![
+            "label1".to_string(),
+            "label2".to_string(),
+            "label3".to_string(),
+        ];
+        let deleted_tags = tag_repo
+            .delete_all_by_label(&labels_to_delete)
+            .await
+            .unwrap();
+
+        // Verify 3 tags were deleted and returned
+        assert_eq!(deleted_tags.len(), 3, "Should return 3 deleted tags");
+
+        // Verify the returned tags have correct labels
+        let deleted_labels: Vec<String> = deleted_tags.iter().map(|t| t.label.clone()).collect();
+        assert!(deleted_labels.contains(&"label1".to_string()));
+        assert!(deleted_labels.contains(&"label2".to_string()));
+        assert!(deleted_labels.contains(&"label3".to_string()));
+
+        // Verify only 3 tags remain in database
+        let remaining_tags = tag_repo.get_all().await.unwrap();
+        assert_eq!(remaining_tags.len(), 3, "Should have 3 tags after deletion");
+
+        // Verify remaining tags are label4, label5, label6
+        let remaining_labels: Vec<String> =
+            remaining_tags.iter().map(|t| t.label.clone()).collect();
+        assert!(remaining_labels.contains(&"label4".to_string()));
+        assert!(remaining_labels.contains(&"label5".to_string()));
+        assert!(remaining_labels.contains(&"label6".to_string()));
+
+        // Verify CASCADE behavior: entry 2 should have no tags (had label1 and label2)
+        let entry_tags = tag_repo.find_by_entry_id(2).await.unwrap();
+        assert_eq!(
+            entry_tags.len(),
+            0,
+            "Entry 2 should have no tags after cascade"
+        );
+
+        // Test deleting with empty vector
+        let empty_result = tag_repo.delete_all_by_label(&vec![]).await.unwrap();
+        assert_eq!(
+            empty_result.len(),
+            0,
+            "Should return empty vector for empty input"
+        );
+
+        // Test deleting mix of existent and non-existent labels
+        let mixed_labels = vec![
+            "label4".to_string(),
+            "nonexistent".to_string(),
+            "label5".to_string(),
+        ];
+        let mixed_deleted = tag_repo.delete_all_by_label(&mixed_labels).await.unwrap();
+        assert_eq!(mixed_deleted.len(), 2, "Should only delete existing tags");
+
+        let mixed_deleted_labels: Vec<String> =
+            mixed_deleted.iter().map(|t| t.label.clone()).collect();
+        assert!(mixed_deleted_labels.contains(&"label4".to_string()));
+        assert!(mixed_deleted_labels.contains(&"label5".to_string()));
+        assert!(!mixed_deleted_labels.contains(&"nonexistent".to_string()));
+
+        // Verify only 1 tag remains (label6)
+        let final_tags = tag_repo.get_all().await.unwrap();
+        assert_eq!(final_tags.len(), 1, "Should have 1 tag remaining");
+        assert_eq!(final_tags[0].label, "label6");
+
+        // Test deleting all non-existent labels
+        let nonexistent_labels = vec!["fake1".to_string(), "fake2".to_string()];
+        let none_deleted = tag_repo
+            .delete_all_by_label(&nonexistent_labels)
+            .await
+            .unwrap();
+        assert_eq!(
+            none_deleted.len(),
+            0,
+            "Should return empty vector for non-existent labels"
+        );
+
+        // Verify count unchanged
+        let unchanged_tags = tag_repo.get_all().await.unwrap();
+        assert_eq!(unchanged_tags.len(), 1, "Should still have 1 tag");
     }
 }

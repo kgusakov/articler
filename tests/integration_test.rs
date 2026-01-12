@@ -20,8 +20,8 @@ use sqlx::SqlitePool;
 use urlencoding::encode;
 // TODO is it appropriate way?
 use wallabag_rs::api::{
-    app_state_init, delete_entry, delete_tag_by_label, delete_tag_from_entry, entries, get_tags,
-    get_tags_by_entry, patch_entry, post_entries,
+    app_state_init, delete_entry, delete_tag_by_label, delete_tags_by_label,
+    delete_tag_from_entry, entries, get_tags, get_tags_by_entry, patch_entry, post_entries,
 };
 
 static INIT: Once = Once::new();
@@ -907,7 +907,7 @@ async fn delete_tag_by_label_success(pool: SqlitePool) {
 
     // Delete tag with label "label1"
     let req = test::TestRequest::delete()
-        .uri("/api/tags/label.json?tag=label1")
+        .uri("/api/tag/label.json?tag=label1")
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -938,10 +938,133 @@ async fn delete_nonexistent_tag_by_label(pool: SqlitePool) {
 
     // Try to delete non-existent tag
     let req = test::TestRequest::delete()
-        .uri("/api/tags/label.json?tag=nonexistent")
+        .uri("/api/tag/label.json?tag=nonexistent")
         .to_request();
 
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), 404, "Should return 404 for non-existent tag");
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn delete_tags_by_label_success(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(delete_tags_by_label),
+    )
+    .await;
+
+    // Delete multiple tags with labels "label1", "label2", "label3"
+    let req = test::TestRequest::delete()
+        .uri("/api/tags/label.json?tags=label1,label2,label3")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/delete_tags_by_label_success.json"))
+            .unwrap();
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn delete_tags_by_label_partial(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(delete_tags_by_label),
+    )
+    .await;
+
+    // Delete mix of existent and non-existent tags
+    let req = test::TestRequest::delete()
+        .uri("/api/tags/label.json?tags=label1,nonexistent,label2")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    // Should return array with only the 2 existing tags
+    let tags = result.as_array().unwrap();
+    assert_eq!(tags.len(), 2, "Should return 2 deleted tags");
+
+    let labels: Vec<String> = tags
+        .iter()
+        .map(|t| t["label"].as_str().unwrap().to_string())
+        .collect();
+    assert!(labels.contains(&"label1".to_string()));
+    assert!(labels.contains(&"label2".to_string()));
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn delete_tags_by_label_nonexistent(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(delete_tags_by_label),
+    )
+    .await;
+
+    // Try to delete all non-existent tags
+    let req = test::TestRequest::delete()
+        .uri("/api/tags/label.json?tags=fake1,fake2,fake3")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    // Should return empty array
+    let tags = result.as_array().unwrap();
+    assert_eq!(tags.len(), 0, "Should return empty array when no tags deleted");
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn delete_tags_by_label_empty(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(delete_tags_by_label),
+    )
+    .await;
+
+    // Try to delete with empty tags parameter
+    let req = test::TestRequest::delete()
+        .uri("/api/tags/label.json?tags=")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    // Should return empty array
+    let tags = result.as_array().unwrap();
+    assert_eq!(
+        tags.len(),
+        0,
+        "Should return empty array for empty tags parameter"
+    );
 }

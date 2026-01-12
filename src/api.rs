@@ -236,8 +236,8 @@ struct TagLabel {
 }
 
 #[routes]
-#[delete("/api/tags/label.json")]
-#[delete("/api/tags/label")]
+#[delete("/api/tag/label.json")]
+#[delete("/api/tag/label")]
 pub async fn delete_tag_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagLabel>,
@@ -253,6 +253,33 @@ pub async fn delete_tag_by_label(
     } else {
         Err(ErrorNotFound("Tag not found"))
     }
+}
+
+#[serde_as]
+#[derive(Deserialize)]
+struct TagsLabel {
+    #[serde(rename(deserialize = "tags"))]
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, String>")]
+    labels: Vec<String>,
+}
+
+#[routes]
+#[delete("/api/tags/label.json")]
+#[delete("/api/tags/label")]
+pub async fn delete_tags_by_label(
+    data: web::Data<AppState>,
+    label: web::Query<TagsLabel>,
+) -> actix_web::Result<Json<Vec<Tag>>> {
+    let result = data
+        .tag_repository
+        .delete_all_by_label(&label.labels)
+        .await
+        .map_err(ErrorInternalServerError)?
+        .into_iter()
+        .map(|tr| tr.into())
+        .collect();
+
+    Ok(Json(result))
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
@@ -493,6 +520,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .service(web::scope("/").service(get_tags))
             .service(web::scope("/").service(delete_tag_from_entry))
             .service(web::scope("/").service(delete_tag_by_label))
+            .service(web::scope("/").service(delete_tags_by_label))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run())
