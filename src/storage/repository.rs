@@ -1,21 +1,16 @@
 use std::{fmt::Display, sync::Arc};
 
-use crate::models::Range;
-use actix_web::cookie::time::Time;
 use async_trait::async_trait;
-use env_logger::builder;
 use indexmap::IndexMap;
 use sqlx::{
-    Database, Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*, query,
-    query_builder::Separated, query_scalar, sqlite::SqliteRow,
+    Database, Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*,
+    query_builder::Separated, sqlite::SqliteRow,
 };
 use thiserror::Error;
 
 const ENTRIES_TABLE: &str = "entries";
 const TAGS_TABLE: &str = "tags";
 const ENTRIES_TAG_TABLE: &str = "entry_tags";
-const ANNOTATIONS_TABLE: &str = "annotations";
-const ANNOTATION_RANGES_TABLE: &str = "annotation_ranges";
 const SQLITE_LIMIT_VARIABLE_NUMBER: usize = 999;
 
 type Result<T> = std::result::Result<T, DbError>;
@@ -292,40 +287,6 @@ impl<'r> FromRow<'r, SqliteRow> for EntryRow {
     }
 }
 
-pub struct AnnotationRow {
-    pub id: Id,
-    pub annotator_schema_version: String,
-    pub text: String,
-    pub created_at: Timestamp,
-    pub updated_at: Timestamp,
-    pub quote: String,
-}
-
-impl AnnotationRow {
-    pub fn from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Self> {
-        Ok(AnnotationRow {
-            id: row.try_get("id")?,
-            annotator_schema_version: row.try_get("annotator_schema_version")?,
-            text: row.try_get("text")?,
-            created_at: row.try_get("created_at")?,
-            updated_at: row.try_get("updated_at")?,
-            quote: row.try_get("quote")?,
-        })
-    }
-}
-
-impl Range {
-    pub fn from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Self> {
-        Ok(Range {
-            id: row.try_get("id")?,
-            start: row.try_get("start")?,
-            end: row.try_get("end")?,
-            start_offset: row.try_get("start_offset")?,
-            end_offset: row.try_get("end_offset")?,
-        })
-    }
-}
-
 #[derive(Debug)]
 pub struct CreateEntry {
     pub user_id: Id,
@@ -437,8 +398,8 @@ impl Display for SortOrder {
 
 #[derive(PartialEq)]
 pub enum Detail {
-    Metadata,
     Full,
+    Metadata,
 }
 
 #[derive(Default)]
@@ -554,7 +515,7 @@ impl EntryRepository for SqliteEntryRepository {
         }
 
         // TODO implement detail filtering
-        if params.detail != Some(Detail::Full) {
+        if params.detail == Some(Detail::Metadata) {
             return Err(DbError::RepositoryError(
                 "Detail metadata mode is not supported yet".into(),
             ));
@@ -689,8 +650,6 @@ impl EntryRepository for SqliteEntryRepository {
         entry: CreateEntry,
         tags: &Vec<CreateTag>,
     ) -> Result<(EntryRow, Vec<TagRow>)> {
-        let now = chrono::Utc::now().timestamp();
-
         let id: i64 = sqlx::query_scalar(
             r#"
             INSERT INTO entries (
@@ -713,8 +672,8 @@ impl EntryRepository for SqliteEntryRepository {
         .bind(entry.archived_at)
         .bind(entry.is_starred)
         .bind(entry.starred_at)
-        .bind(now)
-        .bind(now)
+        .bind(entry.created_at)
+        .bind(entry.updated_at)
         .bind(entry.mimetype)
         .bind(entry.language)
         .bind(entry.reading_time)

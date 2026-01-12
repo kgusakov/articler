@@ -25,7 +25,8 @@ pub struct Entry {
     pub tags: Vec<Tag>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub annotations: Vec<Annotation>,
+    // TODO implement annotations
+    pub annotations: Vec<String>,
     pub mimetype: Option<String>,
     pub language: Option<String>,
     pub reading_time: i32,
@@ -36,28 +37,6 @@ pub struct Entry {
     pub published_by: Option<Vec<String>>,
     pub is_public: Option<bool>,
     pub uid: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct Annotation {
-    pub id: Id,
-    pub annotator_schema_version: String,
-    pub text: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub quote: String,
-    pub ranges: Vec<Range>,
-}
-
-#[derive(Serialize)]
-pub struct Range {
-    pub id: Id,
-    pub start: String,
-    pub end: String,
-    #[serde(rename(serialize = "startOffset"))]
-    pub start_offset: i64,
-    #[serde(rename(serialize = "endOffset"))]
-    pub end_offset: i64,
 }
 
 #[derive(Serialize)]
