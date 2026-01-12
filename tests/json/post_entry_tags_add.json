@@ -1,0 +1,35 @@
+{
+    "url": "https://a.com/1",
+    "hashed_url": "hash1",
+    "given_url": "https://a.com/g1",
+    "hashed_given_url": "ghash1",
+    "title": "title1",
+    "content": "content1",
+    "is_archived": 0,
+    "archived_at": null,
+    "is_starred": 0,
+    "starred_at": null,
+    "tags": [
+        {
+            "label": "label3",
+            "slug": "slug3"
+        },
+        {
+            "label": "label4",
+            "slug": "slug4"
+        }
+    ],
+    "annotations": [],
+    "mimetype": "text/html",
+    "language": "en",
+    "reading_time": 8,
+    "domain_name": "a.com",
+    "preview_picture": "https://a.com/pic1.jpg",
+    "origin_url": "https://a.com/o1",
+    "published_at": "2023-12-01T10:00:00Z",
+    "published_by": [
+        "author1"
+    ],
+    "is_public": false,
+    "uid": null
+}

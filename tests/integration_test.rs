@@ -22,6 +22,7 @@ use urlencoding::encode;
 use wallabag_rs::api::{
     app_state_init, delete_entry, delete_tag_by_id, delete_tag_by_label, delete_tags_by_label,
     delete_tag_from_entry, entries, get_tags, get_tags_by_entry, patch_entry, post_entries,
+    post_entry_tags,
 };
 
 static INIT: Once = Once::new();
@@ -1122,4 +1123,124 @@ async fn delete_tag_by_id_not_found(pool: SqlitePool) {
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), 404, "Should return 404 for non-existent tag");
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn post_entry_tags_add(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(post_entry_tags),
+    )
+    .await;
+
+    // Entry 1 initially has no tags, add label3 and label4
+    let req = test::TestRequest::post()
+        .uri("/api/entries/1/tags.json")
+        .set_form(&[("tags", "label3,label4")])
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/post_entry_tags_add.json")).unwrap();
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn post_entry_tags_replace(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(post_entry_tags),
+    )
+    .await;
+
+    // Entry 2 initially has label1 and label2, replace with label5 and label6
+    let req = test::TestRequest::post()
+        .uri("/api/entries/2/tags.json")
+        .set_form(&[("tags", "label5,label6")])
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/post_entry_tags_replace.json"))
+            .unwrap();
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn post_entry_tags_remove_all(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(post_entry_tags),
+    )
+    .await;
+
+    // Entry 2 initially has label1 and label2, remove all by posting empty tags
+    let req = test::TestRequest::post()
+        .uri("/api/entries/2/tags.json")
+        .set_form(&[("tags", "")])
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    // Verify entry has no tags
+    let tags = result["tags"].as_array().unwrap();
+    assert_eq!(tags.len(), 0, "Entry should have no tags after posting empty");
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn post_entry_tags_not_found(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(app_state_init(a_pool.clone())))
+            .wrap(Logger::default())
+            .service(post_entry_tags),
+    )
+    .await;
+
+    // Try to post tags to non-existent entry
+    let req = test::TestRequest::post()
+        .uri("/api/entries/999/tags.json")
+        .set_form(&[("tags", "label1,label2")])
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(
+        resp.status(),
+        404,
+        "Should return 404 for non-existent entry"
+    );
 }

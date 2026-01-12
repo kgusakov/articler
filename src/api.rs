@@ -427,6 +427,64 @@ pub async fn delete_entry(
     }
 }
 
+#[serde_as]
+#[derive(Deserialize)]
+struct EntryTags {
+    #[serde(rename(deserialize = "tags"))]
+    #[serde_as(as = "StringWithSeparator::<CommaSeparator, String>")]
+    labels: Vec<String>,
+}
+
+#[routes]
+#[post("/api/entries/{entry_id}/tags.json")]
+#[post("/api/entries/{entry_id}/tags")]
+pub async fn post_entry_tags(
+    data: web::Data<AppState>,
+    entry_id: web::Path<Id>,
+    request: web::Form<EntryTags>,
+) -> actix_web::Result<Json<Entry>> {
+    let entry_id = entry_id.into_inner();
+    // TODO dirty design - looks like we need entry repository method for it
+    if let Some(_) = data
+        .entry_repository
+        .find_by_id(entry_id)
+        .await
+        .map_err(ErrorInternalServerError)?
+    {
+        let full_tags = request
+            .into_inner()
+            .labels
+            .into_iter()
+            .map(|l| CreateTag {
+                // TODO remove clone
+                label: l.clone(),
+                slug: slugify(l),
+            })
+            .collect();
+
+        data.tag_repository
+            .update_tags_by_entry_id(entry_id, full_tags)
+            .await
+            .map_err(ErrorInternalServerError)?;
+
+        let (entry_row, tag_rows) = data
+            .entry_repository
+            .find_by_id(entry_id)
+            .await
+            .map_err(ErrorInternalServerError)?
+            .ok_or(ErrorNotFound("Entry not found"))?;
+
+        // TODO this repetitative pattern must be moved to the generic place
+        let entry_tags = tag_rows.into_iter().map(|t| t.into()).collect();
+
+        Ok(Json(
+            Entry::try_from((entry_row, entry_tags)).map_err(ErrorInternalServerError)?,
+        ))
+    } else {
+        Err(ErrorNotFound("Entry not found"))
+    }
+}
+
 #[routes]
 #[patch("/api/entries/{entry_id}.json")]
 #[patch("/api/entries/{entry_id}")]
@@ -542,6 +600,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .service(web::scope("/").service(delete_tag_by_id))
             .service(web::scope("/").service(delete_tag_by_label))
             .service(web::scope("/").service(delete_tags_by_label))
+            .service(web::scope("/").service(post_entry_tags))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run())
