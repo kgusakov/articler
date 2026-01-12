@@ -35,6 +35,7 @@ pub enum DbError {
 
 pub struct TagRow {
     pub id: Id,
+    pub user_id: Id,
     pub label: String,
     pub slug: String,
 }
@@ -43,6 +44,7 @@ impl<'r> FromRow<'r, SqliteRow> for TagRow {
     fn from_row(row: &'r SqliteRow) -> std::result::Result<TagRow, SqlxError> {
         Ok(TagRow {
             id: row.try_get("id")?,
+            user_id: row.try_get("user_id")?,
             label: row.try_get("label")?,
             slug: row.try_get("slug")?,
         })
@@ -51,6 +53,7 @@ impl<'r> FromRow<'r, SqliteRow> for TagRow {
 
 #[derive(Debug)]
 pub struct CreateTag {
+    pub user_id: Id,
     pub label: String,
     pub slug: String,
 }
@@ -122,10 +125,12 @@ impl TagRepository for SqliteTagRepository {
             ));
         }
 
-        let mut tag_builder = QueryBuilder::new("INSERT INTO tags (label, slug) ");
+        let mut tag_builder = QueryBuilder::new("INSERT INTO tags (user_id, label, slug) ");
         tag_builder.push_values(tags.iter(), |mut b, tag| {
             // TODO can we remove cloning?
-            b.push_bind(tag.label.clone()).push_bind(tag.slug.clone());
+            b.push_bind(tag.user_id)
+                .push_bind(tag.label.clone())
+                .push_bind(tag.slug.clone());
         });
         tag_builder.push(" ON CONFLICT DO NOTHING");
         tag_builder.build().execute(self.pool.as_ref()).await?;
@@ -260,6 +265,7 @@ impl<'r> FromRow<'r, SqliteRow> for EntryRow {
     fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> std::result::Result<EntryRow, SqlxError> {
         Ok(EntryRow {
             id: row.try_get("id")?,
+            user_id: row.try_get("user_id")?,
             url: row.try_get("url")?,
             hashed_url: row.try_get("hashed_url")?,
             given_url: row.try_get("given_url")?,
@@ -322,6 +328,7 @@ impl Range {
 
 #[derive(Debug)]
 pub struct CreateEntry {
+    pub user_id: Id,
     pub url: String,
     pub hashed_url: String,
     pub given_url: String,
@@ -373,6 +380,7 @@ pub struct UpdateEntry {
 #[derive(Debug)]
 pub struct EntryRow {
     pub id: Id,
+    pub user_id: Id,
     pub url: String,
     pub hashed_url: Option<String>,
     pub given_url: Option<String>,
@@ -583,6 +591,7 @@ impl EntryRepository for SqliteEntryRepository {
             for r in &e.1 {
                 tags.push(TagRow {
                     id: r.try_get("tag_id")?,
+                    user_id: r.try_get("user_id")?,
                     label: r.try_get("tag_label")?,
                     slug: r.try_get("tag_slug")?,
                 });
@@ -682,41 +691,42 @@ impl EntryRepository for SqliteEntryRepository {
     ) -> Result<(EntryRow, Vec<TagRow>)> {
         let now = chrono::Utc::now().timestamp();
 
-        let id = sqlx::query_scalar!(
-                r#"
-                INSERT INTO entries (
-                    url, hashed_url, given_url, hashed_given_url, title, content, is_archived, archived_at,
-                    is_starred, starred_at, created_at, updated_at, mimetype,
-                    language, reading_time, domain_name, preview_picture,
-                    origin_url, published_at, published_by, is_public, uid
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                RETURNING id
-                "#,
-                entry.url,
-                entry.hashed_url,
-                entry.given_url,
-                entry.hashed_given_url,
-                entry.title,
-                entry.content,
-                entry.is_archived,
-                entry.archived_at,
-                entry.is_starred,
-                entry.starred_at,
-                now,
-                now,
-                entry.mimetype,
-                entry.language,
-                entry.reading_time,
-                entry.domain_name,
-                entry.preview_picture,
-                entry.origin_url,
-                entry.published_at,
-                entry.published_by,
-                entry.is_public,
-                entry.uid,
-            )
-            .fetch_one(self.pool.as_ref())
-            .await?;
+        let id: i64 = sqlx::query_scalar(
+            r#"
+            INSERT INTO entries (
+                user_id, url, hashed_url, given_url, hashed_given_url, title, content, is_archived, archived_at,
+                is_starred, starred_at, created_at, updated_at, mimetype,
+                language, reading_time, domain_name, preview_picture,
+                origin_url, published_at, published_by, is_public, uid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+            "#,
+        )
+        .bind(entry.user_id)
+        .bind(entry.url)
+        .bind(entry.hashed_url)
+        .bind(entry.given_url)
+        .bind(entry.hashed_given_url)
+        .bind(entry.title)
+        .bind(entry.content)
+        .bind(entry.is_archived)
+        .bind(entry.archived_at)
+        .bind(entry.is_starred)
+        .bind(entry.starred_at)
+        .bind(now)
+        .bind(now)
+        .bind(entry.mimetype)
+        .bind(entry.language)
+        .bind(entry.reading_time)
+        .bind(entry.domain_name)
+        .bind(entry.preview_picture)
+        .bind(entry.origin_url)
+        .bind(entry.published_at)
+        .bind(entry.published_by)
+        .bind(entry.is_public)
+        .bind(entry.uid)
+        .fetch_one(self.pool.as_ref())
+        .await?;
 
         if !tags.is_empty() {
             self.tag_repo.create_and_link_tags(id, tags).await?;

@@ -20,8 +20,8 @@ use sqlx::SqlitePool;
 use urlencoding::encode;
 // TODO is it appropriate way?
 use wallabag_rs::api::{
-    app_state_init, delete_entry, delete_tag_by_id, delete_tag_by_label, delete_tags_by_label,
-    delete_tag_from_entry, entries, get_tags, get_tags_by_entry, patch_entry, post_entries,
+    app_state_init, delete_entry, delete_tag_by_id, delete_tag_by_label, delete_tag_from_entry,
+    delete_tags_by_label, entries, get_tags, get_tags_by_entry, patch_entry, post_entries,
     post_entry_tags,
 };
 
@@ -237,7 +237,7 @@ async fn get_entries_public(pool: SqlitePool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
 async fn test_post_entries(pool: SqlitePool) {
     init();
 
@@ -1036,7 +1036,11 @@ async fn delete_tags_by_label_nonexistent(pool: SqlitePool) {
 
     // Should return empty array
     let tags = result.as_array().unwrap();
-    assert_eq!(tags.len(), 0, "Should return empty array when no tags deleted");
+    assert_eq!(
+        tags.len(),
+        0,
+        "Should return empty array when no tags deleted"
+    );
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("entries"))]
@@ -1091,8 +1095,7 @@ async fn delete_tag_by_id_success(pool: SqlitePool) {
 
     let resp = test::call_and_read_body(&app, req).await;
     let expected =
-        serde_json::from_str::<Value>(include_str!("json/delete_tag_by_id_success.json"))
-            .unwrap();
+        serde_json::from_str::<Value>(include_str!("json/delete_tag_by_id_success.json")).unwrap();
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
     assert_json_include!(
@@ -1178,8 +1181,7 @@ async fn post_entry_tags_replace(pool: SqlitePool) {
 
     let resp = test::call_and_read_body(&app, req).await;
     let expected =
-        serde_json::from_str::<Value>(include_str!("json/post_entry_tags_replace.json"))
-            .unwrap();
+        serde_json::from_str::<Value>(include_str!("json/post_entry_tags_replace.json")).unwrap();
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
     assert_json_include!(
@@ -1213,7 +1215,11 @@ async fn post_entry_tags_remove_all(pool: SqlitePool) {
 
     // Verify entry has no tags
     let tags = result["tags"].as_array().unwrap();
-    assert_eq!(tags.len(), 0, "Entry should have no tags after posting empty");
+    assert_eq!(
+        tags.len(),
+        0,
+        "Entry should have no tags after posting empty"
+    );
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("entries"))]

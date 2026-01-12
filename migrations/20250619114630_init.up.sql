@@ -1,6 +1,16 @@
 -- Add up migration script here
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    email TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL, -- Unix timestamp
+    updated_at INTEGER NOT NULL -- Unix timestamp
+);
+
 CREATE TABLE IF NOT EXISTS entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
     url TEXT NOT NULL,
     hashed_url TEXT NOT NULL,
     given_url TEXT NOT NULL,
@@ -12,7 +22,7 @@ CREATE TABLE IF NOT EXISTS entries (
     is_starred BOOLEAN NOT NULL DEFAULT 0,
     starred_at INTEGER, -- Unix timestamp
     created_at INTEGER NOT NULL, -- Unix timestamp
-    updated_at INTEGER NOT NULL, -- Unix timestamp 
+    updated_at INTEGER NOT NULL, -- Unix timestamp
     mimetype TEXT,
     language TEXT,
     reading_time INTEGER NOT NULL,
@@ -22,13 +32,16 @@ CREATE TABLE IF NOT EXISTS entries (
     published_at INTEGER, -- Unix timestamp
     published_by TEXT,
     is_public BOOLEAN,
-    uid TEXT
+    uid TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
     label TEXT NOT NULL UNIQUE,
-    slug TEXT NOT NULL UNIQUE
+    slug TEXT NOT NULL UNIQUE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS entry_tags (

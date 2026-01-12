@@ -60,6 +60,8 @@ pub async fn post_entries(
 
     // TODO can we remove all these ugly to_string?
     let create_entry = CreateEntry {
+        // TODO replace hardcoded value
+        user_id: 1,
         // TODO actually here we must have url without redirects already
         url: request.url.to_string(),
         hashed_url: hash_str(request.url.as_str()),
@@ -87,6 +89,8 @@ pub async fn post_entries(
 
     let tag_to_create_tag = |label: String| -> CreateTag {
         CreateTag {
+            // TODO replace hardcoded value
+            user_id: 1,
             label: label.clone(),
             slug: slugify(label),
         }
@@ -456,6 +460,8 @@ pub async fn post_entry_tags(
             .labels
             .into_iter()
             .map(|l| CreateTag {
+                // TODO replace hardcoded value
+                user_id: 1,
                 // TODO remove clone
                 label: l.clone(),
                 slug: slugify(l),
@@ -544,6 +550,8 @@ pub async fn patch_entry(
         let full_tags = tags
             .into_iter()
             .map(|l| CreateTag {
+                // TODO replace hardcoded value
+                user_id: 1,
                 // TODO remove clone
                 label: l.clone(),
                 slug: slugify(l),

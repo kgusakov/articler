@@ -1,6 +1,11 @@
+-- Insert users
+INSERT INTO users (id, username, email, name, created_at, updated_at) VALUES
+    (1, 'wallabag', 'wallabag@wallabag.io', 'Walla Baggger', 1687895144, 1687895850);
+
 -- Insert entries
 INSERT INTO entries (
     id,
+    user_id,
     url,
     hashed_url,
     given_url,
@@ -26,6 +31,7 @@ INSERT INTO entries (
 ) VALUES 
 -- Entry 1: Not archived, not starred, not public, NO TAGS
 (
+    1,
     1,
     'https://a.com/1',
     'hash1',
@@ -53,6 +59,7 @@ INSERT INTO entries (
 -- Entry 2: Archived, not starred, not public, HAS TAGS
 (
     2,
+    1,
     'https://b.com/2',
     'hash2',
     'https://b.com/g2',
@@ -79,6 +86,7 @@ INSERT INTO entries (
 -- Entry 3: Not archived, starred, not public, NO TAGS
 (
     3,
+    1,
     'https://c.com/3',
     'hash3',
     'https://c.com/g3',
@@ -105,6 +113,7 @@ INSERT INTO entries (
 -- Entry 4: Archived and starred, not public, HAS TAGS
 (
     4,
+    1,
     'https://d.com/4',
     'hash4',
     'https://d.com/g4',
@@ -131,6 +140,7 @@ INSERT INTO entries (
 -- Entry 5: Not archived, not starred, public, NO TAGS
 (
     5,
+    1,
     'https://e.com/5',
     'hash5',
     'https://e.com/g5',
@@ -157,6 +167,7 @@ INSERT INTO entries (
 -- Entry 6: Archived, starred, and public, HAS TAGS
 (
     6,
+    1,
     'https://f.com/6',
     'hash6',
     'https://f.com/g6',
@@ -182,13 +193,13 @@ INSERT INTO entries (
 );
 
 -- Insert tags
-INSERT INTO tags (id, label, slug) VALUES
-    (1, 'label1', 'slug1'),
-    (2, 'label2', 'slug2'),
-    (3, 'label3', 'slug3'),
-    (4, 'label4', 'slug4'),
-    (5, 'label5', 'slug5'),
-    (6, 'label6', 'slug6');
+INSERT INTO tags (id, user_id, label, slug) VALUES
+    (1, 1, 'label1', 'slug1'),
+    (2, 1, 'label2', 'slug2'),
+    (3, 1, 'label3', 'slug3'),
+    (4, 1, 'label4', 'slug4'),
+    (5, 1, 'label5', 'slug5'),
+    (6, 1, 'label6', 'slug6');
 
 -- Link tags to entries (only entries 2, 4, and 6 have tags)
 INSERT INTO entry_tags (entry_id, tag_id) VALUES
