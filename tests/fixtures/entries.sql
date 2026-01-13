@@ -1,6 +1,6 @@
 -- Insert users
-INSERT INTO users (id, username, email, name, created_at, updated_at) VALUES
-    (1, 'wallabag', 'wallabag@wallabag.io', 'Walla Baggger', 1687895144, 1687895850);
+INSERT INTO users (id, username, email, name, password_hash, created_at, updated_at) VALUES
+    (1, 'wallabag', 'wallabag@wallabag.io', 'Walla Baggger', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYNhJ5rHIVe', 1687895144, 1687895850);
 
 -- Insert entries
 INSERT INTO entries (
@@ -240,3 +240,8 @@ INSERT INTO annotation_ranges (
     (3, '/d[1]/p[1]', '/d[1]/p[1]', 0, 40),
     (4, '/d[2]/p[5]', '/d[2]/p[5]', 10, 85),
     (5, '/d[3]/p[2]', '/d[3]/p[2]', 5, 95);
+
+-- Insert OAuth clients
+INSERT INTO clients (id, user_id, client_id, client_secret, created_at) VALUES
+    (1, 1, 'client_1', 'secret_1', 1687895200),
+    (2, 1, 'client_2', 'secret_2', 1687895300);

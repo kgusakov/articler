@@ -3,14 +3,16 @@ use std::{fmt::Display, sync::Arc};
 use async_trait::async_trait;
 use indexmap::IndexMap;
 use sqlx::{
-    Database, Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*,
-    query_builder::Separated, sqlite::SqliteRow,
+    Database, Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*, query_as,
+    query_builder::Separated, query_scalar, sqlite::SqliteRow,
 };
 use thiserror::Error;
 
 const ENTRIES_TABLE: &str = "entries";
 const TAGS_TABLE: &str = "tags";
 const ENTRIES_TAG_TABLE: &str = "entry_tags";
+const USERS_TABLE: &str = "users";
+const CLIENTS_TABLE: &str = "clients";
 const SQLITE_LIMIT_VARIABLE_NUMBER: usize = 999;
 
 type Result<T> = std::result::Result<T, DbError>;
@@ -51,6 +53,52 @@ pub struct CreateTag {
     pub user_id: Id,
     pub label: String,
     pub slug: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UserRow {
+    pub id: Id,
+    pub username: String,
+    pub email: String,
+    pub name: String,
+    pub password_hash: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+impl<'r> FromRow<'r, SqliteRow> for UserRow {
+    fn from_row(row: &'r SqliteRow) -> std::result::Result<UserRow, SqlxError> {
+        Ok(UserRow {
+            id: row.try_get("id")?,
+            username: row.try_get("username")?,
+            email: row.try_get("email")?,
+            name: row.try_get("name")?,
+            password_hash: row.try_get("password_hash")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ClientRow {
+    pub id: Id,
+    pub client_id: String,
+    pub client_secret: String,
+    pub user_id: Id,
+    pub created_at: Timestamp,
+}
+
+impl<'r> FromRow<'r, SqliteRow> for ClientRow {
+    fn from_row(row: &'r SqliteRow) -> std::result::Result<ClientRow, SqlxError> {
+        Ok(ClientRow {
+            id: row.try_get("id")?,
+            client_id: row.try_get("client_id")?,
+            client_secret: row.try_get("client_secret")?,
+            user_id: row.try_get("user_id")?,
+            created_at: row.try_get("created_at")?,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -95,6 +143,87 @@ pub trait TagRepository: Send + Sync {
     async fn delete_by_id(&self, id: Id) -> Result<Option<TagRow>>;
 
     async fn delete_all_by_label(&self, labels: &Vec<String>) -> Result<Vec<TagRow>>;
+}
+
+pub struct SqliteUserRepository {
+    pool: Arc<SqlitePool>,
+}
+
+impl SqliteUserRepository {
+    pub fn new(pool: Arc<SqlitePool>) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait]
+pub trait UserRepository: Send + Sync {
+    async fn find_by_username_and_password(
+        &self,
+        username: &str,
+        password_hash: &str,
+    ) -> Result<Option<UserRow>>;
+}
+
+#[async_trait]
+impl UserRepository for SqliteUserRepository {
+    async fn find_by_username_and_password(
+        &self,
+        username: &str,
+        password_hash: &str,
+    ) -> Result<Option<UserRow>> {
+        let result = sqlx::query_as::<_, UserRow>(&format!(
+            "SELECT * FROM {} WHERE username = ? AND password_hash = ?",
+            USERS_TABLE
+        ))
+        .bind(username)
+        .bind(password_hash)
+        .fetch_optional(self.pool.as_ref())
+        .await?;
+
+        Ok(result)
+    }
+}
+
+pub struct SqliteClientRepository {
+    pool: Arc<SqlitePool>,
+}
+
+impl SqliteClientRepository {
+    pub fn new(pool: Arc<SqlitePool>) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait]
+pub trait ClientRepository: Send + Sync {
+    async fn find_by_user_id_client_id_and_secret(
+        &self,
+        user_id: Id,
+        client_id: &str,
+        client_secret: &str,
+    ) -> Result<Option<ClientRow>>;
+}
+
+#[async_trait]
+impl ClientRepository for SqliteClientRepository {
+    async fn find_by_user_id_client_id_and_secret(
+        &self,
+        user_id: Id,
+        client_id: &str,
+        client_secret: &str,
+    ) -> Result<Option<ClientRow>> {
+        let result = sqlx::query_as::<_, ClientRow>(&format!(
+            "SELECT * FROM {} WHERE user_id = ? AND client_id = ? AND client_secret = ?",
+            CLIENTS_TABLE
+        ))
+        .bind(user_id)
+        .bind(client_id)
+        .bind(client_secret)
+        .fetch_optional(self.pool.as_ref())
+        .await?;
+
+        Ok(result)
+    }
 }
 
 #[async_trait]
@@ -1168,5 +1297,158 @@ mod tests {
         // Verify entry 2 still exists (wasn't affected)
         let entry_2 = entry_repo.find_by_id(2).await.unwrap();
         assert!(entry_2.is_some(), "Entry 2 should still exist");
+    }
+
+    #[sqlx::test(
+        migrations = "./migrations",
+        fixtures("../../tests/fixtures/entries.sql")
+    )]
+    async fn test_find_by_username_and_password(pool: SqlitePool) {
+        let pool = Arc::new(pool);
+        let user_repo = SqliteUserRepository::new(pool.clone());
+
+        // Test successful lookup with correct credentials
+        let user = user_repo
+            .find_by_username_and_password(
+                "wallabag",
+                "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYNhJ5rHIVe",
+            )
+            .await
+            .unwrap();
+
+        assert!(user.is_some(), "Should find user with correct credentials");
+        let user = user.unwrap();
+        assert_eq!(user.id, 1, "User should have id 1");
+        assert_eq!(user.username, "wallabag", "Username should match");
+        assert_eq!(user.email, "wallabag@wallabag.io", "Email should match");
+        assert_eq!(user.name, "Walla Baggger", "Name should match");
+        assert_eq!(
+            user.password_hash,
+            "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYNhJ5rHIVe",
+            "Password hash should match"
+        );
+
+        // Test failure with wrong password hash
+        let no_user = user_repo
+            .find_by_username_and_password("wallabag", "wrong_hash")
+            .await
+            .unwrap();
+
+        assert!(
+            no_user.is_none(),
+            "Should not find user with wrong password hash"
+        );
+
+        // Test failure with non-existent username
+        let no_user = user_repo
+            .find_by_username_and_password(
+                "nonexistent",
+                "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYNhJ5rHIVe",
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            no_user.is_none(),
+            "Should not find user with non-existent username"
+        );
+
+        // Test failure with both wrong username and password
+        let no_user = user_repo
+            .find_by_username_and_password("wrong_user", "wrong_hash")
+            .await
+            .unwrap();
+
+        assert!(
+            no_user.is_none(),
+            "Should not find user with wrong username and password"
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "./migrations",
+        fixtures("../../tests/fixtures/entries.sql")
+    )]
+    async fn test_find_by_user_id_client_id_and_secret(pool: SqlitePool) {
+        let pool = Arc::new(pool);
+        let client_repo = SqliteClientRepository::new(pool.clone());
+
+        // Test successful lookup with correct credentials
+        let client = client_repo
+            .find_by_user_id_client_id_and_secret(1, "client_1", "secret_1")
+            .await
+            .unwrap();
+
+        assert!(
+            client.is_some(),
+            "Should find client with correct credentials"
+        );
+        let client = client.unwrap();
+        assert_eq!(client.id, 1, "Client should have id 1");
+        assert_eq!(client.user_id, 1, "Client should belong to user 1");
+        assert_eq!(client.client_id, "client_1", "Client ID should match");
+        assert_eq!(
+            client.client_secret, "secret_1",
+            "Client secret should match"
+        );
+        assert_eq!(client.created_at, 1687895200, "Created timestamp should match");
+
+        // Test successful lookup for second client
+        let client = client_repo
+            .find_by_user_id_client_id_and_secret(1, "client_2", "secret_2")
+            .await
+            .unwrap();
+
+        assert!(
+            client.is_some(),
+            "Should find second client with correct credentials"
+        );
+        let client = client.unwrap();
+        assert_eq!(client.id, 2, "Client should have id 2");
+        assert_eq!(client.client_id, "client_2", "Client ID should match");
+
+        // Test failure with wrong client_secret
+        let no_client = client_repo
+            .find_by_user_id_client_id_and_secret(1, "client_1", "wrong_secret")
+            .await
+            .unwrap();
+
+        assert!(
+            no_client.is_none(),
+            "Should not find client with wrong secret"
+        );
+
+        // Test failure with wrong client_id
+        let no_client = client_repo
+            .find_by_user_id_client_id_and_secret(1, "wrong_client", "secret_1")
+            .await
+            .unwrap();
+
+        assert!(
+            no_client.is_none(),
+            "Should not find client with wrong client_id"
+        );
+
+        // Test failure with wrong user_id
+        let no_client = client_repo
+            .find_by_user_id_client_id_and_secret(999, "client_1", "secret_1")
+            .await
+            .unwrap();
+
+        assert!(
+            no_client.is_none(),
+            "Should not find client with wrong user_id"
+        );
+
+        // Test failure with all wrong parameters
+        let no_client = client_repo
+            .find_by_user_id_client_id_and_secret(999, "wrong_client", "wrong_secret")
+            .await
+            .unwrap();
+
+        assert!(
+            no_client.is_none(),
+            "Should not find client with all wrong parameters"
+        );
     }
 }

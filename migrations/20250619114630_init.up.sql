@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT NOT NULL,
     email TEXT NOT NULL,
     name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
     created_at INTEGER NOT NULL, -- Unix timestamp
     updated_at INTEGER NOT NULL -- Unix timestamp
 );
@@ -74,3 +75,14 @@ CREATE TABLE IF NOT EXISTS annotation_ranges (
 );
 
 CREATE INDEX IF NOT EXISTS idx_annotation_ranges_annotation_id ON annotation_ranges(annotation_id);
+
+CREATE TABLE IF NOT EXISTS clients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id TEXT NOT NULL UNIQUE,
+    client_secret TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    created_at INTEGER NOT NULL, -- Unix timestamp
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_user_id_client_id ON clients(user_id, client_id);

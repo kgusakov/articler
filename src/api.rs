@@ -1,22 +1,26 @@
 use crate::{
     helpers::{generate_uid, hash_str},
     models::{Entry, Tag},
-    storage::repository::{
-        self, CreateEntry, CreateTag, EntriesCriteria, EntryRepository, EntryRow, SortColumn,
-        SortOrder, SqliteEntryRepository, SqliteTagRepository, TagRepository, TagRow,
-        UpdateEntry as RepositoryUpdateEntry,
+    storage::{
+        repository::{
+            self, CreateEntry, CreateTag, EntriesCriteria, EntryRepository, EntryRow, SortColumn,
+            SortOrder, SqliteEntryRepository, SqliteTagRepository, SqliteUserRepository,
+            TagRepository, TagRow, UpdateEntry as RepositoryUpdateEntry, UserRepository,
+        },
+        token_storage::TokenStorage,
     },
 };
 use actix_web::{
     App, HttpServer, delete,
     dev::Server,
-    error::{ErrorInternalServerError, ErrorNotFound},
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     get, patch, post, routes,
     web::{self, Json, Query},
 };
 use anyhow::anyhow;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, OutOfRange, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use serde_with::BoolFromInt;
 use serde_with::StringWithSeparator;
 use serde_with::formats::CommaSeparator;
@@ -27,6 +31,103 @@ use std::{str::FromStr, sync::Arc};
 use url::{ParseError, Url};
 
 type Id = i64;
+
+#[derive(Deserialize, Debug)]
+struct GetToken {
+    grant_type: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+struct Token {
+    access_token: String,
+    expiren_in: i64,
+    token_type: String,
+    scope: Option<String>,
+    refresh_token: String,
+}
+
+#[derive(Debug, Serialize)]
+struct OauthError {
+    error: String,
+    error_description: String,
+}
+
+impl std::fmt::Display for OauthError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let json = serde_json::to_string(self).map_err(|_| std::fmt::Error)?;
+        write!(f, "{}", json)
+    }
+}
+
+fn o_error(error: &str, description: &str) -> OauthError {
+    OauthError {
+        error: error.to_string(),
+        error_description: description.to_string(),
+    }
+}
+
+#[get("/oauth/v2/token")]
+pub async fn get_token(
+    data: web::Data<AppState>,
+    request: web::Query<GetToken>,
+) -> actix_web::Result<Json<Token>> {
+    let r = request.into_inner();
+    let (_, username, password, client_id, client_secret) = if let Some(grant_type) = r.grant_type
+        && grant_type.eq("password")
+    {
+        if let Some(username) = r.username
+            && let Some(password) = r.password
+        {
+            if let Some(client_id) = r.client_id {
+                if let Some(client_secret) = r.client_secret {
+                    Ok((grant_type, username, password, client_id, client_secret))
+                } else {
+                    Err(ErrorBadRequest(o_error(
+                        "invalid_client",
+                        "The client credentials are invalid",
+                    )))
+                }
+            } else {
+                Err(ErrorBadRequest(o_error(
+                    "invalid_client",
+                    "Client id was not found in the headers or body",
+                )))
+            }
+        } else {
+            Err(ErrorBadRequest(o_error(
+                "invalid_request",
+                "Missing parameters. \"username\" and \"password\" required",
+            )))
+        }
+    } else {
+        Err(ErrorBadRequest(o_error(
+            "invalid_request",
+            "Invalid grant_type parameter or parameter missing",
+        )))
+    }?;
+    // if let Some((user_row, client_row)) = data
+    //     .user_repository
+    //     .find_by_username_and_password_hash_with_client(
+    //         &request.username,
+    //         &request.password,
+    //         &request.client_id,
+    //         &request.client_secret,
+    //     )
+    //     .await
+    //     .map_err(ErrorInternalServerError)?
+    // {
+    //     todo!()
+    // } else {
+    //     // TODO implement appropriate error handling
+    //     Err(ErrorBadRequest("Bad request"))
+    // }
+    // todo!()
+    todo!()
+}
 
 // TODO post with the same url is not supported
 #[post("/api/entries.json")]
@@ -581,6 +682,8 @@ pub async fn patch_entry(
 pub struct AppState {
     pub tag_repository: Arc<dyn TagRepository>,
     pub entry_repository: Arc<dyn EntryRepository>,
+    pub user_repository: Arc<dyn UserRepository>,
+    pub token_storage: Arc<TokenStorage>,
 }
 
 pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
@@ -589,6 +692,8 @@ pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
     AppState {
         tag_repository: tag_repo.clone(),
         entry_repository: Arc::new(SqliteEntryRepository::new(pool.clone(), tag_repo.clone())),
+        user_repository: Arc::new(SqliteUserRepository::new(pool.clone())),
+        token_storage: Arc::new(TokenStorage {}),
     }
 }
 
