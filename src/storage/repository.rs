@@ -202,6 +202,12 @@ pub trait ClientRepository: Send + Sync {
         client_id: &str,
         client_secret: &str,
     ) -> Result<Option<ClientRow>>;
+
+    async fn find_by_client_id_and_secret(
+        &self,
+        client_id: &str,
+        client_secret: &str,
+    ) -> Result<Option<ClientRow>>;
 }
 
 #[async_trait]
@@ -217,6 +223,23 @@ impl ClientRepository for SqliteClientRepository {
             CLIENTS_TABLE
         ))
         .bind(user_id)
+        .bind(client_id)
+        .bind(client_secret)
+        .fetch_optional(self.pool.as_ref())
+        .await?;
+
+        Ok(result)
+    }
+
+    async fn find_by_client_id_and_secret(
+        &self,
+        client_id: &str,
+        client_secret: &str,
+    ) -> Result<Option<ClientRow>> {
+        let result = sqlx::query_as::<_, ClientRow>(&format!(
+            "SELECT * FROM {} WHERE client_id = ? AND client_secret = ?",
+            CLIENTS_TABLE
+        ))
         .bind(client_id)
         .bind(client_secret)
         .fetch_optional(self.pool.as_ref())
@@ -1323,8 +1346,7 @@ mod tests {
         assert_eq!(user.email, "wallabag@wallabag.io", "Email should match");
         assert_eq!(user.name, "Walla Baggger", "Name should match");
         assert_eq!(
-            user.password_hash,
-            "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYNhJ5rHIVe",
+            user.password_hash, "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYNhJ5rHIVe",
             "Password hash should match"
         );
 
@@ -1391,7 +1413,10 @@ mod tests {
             client.client_secret, "secret_1",
             "Client secret should match"
         );
-        assert_eq!(client.created_at, 1687895200, "Created timestamp should match");
+        assert_eq!(
+            client.created_at, 1687895200,
+            "Created timestamp should match"
+        );
 
         // Test successful lookup for second client
         let client = client_repo

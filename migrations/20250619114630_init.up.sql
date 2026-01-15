@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
     created_at INTEGER NOT NULL, -- Unix timestamp
-    updated_at INTEGER NOT NULL -- Unix timestamp
+    updated_at INTEGER NOT NULL, -- Unix timestamp
+    CONSTRAINT unique_username UNIQUE (username)
 );
 
 CREATE TABLE IF NOT EXISTS entries (
@@ -82,7 +83,6 @@ CREATE TABLE IF NOT EXISTS clients (
     client_secret TEXT NOT NULL,
     user_id INTEGER NOT NULL,
     created_at INTEGER NOT NULL, -- Unix timestamp
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT unique_user_id_client_id UNIQUE (user_id, client_id)
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_user_id_client_id ON clients(user_id, client_id);

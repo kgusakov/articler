@@ -1,11 +1,12 @@
 use crate::{
-    helpers::{generate_uid, hash_str},
+    helpers::{generate_uid, hash_password, hash_str},
     models::{Entry, Tag},
     storage::{
         repository::{
-            self, CreateEntry, CreateTag, EntriesCriteria, EntryRepository, EntryRow, SortColumn,
-            SortOrder, SqliteEntryRepository, SqliteTagRepository, SqliteUserRepository,
-            TagRepository, TagRow, UpdateEntry as RepositoryUpdateEntry, UserRepository,
+            self, ClientRepository, CreateEntry, CreateTag, EntriesCriteria, EntryRepository,
+            EntryRow, SortColumn, SortOrder, SqliteClientRepository, SqliteEntryRepository,
+            SqliteTagRepository, SqliteUserRepository, TagRepository, TagRow,
+            UpdateEntry as RepositoryUpdateEntry, UserRepository,
         },
         token_storage::TokenStorage,
     },
@@ -28,6 +29,7 @@ use serde_with::serde_as;
 use slug::slugify;
 use sqlx::{Pool, Sqlite};
 use std::{str::FromStr, sync::Arc};
+use tokio::sync::{Mutex, RwLock};
 use url::{ParseError, Url};
 
 type Id = i64;
@@ -39,6 +41,7 @@ struct GetToken {
     client_secret: Option<String>,
     username: Option<String>,
     password: Option<String>,
+    refresh_token: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -76,15 +79,120 @@ pub async fn get_token(
     request: web::Query<GetToken>,
 ) -> actix_web::Result<Json<Token>> {
     let r = request.into_inner();
-    let (_, username, password, client_id, client_secret) = if let Some(grant_type) = r.grant_type
-        && grant_type.eq("password")
-    {
-        if let Some(username) = r.username
-            && let Some(password) = r.password
-        {
+    // TODO support grant_type "refresh_token"
+    match r.grant_type {
+        Some(gt) if gt == "password" => {
+            if let Some(username) = r.username
+                && let Some(password) = r.password
+            {
+                if let Some(client_id) = r.client_id {
+                    if let Some(client_secret) = r.client_secret {
+                        if let Some(user_row) = data
+                            .user_repository
+                            .find_by_username_and_password(
+                                &username,
+                                &hash_password(&password).map_err(ErrorInternalServerError)?,
+                            )
+                            .await
+                            .map_err(ErrorInternalServerError)?
+                        {
+                            if let Some(client_row) = data
+                                .client_repository
+                                .find_by_user_id_client_id_and_secret(
+                                    user_row.id,
+                                    &client_id,
+                                    &client_secret,
+                                )
+                                .await
+                                .map_err(ErrorInternalServerError)?
+                            {
+                                let new_token = data
+                                    .token_storage
+                                    .write()
+                                    .await
+                                    .new_token(user_row.id, client_row.id)
+                                    .map_err(ErrorInternalServerError)?;
+
+                                Ok(Json(Token {
+                                    access_token: new_token.access_token,
+                                    expiren_in: new_token.expires_in,
+                                    token_type: "bearer".to_string(),
+                                    scope: None,
+                                    refresh_token: new_token.refresh_token,
+                                }))
+                            } else {
+                                Err(ErrorBadRequest(o_error(
+                                    "invalid_client",
+                                    "The client credentials are invalid",
+                                )))
+                            }
+                        } else {
+                            Err(ErrorBadRequest(o_error(
+                                "invalid_grant",
+                                "Invalid username and password combination",
+                            )))
+                        }
+                    } else {
+                        Err(ErrorBadRequest(o_error(
+                            "invalid_client",
+                            "The client credentials are invalid",
+                        )))
+                    }
+                } else {
+                    Err(ErrorBadRequest(o_error(
+                        "invalid_client",
+                        "Client id was not found in the headers or body",
+                    )))
+                }
+            } else {
+                Err(ErrorBadRequest(o_error(
+                    "invalid_request",
+                    "Missing parameters. \"username\" and \"password\" required",
+                )))
+            }
+        }
+        Some(gt) if gt == "refresh_token" => {
             if let Some(client_id) = r.client_id {
                 if let Some(client_secret) = r.client_secret {
-                    Ok((grant_type, username, password, client_id, client_secret))
+                    if let Some(_) = data
+                        .client_repository
+                        .find_by_client_id_and_secret(&client_id, &client_secret)
+                        .await
+                        .map_err(ErrorInternalServerError)?
+                    {
+                        if let Some(refresh_token) = r.refresh_token {
+                            if let Some(new_token) = data
+                                .token_storage
+                                .write()
+                                .await
+                                .refresh(&refresh_token)
+                                .map_err(ErrorInternalServerError)?
+                            {
+                                Ok(Json(Token {
+                                    access_token: new_token.access_token,
+                                    expiren_in: new_token.expires_in,
+                                    token_type: "bearer".to_string(),
+                                    scope: None,
+                                    refresh_token: new_token.refresh_token,
+                                }))
+                            } else {
+                                Err(ErrorBadRequest(o_error(
+                                    "invalid_grant",
+                                    "Invalid refresh token",
+                                )))
+                            }
+                        } else {
+                            Err(ErrorBadRequest(o_error(
+                                "invalid_request",
+                                "No \"refresh_token\" parameter found",
+                            )))
+                        }
+                    } else {
+                        Err(ErrorBadRequest(o_error(
+                            "invalid_client",
+                            "The client credentials are invalid",
+                        )))
+                    }
                 } else {
                     Err(ErrorBadRequest(o_error(
                         "invalid_client",
@@ -97,36 +205,54 @@ pub async fn get_token(
                     "Client id was not found in the headers or body",
                 )))
             }
-        } else {
-            Err(ErrorBadRequest(o_error(
-                "invalid_request",
-                "Missing parameters. \"username\" and \"password\" required",
-            )))
         }
-    } else {
-        Err(ErrorBadRequest(o_error(
+        _ => Err(ErrorBadRequest(o_error(
             "invalid_request",
             "Invalid grant_type parameter or parameter missing",
-        )))
-    }?;
-    // if let Some((user_row, client_row)) = data
+        ))),
+    }
+
+    // if let Some(user_row) = data
     //     .user_repository
-    //     .find_by_username_and_password_hash_with_client(
-    //         &request.username,
-    //         &request.password,
-    //         &request.client_id,
-    //         &request.client_secret,
+    //     .find_by_username_and_password(
+    //         &username,
+    //         &hash_password(&password).map_err(ErrorInternalServerError)?,
     //     )
     //     .await
     //     .map_err(ErrorInternalServerError)?
     // {
-    //     todo!()
+    //     if let Some(client_row) = data
+    //         .client_repository
+    //         .find_by_user_id_client_id_and_secret(user_row.id, &client_id, &client_secret)
+    //         .await
+    //         .map_err(ErrorInternalServerError)?
+    //     {
+    //         let new_token = data
+    //             .token_storage
+    //             .write()
+    //             .await
+    //             .new_token(user_row.id, client_row.id)
+    //             .map_err(ErrorInternalServerError)?;
+
+    //         Ok(Json(Token {
+    //             access_token: new_token.access_token,
+    //             expiren_in: new_token.expires_in,
+    //             token_type: "bearer".to_string(),
+    //             scope: None,
+    //             refresh_token: new_token.refresh_token,
+    //         }))
+    //     } else {
+    //         Err(ErrorBadRequest(o_error(
+    //             "invalid_client",
+    //             "The client credentials are invalid",
+    //         )))
+    //     }
     // } else {
-    //     // TODO implement appropriate error handling
-    //     Err(ErrorBadRequest("Bad request"))
+    //     Err(ErrorBadRequest(o_error(
+    //         "invalid_grant",
+    //         "Invalid username and password combination",
+    //     )))
     // }
-    // todo!()
-    todo!()
 }
 
 // TODO post with the same url is not supported
@@ -683,7 +809,8 @@ pub struct AppState {
     pub tag_repository: Arc<dyn TagRepository>,
     pub entry_repository: Arc<dyn EntryRepository>,
     pub user_repository: Arc<dyn UserRepository>,
-    pub token_storage: Arc<TokenStorage>,
+    pub client_repository: Arc<dyn ClientRepository>,
+    pub token_storage: RwLock<TokenStorage>,
 }
 
 pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
@@ -693,7 +820,8 @@ pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
         tag_repository: tag_repo.clone(),
         entry_repository: Arc::new(SqliteEntryRepository::new(pool.clone(), tag_repo.clone())),
         user_repository: Arc::new(SqliteUserRepository::new(pool.clone())),
-        token_storage: Arc::new(TokenStorage {}),
+        client_repository: Arc::new(SqliteClientRepository::new(pool.clone())),
+        token_storage: RwLock::new(TokenStorage::new()),
     }
 }
 
