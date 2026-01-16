@@ -22,7 +22,9 @@ slug = "0.1.6"
 thiserror = "2.0.17"
 argon2 = {version = "0.5.3", features = ["std"]}
 tokio = "1.49.0"
+actix-web-httpauth = "0.8.2"
 
 [dev-dependencies]
 proptest = "1.4"
 urlencoding = "2.1"
+actix-http = "3.11.2"

@@ -1,30 +1,25 @@
-use std::{
-    borrow::Cow,
-    rc::Rc,
-    sync::{Arc, Once},
-};
+use std::sync::{Arc, Once};
 
+use actix_http::Request;
 use actix_web::{
-    App,
-    cookie::time::UtcDateTime,
+    App, Error,
+    body::MessageBody,
+    dev::{Service, ServiceResponse},
     middleware::Logger,
     test,
     web::{self},
 };
 
 use chrono::{DateTime, Utc};
-use proptest::prelude::*;
 use serde_json::Value;
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
-use urlencoding::encode;
 // TODO is it appropriate way?
 use wallabag_rs::api::{
     app_state_init, delete_entry, delete_tag_by_id, delete_tag_by_label, delete_tag_from_entry,
     delete_tags_by_label, entries, get_tags, get_tags_by_entry, get_token, patch_entry,
     post_entries, post_entry_tags,
 };
-use wallabag_rs::helpers::hash_password;
 
 static INIT: Once = Once::new();
 
@@ -34,19 +29,31 @@ fn init() {
     });
 }
 
+async fn init_app<F>(
+    pool: SqlitePool,
+    service_factory: Vec<F>,
+) -> impl Service<Request, Response = ServiceResponse<impl MessageBody>, Error = Error>
+where
+    F: actix_web::dev::HttpServiceFactory + 'static,
+{
+    let a_pool = Arc::new(pool);
+
+    let mut app = App::new()
+        .app_data(web::Data::new(app_state_init(a_pool.clone())))
+        .wrap(Logger::default());
+
+    for s in service_factory {
+        app = app.service(s);
+    }
+
+    test::init_service(app).await
+}
+
 #[sqlx::test(migrations = "./migrations", fixtures("entries"))]
 async fn get_entries_json(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(entries),
-    )
-    .await;
+    let app = init_app(pool, vec![entries]).await;
 
     let req = test::TestRequest::default()
         .uri("/api/entries.json")
@@ -66,15 +73,7 @@ async fn get_entries_json(pool: SqlitePool) {
 async fn get_entries(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(entries),
-    )
-    .await;
+    let app = init_app(pool, vec![entries]).await;
 
     let req = test::TestRequest::default()
         .uri("/api/entries")
@@ -94,15 +93,7 @@ async fn get_entries(pool: SqlitePool) {
 async fn get_entries_ordered_by_updated_at(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(entries),
-    )
-    .await;
+    let app = init_app(pool, vec![entries]).await;
 
     let req = test::TestRequest::default()
         .uri("/api/entries?sort=updated")
@@ -123,15 +114,7 @@ async fn get_entries_ordered_by_updated_at(pool: SqlitePool) {
 async fn get_entries_with_pages(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(entries),
-    )
-    .await;
+    let app = init_app(pool, vec![entries]).await;
 
     let req = test::TestRequest::default()
         .uri("/api/entries?page=2&perPage=1")
@@ -151,15 +134,7 @@ async fn get_entries_with_pages(pool: SqlitePool) {
 async fn get_entries_archived(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(entries),
-    )
-    .await;
+    let app = init_app(pool, vec![entries]).await;
 
     let req = test::TestRequest::default()
         .uri("/api/entries?archive=1")
@@ -179,15 +154,7 @@ async fn get_entries_archived(pool: SqlitePool) {
 async fn get_entries_starred(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(entries),
-    )
-    .await;
+    let app = init_app(pool, vec![entries]).await;
 
     let req = test::TestRequest::default()
         .uri("/api/entries?starred=1")
@@ -207,15 +174,7 @@ async fn get_entries_starred(pool: SqlitePool) {
 async fn get_entries_public(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(entries),
-    )
-    .await;
+    let app = init_app(pool, vec![entries]).await;
 
     let req = test::TestRequest::default()
         .uri("/api/entries?public=1")
@@ -235,15 +194,7 @@ async fn get_entries_public(pool: SqlitePool) {
 async fn test_post_entries(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(post_entries),
-    )
-    .await;
+    let app = init_app(pool, vec![post_entries]).await;
 
     let payload = "url=https://example.com/article&archive=1&starred=1&tags=label 1,label 2&title=New title&content=New content&language=ru&published_at=2023-12-01T11:00:00Z&preview_picture=https://example.com/pic.jpg&authors=author1,author2&public=1&origin_url=https://example.com/origin/url";
 
@@ -367,15 +318,7 @@ async fn delete_entry_expect_full(pool: SqlitePool) {
 async fn delete_entry_not_found(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_entry]).await;
 
     let req = test::TestRequest::delete()
         .uri("/api/entries/999.json?expect=id")
@@ -394,15 +337,7 @@ async fn delete_entry_not_found(pool: SqlitePool) {
 async fn patch_entry_basic_fields(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(patch_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![patch_entry]).await;
 
     let payload = r#"{"title":"Updated Title","content":"Updated Content","language":"fr"}"#;
 
@@ -432,15 +367,7 @@ async fn patch_entry_basic_fields(pool: SqlitePool) {
 async fn patch_entry_archive_and_star(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(patch_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![patch_entry]).await;
 
     // Archive and star entry 1 (which is not archived and not starred)
     let payload = r#"{"archive":1,"starred":1}"#;
@@ -471,15 +398,7 @@ async fn patch_entry_archive_and_star(pool: SqlitePool) {
 async fn patch_entry_unarchive_and_unstar(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(patch_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![patch_entry]).await;
 
     // Unarchive and unstar entry 4 (which is archived and starred)
     let payload = r#"{"archive":0,"starred":0}"#;
@@ -504,15 +423,7 @@ async fn patch_entry_unarchive_and_unstar(pool: SqlitePool) {
 async fn patch_entry_add_tags(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(patch_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![patch_entry]).await;
 
     // Add tags to entry 1 (which has no tags)
     let payload = r#"{"tags":"newtag1,newtag2"}"#;
@@ -537,15 +448,7 @@ async fn patch_entry_add_tags(pool: SqlitePool) {
 async fn patch_entry_replace_tags(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(patch_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![patch_entry]).await;
 
     // Replace tags on entry 2 (which has label1 and label2)
     let payload = r#"{"tags":"label3,newtag"}"#;
@@ -570,15 +473,7 @@ async fn patch_entry_replace_tags(pool: SqlitePool) {
 async fn patch_entry_remove_all_tags(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(patch_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![patch_entry]).await;
 
     // Remove all tags from entry 2 (which has label1 and label2)
     let payload = r#"{"tags":""}"#;
@@ -599,15 +494,7 @@ async fn patch_entry_remove_all_tags(pool: SqlitePool) {
 async fn patch_entry_not_found(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(patch_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![patch_entry]).await;
 
     let payload = r#"{"title":"Updated"}"#;
 
@@ -630,15 +517,7 @@ async fn patch_entry_not_found(pool: SqlitePool) {
 async fn patch_entry_make_public(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(patch_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![patch_entry]).await;
 
     // Make entry 1 public (which is not public)
     let payload = r#"{"public":1}"#;
@@ -660,15 +539,7 @@ async fn patch_entry_make_public(pool: SqlitePool) {
 async fn get_tags_for_entry_with_tags(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_tags_by_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![get_tags_by_entry]).await;
 
     let req = test::TestRequest::get()
         .uri("/api/entries/2/tags")
@@ -690,15 +561,7 @@ async fn get_tags_for_entry_with_tags(pool: SqlitePool) {
 async fn get_tags_for_entry_without_tags(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_tags_by_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![get_tags_by_entry]).await;
 
     let req = test::TestRequest::get()
         .uri("/api/entries/1/tags")
@@ -719,15 +582,7 @@ async fn get_tags_for_entry_without_tags(pool: SqlitePool) {
 async fn get_tags_for_nonexistent_entry(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_tags_by_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![get_tags_by_entry]).await;
 
     let req = test::TestRequest::get()
         .uri("/api/entries/999/tags")
@@ -746,15 +601,7 @@ async fn get_tags_for_nonexistent_entry(pool: SqlitePool) {
 async fn test_get_all_tags(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_tags),
-    )
-    .await;
+    let app = init_app(pool, vec![get_tags]).await;
 
     let req = test::TestRequest::get().uri("/api/tags").to_request();
 
@@ -772,15 +619,7 @@ async fn test_get_all_tags(pool: SqlitePool) {
 async fn test_get_all_tags_empty(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_tags),
-    )
-    .await;
+    let app = init_app(pool, vec![get_tags]).await;
 
     let req = test::TestRequest::get().uri("/api/tags").to_request();
 
@@ -799,15 +638,7 @@ async fn test_get_all_tags_empty(pool: SqlitePool) {
 async fn delete_tag_from_entry_success(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_tag_from_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_tag_from_entry]).await;
 
     // Delete tag_id=1 (label1) from entry 2
     let req = test::TestRequest::delete()
@@ -830,15 +661,7 @@ async fn delete_tag_from_entry_success(pool: SqlitePool) {
 async fn delete_nonexistent_tag_from_entry(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_tag_from_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_tag_from_entry]).await;
 
     // Try to delete non-existent tag_id=999 from entry 2
     let req = test::TestRequest::delete()
@@ -862,15 +685,7 @@ async fn delete_nonexistent_tag_from_entry(pool: SqlitePool) {
 async fn delete_tag_from_nonexistent_entry(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_tag_from_entry),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_tag_from_entry]).await;
 
     // Try to delete tag from non-existent entry 999
     let req = test::TestRequest::delete()
@@ -890,15 +705,7 @@ async fn delete_tag_from_nonexistent_entry(pool: SqlitePool) {
 async fn delete_tag_by_label_success(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_tag_by_label),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_tag_by_label]).await;
 
     // Delete tag with label "label1"
     let req = test::TestRequest::delete()
@@ -921,15 +728,7 @@ async fn delete_tag_by_label_success(pool: SqlitePool) {
 async fn delete_nonexistent_tag_by_label(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_tag_by_label),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_tag_by_label]).await;
 
     // Try to delete non-existent tag
     let req = test::TestRequest::delete()
@@ -945,15 +744,7 @@ async fn delete_nonexistent_tag_by_label(pool: SqlitePool) {
 async fn delete_tags_by_label_success(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_tags_by_label),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_tags_by_label]).await;
 
     // Delete multiple tags with labels "label1", "label2", "label3"
     let req = test::TestRequest::delete()
@@ -976,15 +767,7 @@ async fn delete_tags_by_label_success(pool: SqlitePool) {
 async fn delete_tags_by_label_partial(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_tags_by_label),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_tags_by_label]).await;
 
     // Delete mix of existent and non-existent tags
     let req = test::TestRequest::delete()
@@ -1010,15 +793,7 @@ async fn delete_tags_by_label_partial(pool: SqlitePool) {
 async fn delete_tags_by_label_nonexistent(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_tags_by_label),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_tags_by_label]).await;
 
     // Try to delete all non-existent tags
     let req = test::TestRequest::delete()
@@ -1041,15 +816,7 @@ async fn delete_tags_by_label_nonexistent(pool: SqlitePool) {
 async fn delete_tags_by_label_empty(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_tags_by_label),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_tags_by_label]).await;
 
     // Try to delete with empty tags parameter
     let req = test::TestRequest::delete()
@@ -1072,15 +839,7 @@ async fn delete_tags_by_label_empty(pool: SqlitePool) {
 async fn delete_tag_by_id_success(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_tag_by_id),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_tag_by_id]).await;
 
     // Delete tag with id=1 (label1)
     let req = test::TestRequest::delete()
@@ -1102,15 +861,7 @@ async fn delete_tag_by_id_success(pool: SqlitePool) {
 async fn delete_tag_by_id_not_found(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(delete_tag_by_id),
-    )
-    .await;
+    let app = init_app(pool, vec![delete_tag_by_id]).await;
 
     // Try to delete non-existent tag
     let req = test::TestRequest::delete()
@@ -1126,15 +877,7 @@ async fn delete_tag_by_id_not_found(pool: SqlitePool) {
 async fn post_entry_tags_add(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(post_entry_tags),
-    )
-    .await;
+    let app = init_app(pool, vec![post_entry_tags]).await;
 
     // Entry 1 initially has no tags, add label3 and label4
     let req = test::TestRequest::post()
@@ -1157,15 +900,7 @@ async fn post_entry_tags_add(pool: SqlitePool) {
 async fn post_entry_tags_replace(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(post_entry_tags),
-    )
-    .await;
+    let app = init_app(pool, vec![post_entry_tags]).await;
 
     // Entry 2 initially has label1 and label2, replace with label5 and label6
     let req = test::TestRequest::post()
@@ -1188,15 +923,7 @@ async fn post_entry_tags_replace(pool: SqlitePool) {
 async fn post_entry_tags_remove_all(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(post_entry_tags),
-    )
-    .await;
+    let app = init_app(pool, vec![post_entry_tags]).await;
 
     // Entry 2 initially has label1 and label2, remove all by posting empty tags
     let req = test::TestRequest::post()
@@ -1220,15 +947,7 @@ async fn post_entry_tags_remove_all(pool: SqlitePool) {
 async fn post_entry_tags_not_found(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(post_entry_tags),
-    )
-    .await;
+    let app = init_app(pool, vec![post_entry_tags]).await;
 
     // Try to post tags to non-existent entry
     let req = test::TestRequest::post()
@@ -1249,15 +968,7 @@ async fn post_entry_tags_not_found(pool: SqlitePool) {
 async fn test_oauth_get_token_password_grant_success(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
+    let app = init_app(pool, vec![get_token]).await;
 
     let password = "test_password_123";
     let req = test::TestRequest::get()
@@ -1295,15 +1006,7 @@ async fn test_oauth_get_token_password_grant_success(pool: SqlitePool) {
 async fn test_oauth_missing_grant_type(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
+    let app = init_app(pool, vec![get_token]).await;
 
     let req = test::TestRequest::get()
         .uri("/oauth/v2/token?username=testuser&password=password123")
@@ -1335,15 +1038,7 @@ async fn test_oauth_missing_grant_type(pool: SqlitePool) {
 async fn test_oauth_invalid_grant_type(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
+    let app = init_app(pool, vec![get_token]).await;
 
     let req = test::TestRequest::get()
         .uri("/oauth/v2/token?grant_type=invalid_type&username=testuser&password=password123")
@@ -1376,15 +1071,7 @@ async fn test_oauth_invalid_grant_type(pool: SqlitePool) {
 async fn test_oauth_invalid_credentials(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
+    let app = init_app(pool, vec![get_token]).await;
 
     let req = test::TestRequest::get()
         .uri("/oauth/v2/token?grant_type=password&username=test_user_invalid&password=wrong_password&client_id=test_client&client_secret=test_secret")
@@ -1417,17 +1104,9 @@ async fn test_oauth_invalid_credentials(pool: SqlitePool) {
 async fn test_oauth_invalid_client(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
     let password = "test_password";
 
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
+    let app = init_app(pool, vec![get_token]).await;
 
     let req = test::TestRequest::get()
         .uri(&format!(
@@ -1459,15 +1138,7 @@ async fn test_oauth_invalid_client(pool: SqlitePool) {
 async fn test_oauth_missing_username(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
+    let app = init_app(pool, vec![get_token]).await;
 
     let req = test::TestRequest::get()
         .uri("/oauth/v2/token?grant_type=password&password=test&client_id=client&client_secret=secret")
@@ -1496,15 +1167,7 @@ async fn test_oauth_missing_username(pool: SqlitePool) {
 async fn test_oauth_missing_password(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
+    let app = init_app(pool, vec![get_token]).await;
 
     let req = test::TestRequest::get()
         .uri("/oauth/v2/token?grant_type=password&username=user&client_id=client&client_secret=secret")
@@ -1533,15 +1196,7 @@ async fn test_oauth_missing_password(pool: SqlitePool) {
 async fn test_oauth_missing_client_id(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
+    let app = init_app(pool, vec![get_token]).await;
 
     let req = test::TestRequest::get()
         .uri("/oauth/v2/token?grant_type=password&username=user&password=test&client_secret=secret")
@@ -1574,15 +1229,7 @@ async fn test_oauth_missing_client_id(pool: SqlitePool) {
 async fn test_oauth_missing_client_secret(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
+    let app = init_app(pool, vec![get_token]).await;
 
     let req = test::TestRequest::get()
         .uri("/oauth/v2/token?grant_type=password&username=user&password=test&client_id=client")
@@ -1615,17 +1262,9 @@ async fn test_oauth_missing_client_secret(pool: SqlitePool) {
 async fn test_oauth_refresh_token_grant_success(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
+    let app = init_app(pool, vec![get_token]).await;
 
     let password = "test_password";
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
 
     // First, get an initial token using password grant
     let req = test::TestRequest::get()
@@ -1675,15 +1314,7 @@ async fn test_oauth_refresh_token_grant_success(pool: SqlitePool) {
 async fn test_oauth_refresh_with_invalid_token(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
+    let app = init_app(pool, vec![get_token]).await;
 
     let req = test::TestRequest::get()
         .uri("/oauth/v2/token?grant_type=refresh_token&refresh_token=totally_invalid_token&client_id=invalid_refresh_client&client_secret=invalid_refresh_secret")
@@ -1716,15 +1347,7 @@ async fn test_oauth_refresh_with_invalid_token(pool: SqlitePool) {
 async fn test_oauth_refresh_missing_refresh_token(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(app_state_init(a_pool.clone())))
-            .wrap(Logger::default())
-            .service(get_token),
-    )
-    .await;
+    let app = init_app(pool, vec![get_token]).await;
 
     let req = test::TestRequest::get()
         .uri("/oauth/v2/token?grant_type=refresh_token&client_id=invalid_refresh_client&client_secret=invalid_refresh_secret")
