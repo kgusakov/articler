@@ -6,7 +6,7 @@ use argon2::{
 };
 use sha1::{Digest, Sha1};
 
-const PASSWORD_HASHER: LazyLock<Argon2> = LazyLock::new(|| Argon2::default());
+static PASSWORD_HASHER: LazyLock<Argon2> = LazyLock::new(Argon2::default);
 
 pub fn hash_str(st: &str) -> String {
     format!("{:x}", Sha1::digest(st))

@@ -3,8 +3,8 @@ use std::{fmt::Display, sync::Arc};
 use async_trait::async_trait;
 use indexmap::IndexMap;
 use sqlx::{
-    Database, Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*, query_as,
-    query_builder::Separated, query_scalar, sqlite::SqliteRow,
+    Database, Error as SqlxError, QueryBuilder, Row, SqlitePool, prelude::*,
+    query_builder::Separated, sqlite::SqliteRow,
 };
 use thiserror::Error;
 
@@ -99,12 +99,6 @@ impl<'r> FromRow<'r, SqliteRow> for ClientRow {
             created_at: row.try_get("created_at")?,
         })
     }
-}
-
-#[derive(Debug)]
-pub struct UpdateTag {
-    pub label: Option<String>,
-    pub slug: Option<String>,
 }
 
 #[derive(Clone)]
@@ -277,14 +271,11 @@ impl TagRepository for SqliteTagRepository {
         }
 
         if tags.len() > SQLITE_LIMIT_VARIABLE_NUMBER / 2 {
-            return Err(DbError::RepositoryError(
-                format!(
-                    "Too many tags: {} exceeds limit of {}",
-                    tags.len(),
-                    SQLITE_LIMIT_VARIABLE_NUMBER / 2
-                )
-                .into(),
-            ));
+            return Err(DbError::RepositoryError(format!(
+                "Too many tags: {} exceeds limit of {}",
+                tags.len(),
+                SQLITE_LIMIT_VARIABLE_NUMBER / 2
+            )));
         }
 
         let mut tag_builder = QueryBuilder::new("INSERT INTO tags (user_id, label, slug) ");
@@ -613,7 +604,7 @@ pub struct SqliteEntryRepository {
     tag_repo: Arc<dyn TagRepository>,
 }
 
-impl<'a> SqliteEntryRepository {
+impl SqliteEntryRepository {
     pub fn new(pool: Arc<SqlitePool>, tag_repo: Arc<dyn TagRepository>) -> Self {
         Self { pool, tag_repo }
     }
@@ -689,14 +680,14 @@ impl EntryRepository for SqliteEntryRepository {
         }
 
         // TODO implement domain_name filtering
-        if let Some(_) = params.domain_name {
+        if params.domain_name.is_some() {
             return Err(DbError::RepositoryError(
                 "Domain filtering is not supported yet".into(),
             ));
         }
 
         // TODO implement tags filtering
-        if let Some(_) = params.tags {
+        if params.tags.is_some() {
             return Err(DbError::RepositoryError(
                 "Tags filtering is not supported yet".into(),
             ));
@@ -792,14 +783,14 @@ impl EntryRepository for SqliteEntryRepository {
         }
 
         // TODO implement domain_name filtering
-        if let Some(_) = params.domain_name {
+        if params.domain_name.is_some() {
             return Err(DbError::RepositoryError(
                 "Domain filtering is not supported yet".into(),
             ));
         }
 
         // TODO implement tags filtering
-        if let Some(_) = params.tags {
+        if params.tags.is_some() {
             return Err(DbError::RepositoryError(
                 "Tags filtering is not supported yet".into(),
             ));

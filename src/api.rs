@@ -1,5 +1,5 @@
 use crate::{
-    helpers::{generate_uid, hash_password, hash_str, verify_password},
+    helpers::{generate_uid, hash_str, verify_password},
     models::{Entry, Tag},
     storage::{
         repository::{
@@ -12,16 +12,15 @@ use crate::{
     },
 };
 use actix_web::{
-    App, HttpServer, delete,
+    App, HttpServer,
     dev::Server,
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
-    get, patch, post, routes,
+    get, post, routes,
     web::{self, Json, Query},
 };
 use anyhow::anyhow;
-use chrono::{DateTime, OutOfRange, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use serde_with::BoolFromInt;
 use serde_with::StringWithSeparator;
 use serde_with::formats::CommaSeparator;
@@ -29,7 +28,6 @@ use serde_with::serde_as;
 use slug::slugify;
 use sqlx::{Pool, Sqlite};
 use std::{str::FromStr, sync::Arc};
-use tokio::sync::{Mutex, RwLock};
 use url::{ParseError, Url};
 
 type Id = i64;
@@ -167,11 +165,12 @@ pub async fn get_token(
         Some(gt) if gt == "refresh_token" => {
             if let Some(client_id) = r.client_id {
                 if let Some(client_secret) = r.client_secret {
-                    if let Some(_) = data
+                    if data
                         .client_repository
                         .find_by_client_id_and_secret(&client_id, &client_secret)
                         .await
                         .map_err(ErrorInternalServerError)?
+                        .is_some()
                     {
                         if let Some(refresh_token) = r.refresh_token {
                             if let Some(new_token) = data
@@ -273,7 +272,7 @@ pub async fn post_entries(
         updated_at: now,
         mimetype: Some(mimetype.to_string()),
         language: request.language,
-        reading_time: reading_time,
+        reading_time,
         domain_name: domain_name.to_string(),
         preview_picture: request.preview_picture.map(|u| u.to_string()),
         origin_url: request.origin_url.map(|u| u.to_string()),
@@ -310,7 +309,7 @@ pub async fn post_entries(
         .await
         .map_err(ErrorInternalServerError)?;
 
-    let tags = tag_rows.into_iter().map(|tr| Tag::from(tr)).collect();
+    let tags = tag_rows.into_iter().map(Tag::from).collect();
 
     // TODO replace by real url
     let self_url = Url::parse("https://example.com").map_err(ErrorInternalServerError)?;
@@ -502,18 +501,13 @@ pub async fn delete_tags_by_label(
     Ok(Json(result))
 }
 
-#[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
 enum Expect {
+    #[default]
     #[serde(rename(deserialize = "id"))]
     Id,
     #[serde(rename(deserialize = "full"))]
     Full,
-}
-
-impl Default for Expect {
-    fn default() -> Self {
-        Expect::Id
-    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -530,7 +524,7 @@ pub enum DeleteEntryResponse {
     },
     Full {
         #[serde(flatten)]
-        entry: Entry,
+        entry: Box<Entry>,
     },
 }
 
@@ -567,10 +561,10 @@ pub async fn delete_tag_from_entry(
             ))
         } else {
             // TODO needed while transactions is not implemented
-            return Err(ErrorNotFound("Entry not found"));
+            Err(ErrorNotFound("Entry not found"))
         }
     } else {
-        return Err(ErrorNotFound("Entry not found"));
+        Err(ErrorNotFound("Entry not found"))
     }
 }
 
@@ -622,7 +616,9 @@ pub async fn delete_entry(
             let tags: Vec<Tag> = tag_rows.into_iter().map(|tr| tr.into()).collect();
             let entry = Entry::try_from((entry_row, tags)).map_err(ErrorInternalServerError)?;
 
-            Ok(Json(DeleteEntryResponse::Full { entry }))
+            Ok(Json(DeleteEntryResponse::Full {
+                entry: Box::new(entry),
+            }))
         }
     }
 }
@@ -645,11 +641,12 @@ pub async fn post_entry_tags(
 ) -> actix_web::Result<Json<Entry>> {
     let entry_id = entry_id.into_inner();
     // TODO dirty design - looks like we need entry repository method for it
-    if let Some(_) = data
+    if data
         .entry_repository
         .find_by_id(entry_id)
         .await
         .map_err(ErrorInternalServerError)?
+        .is_some()
     {
         let full_tags = request
             .into_inner()
@@ -790,7 +787,7 @@ pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
         entry_repository: Arc::new(SqliteEntryRepository::new(pool.clone(), tag_repo.clone())),
         user_repository: Arc::new(SqliteUserRepository::new(pool.clone())),
         client_repository: Arc::new(SqliteClientRepository::new(pool.clone())),
-        token_storage: TokenStorage::new(),
+        token_storage: TokenStorage::default(),
     }
 }
 
@@ -886,7 +883,7 @@ impl TryFrom<(EntryRow, Vec<Tag>)> for Entry {
             archived_at: try_parse_timestamp_opt(e.archived_at)?,
             is_starred: e.is_starred,
             starred_at: try_parse_timestamp_opt(e.starred_at)?,
-            tags: tags,
+            tags,
             created_at: try_parse_timestamp(e.created_at)?,
             updated_at: try_parse_timestamp(e.updated_at)?,
             // TODO implement annotations support
@@ -908,8 +905,9 @@ impl TryFrom<(EntryRow, Vec<Tag>)> for Entry {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
 enum FindSortEnum {
+    #[default]
     #[serde(rename(deserialize = "created"))]
     Created,
     #[serde(rename(deserialize = "updated"))]
@@ -918,15 +916,9 @@ enum FindSortEnum {
     Archived,
 }
 
-impl Default for FindSortEnum {
-    fn default() -> Self {
-        FindSortEnum::Created
-    }
-}
-
-impl Into<SortColumn> for FindSortEnum {
-    fn into(self) -> SortColumn {
-        match self {
+impl From<FindSortEnum> for SortColumn {
+    fn from(val: FindSortEnum) -> Self {
+        match val {
             FindSortEnum::Created => SortColumn::Created,
             FindSortEnum::Updated => SortColumn::Updated,
             FindSortEnum::Archived => SortColumn::Archived,
@@ -934,46 +926,36 @@ impl Into<SortColumn> for FindSortEnum {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
 enum FindSortOrder {
+    #[default]
     #[serde(rename(deserialize = "asc"))]
     Asc,
     #[serde(rename(deserialize = "desc"))]
     Desc,
 }
 
-impl Default for FindSortOrder {
-    fn default() -> Self {
-        FindSortOrder::Asc
-    }
-}
-
-impl Into<SortOrder> for FindSortOrder {
-    fn into(self) -> SortOrder {
-        match self {
+impl From<FindSortOrder> for SortOrder {
+    fn from(val: FindSortOrder) -> Self {
+        match val {
             FindSortOrder::Asc => SortOrder::Asc,
             FindSortOrder::Desc => SortOrder::Desc,
         }
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
 enum Detail {
     #[serde(rename(deserialize = "metadata"))]
     Metadata,
+    #[default]
     #[serde(rename(deserialize = "full"))]
     Full,
 }
 
-impl Default for Detail {
-    fn default() -> Self {
-        Detail::Full
-    }
-}
-
-impl Into<repository::Detail> for Detail {
-    fn into(self) -> repository::Detail {
-        match self {
+impl From<Detail> for repository::Detail {
+    fn from(val: Detail) -> Self {
+        match val {
             Detail::Full => repository::Detail::Full,
             Detail::Metadata => repository::Detail::Metadata,
         }
