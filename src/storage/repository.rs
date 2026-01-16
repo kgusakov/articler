@@ -162,6 +162,8 @@ pub trait UserRepository: Send + Sync {
         username: &str,
         password_hash: &str,
     ) -> Result<Option<UserRow>>;
+
+    async fn find_by_username(&self, username: &str) -> Result<Option<UserRow>>;
 }
 
 #[async_trait]
@@ -171,12 +173,25 @@ impl UserRepository for SqliteUserRepository {
         username: &str,
         password_hash: &str,
     ) -> Result<Option<UserRow>> {
+        dbg!(username, password_hash);
         let result = sqlx::query_as::<_, UserRow>(&format!(
             "SELECT * FROM {} WHERE username = ? AND password_hash = ?",
             USERS_TABLE
         ))
         .bind(username)
         .bind(password_hash)
+        .fetch_optional(self.pool.as_ref())
+        .await?;
+
+        Ok(result)
+    }
+
+    async fn find_by_username(&self, username: &str) -> Result<Option<UserRow>> {
+        let result = sqlx::query_as::<_, UserRow>(&format!(
+            "SELECT * FROM {} WHERE username = ?",
+            USERS_TABLE
+        ))
+        .bind(username)
         .fetch_optional(self.pool.as_ref())
         .await?;
 

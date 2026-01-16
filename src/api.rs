@@ -1,12 +1,12 @@
 use crate::{
-    helpers::{generate_uid, hash_password, hash_str},
+    helpers::{generate_uid, hash_password, hash_str, verify_password},
     models::{Entry, Tag},
     storage::{
         repository::{
             self, ClientRepository, CreateEntry, CreateTag, EntriesCriteria, EntryRepository,
             EntryRow, SortColumn, SortOrder, SqliteClientRepository, SqliteEntryRepository,
             SqliteTagRepository, SqliteUserRepository, TagRepository, TagRow,
-            UpdateEntry as RepositoryUpdateEntry, UserRepository,
+            UpdateEntry as RepositoryUpdateEntry, UserRepository, UserRow,
         },
         token_storage::TokenStorage,
     },
@@ -47,7 +47,7 @@ struct GetToken {
 #[derive(Serialize, Debug)]
 struct Token {
     access_token: String,
-    expiren_in: i64,
+    expire_in: i64,
     token_type: String,
     scope: Option<String>,
     refresh_token: String,
@@ -73,13 +73,33 @@ fn o_error(error: &str, description: &str) -> OauthError {
     }
 }
 
+async fn find_user(
+    user_repository: &Arc<dyn UserRepository>,
+    username: &str,
+    password: &str,
+) -> actix_web::Result<Option<UserRow>> {
+    if let Some(user_row) = user_repository
+        .find_by_username(username)
+        .await
+        .map_err(ErrorInternalServerError)?
+    {
+        if verify_password(password, &user_row.password_hash).map_err(ErrorInternalServerError)? {
+            Ok(Some(user_row))
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
+}
+
 #[get("/oauth/v2/token")]
 pub async fn get_token(
     data: web::Data<AppState>,
     request: web::Query<GetToken>,
 ) -> actix_web::Result<Json<Token>> {
     let r = request.into_inner();
-    // TODO support grant_type "refresh_token"
+
     match r.grant_type {
         Some(gt) if gt == "password" => {
             if let Some(username) = r.username
@@ -87,14 +107,8 @@ pub async fn get_token(
             {
                 if let Some(client_id) = r.client_id {
                     if let Some(client_secret) = r.client_secret {
-                        if let Some(user_row) = data
-                            .user_repository
-                            .find_by_username_and_password(
-                                &username,
-                                &hash_password(&password).map_err(ErrorInternalServerError)?,
-                            )
-                            .await
-                            .map_err(ErrorInternalServerError)?
+                        if let Some(user_row) =
+                            find_user(&data.user_repository, &username, &password).await?
                         {
                             if let Some(client_row) = data
                                 .client_repository
@@ -115,7 +129,7 @@ pub async fn get_token(
 
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
-                                    expiren_in: new_token.expires_in,
+                                    expire_in: new_token.expires_in,
                                     token_type: "bearer".to_string(),
                                     scope: None,
                                     refresh_token: new_token.refresh_token,
@@ -127,6 +141,7 @@ pub async fn get_token(
                                 )))
                             }
                         } else {
+                            dbg!("I'm here");
                             Err(ErrorBadRequest(o_error(
                                 "invalid_grant",
                                 "Invalid username and password combination",
@@ -170,7 +185,7 @@ pub async fn get_token(
                             {
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
-                                    expiren_in: new_token.expires_in,
+                                    expire_in: new_token.expires_in,
                                     token_type: "bearer".to_string(),
                                     scope: None,
                                     refresh_token: new_token.refresh_token,
@@ -211,48 +226,6 @@ pub async fn get_token(
             "Invalid grant_type parameter or parameter missing",
         ))),
     }
-
-    // if let Some(user_row) = data
-    //     .user_repository
-    //     .find_by_username_and_password(
-    //         &username,
-    //         &hash_password(&password).map_err(ErrorInternalServerError)?,
-    //     )
-    //     .await
-    //     .map_err(ErrorInternalServerError)?
-    // {
-    //     if let Some(client_row) = data
-    //         .client_repository
-    //         .find_by_user_id_client_id_and_secret(user_row.id, &client_id, &client_secret)
-    //         .await
-    //         .map_err(ErrorInternalServerError)?
-    //     {
-    //         let new_token = data
-    //             .token_storage
-    //             .write()
-    //             .await
-    //             .new_token(user_row.id, client_row.id)
-    //             .map_err(ErrorInternalServerError)?;
-
-    //         Ok(Json(Token {
-    //             access_token: new_token.access_token,
-    //             expiren_in: new_token.expires_in,
-    //             token_type: "bearer".to_string(),
-    //             scope: None,
-    //             refresh_token: new_token.refresh_token,
-    //         }))
-    //     } else {
-    //         Err(ErrorBadRequest(o_error(
-    //             "invalid_client",
-    //             "The client credentials are invalid",
-    //         )))
-    //     }
-    // } else {
-    //     Err(ErrorBadRequest(o_error(
-    //         "invalid_grant",
-    //         "Invalid username and password combination",
-    //     )))
-    // }
 }
 
 // TODO post with the same url is not supported
