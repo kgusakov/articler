@@ -202,6 +202,11 @@ fn generate_token() -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{
+        Arc,
+        atomic::{self, AtomicI64, Ordering::Relaxed},
+    };
+
     use super::*;
 
     #[test]
@@ -319,7 +324,7 @@ mod tests {
 
     #[test]
     fn test_refresh_access_token_as_refresh_token() {
-        let mut storage = TokenStorage::new();
+        let storage = TokenStorage::new();
         let token = storage.new_token(1, 100).unwrap();
 
         // Try to use access token as refresh token
@@ -379,6 +384,172 @@ mod tests {
         assert_eq!(
             claim2_after.user_id, 2,
             "Other user's token should still work"
+        );
+    }
+
+    #[test]
+    fn test_access_token_expiration_on_validate() {
+        let current_time = Arc::new(AtomicI64::new(1000i64));
+        let time_clone = current_time.clone();
+
+        let storage = TokenStorage::new_with_custom_timestamp_provider(Box::new(move || {
+            time_clone.load(atomic::Ordering::Relaxed)
+        }));
+
+        let token = storage.new_token(1, 100).unwrap();
+
+        // Token should be valid immediately
+        let claim = storage.validate(&token.access_token).unwrap();
+        assert!(claim.is_some(), "Token should be valid when just created");
+
+        // Move time forward past expiration (1 hour = 3600 seconds)
+        current_time.store(1000 + EXPIRATION_TIME + 1, Relaxed);
+
+        // Token should now be expired and return None
+        let claim = storage.validate(&token.access_token).unwrap();
+        assert!(
+            claim.is_none(),
+            "Expired access token should return None on validation"
+        );
+
+        // Token should be removed from storage (validating again still returns None)
+        current_time.store(1000, Relaxed); // Reset time
+        let claim = storage.validate(&token.access_token).unwrap();
+        assert!(
+            claim.is_none(),
+            "Expired token should be removed from storage"
+        );
+    }
+
+    #[test]
+    fn test_refresh_token_expiration_on_refresh() {
+        let current_time = Arc::new(AtomicI64::new(1000i64));
+        let time_clone = current_time.clone();
+
+        let storage = TokenStorage::new_with_custom_timestamp_provider(Box::new(move || {
+            time_clone.load(atomic::Ordering::Relaxed)
+        }));
+
+        let token = storage.new_token(1, 100).unwrap();
+
+        // Refresh should work immediately
+        let new_token = storage.refresh(&token.refresh_token).unwrap();
+        assert!(
+            new_token.is_some(),
+            "Refresh token should work when just created"
+        );
+        let new_token = new_token.unwrap();
+
+        // Move time forward past refresh token expiration (30 days)
+        current_time.store(1000 + REFRESH_TOKEN_EXPIRATION_TIME + 1, Relaxed);
+
+        // Refresh should now fail and return None
+        let result = storage.refresh(&new_token.refresh_token).unwrap();
+        assert!(result.is_none(), "Expired refresh token should return None");
+
+        // Token should be removed from storage (refreshing again still returns None)
+        current_time.store(1000, Relaxed); // Reset time
+        let result = storage.refresh(&new_token.refresh_token).unwrap();
+        assert!(
+            result.is_none(),
+            "Expired refresh token should be removed from storage"
+        );
+    }
+
+    #[test]
+    fn test_access_token_not_expired_before_expiration_time() {
+        let current_time = Arc::new(AtomicI64::new(1000i64));
+        let time_clone = current_time.clone();
+
+        let storage = TokenStorage::new_with_custom_timestamp_provider(Box::new(move || {
+            time_clone.load(atomic::Ordering::Relaxed)
+        }));
+
+        let token = storage.new_token(1, 100).unwrap();
+
+        // Move time forward but not past expiration
+        current_time.store(1000 + EXPIRATION_TIME - 1, Relaxed);
+
+        // Token should still be valid
+        let claim = storage.validate(&token.access_token).unwrap();
+        assert!(
+            claim.is_some(),
+            "Token should still be valid before expiration time"
+        );
+    }
+
+    #[test]
+    fn test_refresh_token_not_expired_before_expiration_time() {
+        let current_time = Arc::new(AtomicI64::new(1000i64));
+        let time_clone = current_time.clone();
+
+        let storage = TokenStorage::new_with_custom_timestamp_provider(Box::new(move || {
+            time_clone.load(atomic::Ordering::Relaxed)
+        }));
+
+        let token = storage.new_token(1, 100).unwrap();
+
+        // Move time forward but not past expiration
+        current_time.store(1000 + REFRESH_TOKEN_EXPIRATION_TIME - 1, Relaxed);
+
+        // Refresh should still work
+        let result = storage.refresh(&token.refresh_token).unwrap();
+        assert!(
+            result.is_some(),
+            "Refresh token should still work before expiration time"
+        );
+    }
+
+    #[test]
+    fn test_gc_removes_expired_tokens() {
+        let current_time = Arc::new(AtomicI64::new(1000i64));
+        let time_clone = current_time.clone();
+
+        let storage = TokenStorage::new_with_custom_timestamp_provider(Box::new(move || {
+            time_clone.load(atomic::Ordering::Relaxed)
+        }));
+
+        let token1 = storage.new_token(1, 100).unwrap();
+
+        // Move time forward to expire first token
+        current_time.store(1000 + EXPIRATION_TIME + 1, atomic::Ordering::Relaxed);
+
+        let token2 = storage.new_token(2, 200).unwrap();
+
+        // Validate token2 (which triggers GC)
+        let claim2 = storage.validate(&token2.access_token).unwrap();
+        assert!(claim2.is_some(), "Token2 should be valid");
+
+        // Token1 should be gone (removed by GC)
+        current_time.store(1000, atomic::Ordering::Relaxed); // Reset time to when token1 was valid
+        let claim1 = storage.validate(&token1.access_token).unwrap();
+        assert!(claim1.is_none(), "Token1 should be removed by GC");
+    }
+
+    #[test]
+    fn test_gc_preserves_valid_tokens() {
+        let current_time = Arc::new(AtomicI64::new(1000i64));
+        let time_clone = current_time.clone();
+
+        let storage = TokenStorage::new_with_custom_timestamp_provider(Box::new(move || {
+            time_clone.load(atomic::Ordering::Relaxed)
+        }));
+
+        let token1 = storage.new_token(1, 100).unwrap();
+        let token2 = storage.new_token(2, 200).unwrap();
+
+        // Move time forward but not enough to expire tokens
+        current_time.store(1000 + EXPIRATION_TIME / 2, Relaxed);
+
+        // Validate token1 (triggers GC)
+        let claim1 = storage.validate(&token1.access_token).unwrap();
+        assert!(claim1.is_some(), "Token1 should still be valid");
+
+        // Token2 should still be there
+        let claim2 = storage.validate(&token2.access_token).unwrap();
+        assert!(
+            claim2.is_some(),
+            "Token2 should be preserved by GC since it's still valid"
         );
     }
 }
