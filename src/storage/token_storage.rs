@@ -1,9 +1,12 @@
-use std::{collections::HashMap, io::Error, ops::Deref, sync::LazyLock};
+use std::{
+    collections::HashMap,
+    hash::Hash,
+    io::Error,
+    sync::{LazyLock, Mutex},
+};
 
-use actix_web::cookie::Expiration;
 use chrono::Utc;
 use rand::{distr::Alphanumeric, prelude::*, rng};
-use thiserror::Error;
 
 type Id = i64;
 type Result<T> = std::result::Result<T, Error>;
@@ -12,10 +15,7 @@ const RNG: LazyLock<ThreadRng> = LazyLock::new(|| rng());
 const EXPIRATION_TIME: i64 = 60 * 60; // one hour in seconds
 const REFRESH_TOKEN_EXPIRATION_TIME: i64 = 30 * 24 * 60 * 60; // one month in seconds
 
-// TODO VERY naive implementation of token storage:
-// - no expirations (!!!)
-// - no bookkeeping at all
-// - non thread-safe
+// TODO fix global mutex and gc on every call (without calls it will produce memory leaks moreover)
 
 #[derive(Debug, Clone, Copy)]
 pub struct Claim {
@@ -36,28 +36,48 @@ struct InternalToken {
     expires_at: i64,
 }
 
-pub struct TokenStorage {
+struct TokenStorageInner {
     access_tokens: HashMap<String, InternalToken>,
     refresh_tokens: HashMap<String, InternalToken>,
+}
+
+pub struct TokenStorage {
+    inner: Mutex<TokenStorageInner>,
+    now: Box<dyn Fn() -> i64 + Send + Sync>,
 }
 
 impl TokenStorage {
     pub fn new() -> Self {
         TokenStorage {
-            access_tokens: HashMap::new(),
-            refresh_tokens: HashMap::new(),
+            inner: Mutex::new(TokenStorageInner {
+                access_tokens: HashMap::new(),
+                refresh_tokens: HashMap::new(),
+            }),
+            now: Box::new(|| Utc::now().timestamp()),
         }
     }
-}
 
-impl TokenStorage {
-    pub fn new_token(&mut self, user_id: Id, client_id: Id) -> Result<NewToken> {
+    pub fn new_with_custom_timestamp_provider(
+        provider: Box<dyn Fn() -> i64 + Send + Sync>,
+    ) -> Self {
+        TokenStorage {
+            inner: Mutex::new(TokenStorageInner {
+                access_tokens: HashMap::new(),
+                refresh_tokens: HashMap::new(),
+            }),
+            now: provider,
+        }
+    }
+
+    pub fn new_token(&self, user_id: Id, client_id: Id) -> Result<NewToken> {
+        // It's ok to unwrap - poison should be propagated
+        let mut inner = self.inner.lock().unwrap();
         let access_token = generate_token();
         let refresh_token = generate_token();
 
-        let now = Utc::now().timestamp();
+        let now = self.now();
 
-        self.access_tokens.insert(
+        inner.access_tokens.insert(
             access_token.clone(),
             InternalToken {
                 claim: Claim { user_id, client_id },
@@ -65,7 +85,7 @@ impl TokenStorage {
             },
         );
 
-        self.refresh_tokens.insert(
+        inner.refresh_tokens.insert(
             refresh_token.clone(),
             InternalToken {
                 claim: Claim { user_id, client_id },
@@ -80,12 +100,19 @@ impl TokenStorage {
         })
     }
 
-    pub fn validate(&self, access_token: &str) -> Result<Option<Claim>> {
-        let now = Utc::now().timestamp();
+    // TODO mut in validate looks like a bad pattern
+    pub fn validate(&mut self, access_token: &str) -> Result<Option<Claim>> {
+        // It's ok to unwrap - poison should be propagated
+        let mut inner = self.inner.lock().unwrap();
+        // TODO gc on every validate is a bad pattern
+        self.gc(&mut inner);
 
-        if let Some(t) = self.access_tokens.get(access_token) {
+        let now = self.now();
+
+        if let Some(t) = inner.access_tokens.get(access_token) {
             if t.expires_at < now {
-                // TODO we should clean this token here
+                inner.access_tokens.remove(access_token);
+
                 Ok(None)
             } else {
                 Ok(Some(t.claim))
@@ -95,39 +122,62 @@ impl TokenStorage {
         }
     }
 
-    pub fn refresh(&mut self, refresh_token: &str) -> Result<Option<NewToken>> {
-        if let Some(&InternalToken { claim, .. }) = self.refresh_tokens.get(refresh_token) {
-            let access_token = generate_token();
-            let new_refresh_token = generate_token();
+    pub fn refresh(&self, refresh_token: &str) -> Result<Option<NewToken>> {
+        // It's ok to unwrap - poison should be propagated
+        let mut inner = self.inner.lock().unwrap();
 
-            let now = Utc::now().timestamp();
+        if let Some(internal_token) = inner.refresh_tokens.get(refresh_token) {
+            let now = self.now();
 
-            self.access_tokens.insert(
-                access_token.to_string(),
-                InternalToken {
-                    claim: claim,
-                    expires_at: now + EXPIRATION_TIME,
-                },
-            );
+            if internal_token.expires_at < now {
+                inner.refresh_tokens.remove(refresh_token);
 
-            self.refresh_tokens.remove(refresh_token);
+                Ok(None)
+            } else {
+                let access_token = generate_token();
+                let new_refresh_token = generate_token();
 
-            self.refresh_tokens.insert(
-                new_refresh_token.clone(),
-                InternalToken {
-                    claim: claim,
-                    expires_at: now + REFRESH_TOKEN_EXPIRATION_TIME,
-                },
-            );
+                let claim = internal_token.claim;
 
-            Ok(Some(NewToken {
-                access_token,
-                expires_in: 3600,
-                refresh_token: new_refresh_token,
-            }))
+                inner.refresh_tokens.remove(refresh_token);
+
+                inner.access_tokens.insert(
+                    access_token.to_string(),
+                    InternalToken {
+                        claim,
+                        expires_at: now + EXPIRATION_TIME,
+                    },
+                );
+
+                inner.refresh_tokens.insert(
+                    new_refresh_token.clone(),
+                    InternalToken {
+                        claim,
+                        expires_at: now + REFRESH_TOKEN_EXPIRATION_TIME,
+                    },
+                );
+
+                Ok(Some(NewToken {
+                    access_token,
+                    expires_in: 3600,
+                    refresh_token: new_refresh_token,
+                }))
+            }
         } else {
             Ok(None)
         }
+    }
+
+    fn now(&self) -> i64 {
+        (self.now)()
+    }
+
+    // TODO stupid O(n) algo for every call
+    fn gc(&self, inner: &mut TokenStorageInner) {
+        let now = self.now();
+
+        inner.access_tokens.retain(|_, v| v.expires_at > now);
+        inner.refresh_tokens.retain(|_, v| v.expires_at > now);
     }
 }
 
@@ -145,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_new_token() {
-        let mut storage = TokenStorage::new();
+        let storage = TokenStorage::new();
         let user_id = 1;
         let client_id = 100;
 
@@ -185,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_validate_invalid_token() {
-        let storage = TokenStorage::new();
+        let mut storage = TokenStorage::new();
 
         let claim = storage.validate("invalid_token").unwrap();
 

@@ -122,8 +122,6 @@ pub async fn get_token(
                             {
                                 let new_token = data
                                     .token_storage
-                                    .write()
-                                    .await
                                     .new_token(user_row.id, client_row.id)
                                     .map_err(ErrorInternalServerError)?;
 
@@ -178,8 +176,6 @@ pub async fn get_token(
                         if let Some(refresh_token) = r.refresh_token {
                             if let Some(new_token) = data
                                 .token_storage
-                                .write()
-                                .await
                                 .refresh(&refresh_token)
                                 .map_err(ErrorInternalServerError)?
                             {
@@ -783,7 +779,7 @@ pub struct AppState {
     pub entry_repository: Arc<dyn EntryRepository>,
     pub user_repository: Arc<dyn UserRepository>,
     pub client_repository: Arc<dyn ClientRepository>,
-    pub token_storage: RwLock<TokenStorage>,
+    pub token_storage: TokenStorage,
 }
 
 pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
@@ -794,7 +790,7 @@ pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
         entry_repository: Arc::new(SqliteEntryRepository::new(pool.clone(), tag_repo.clone())),
         user_repository: Arc::new(SqliteUserRepository::new(pool.clone())),
         client_repository: Arc::new(SqliteClientRepository::new(pool.clone())),
-        token_storage: RwLock::new(TokenStorage::new()),
+        token_storage: TokenStorage::new(),
     }
 }
 
@@ -815,6 +811,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .service(web::scope("/").service(delete_tag_by_label))
             .service(web::scope("/").service(delete_tags_by_label))
             .service(web::scope("/").service(post_entry_tags))
+            .service(web::scope("/").service(get_token))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run())
