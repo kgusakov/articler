@@ -1,24 +1,26 @@
 use std::sync::{Arc, Once};
 
-use actix_http::Request;
+use actix_http::{Request, header};
 use actix_web::{
     App, Error,
     body::MessageBody,
-    dev::{Service, ServiceResponse},
+    dev::{Service, ServiceRequest, ServiceResponse},
+    error,
     middleware::Logger,
     test,
-    web::{self},
+    web::{self, service},
 };
 
+use actix_web_httpauth::{extractors::bearer::BearerAuth, middleware::HttpAuthentication};
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
 // TODO is it appropriate way?
 use wallabag_rs::api::{
-    app_state_init, delete_entry, delete_tag_by_id, delete_tag_by_label, delete_tag_from_entry,
-    delete_tags_by_label, entries, get_tags, get_tags_by_entry, get_token, patch_entry,
-    post_entries, post_entry_tags,
+    app_state_init, auth_extractor, delete_entry, delete_tag_by_id, delete_tag_by_label,
+    delete_tag_from_entry, delete_tags_by_label, entries, get_tags, get_tags_by_entry, get_token,
+    patch_entry, post_entries, post_entry_tags,
 };
 
 static INIT: Once = Once::new();
@@ -1274,4 +1276,139 @@ async fn test_oauth_refresh_missing_refresh_token(pool: SqlitePool) {
         "No \"refresh_token\" parameter found",
         "Should have correct error_description"
     );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn test_auth_wrong_bearer(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let auth = HttpAuthentication::with_fn(auth_extractor);
+
+    let a = App::new()
+        .app_data(web::Data::new(app_state_init(a_pool.clone())))
+        .wrap(Logger::default())
+        .wrap(auth)
+        .service(entries);
+
+    let app = test::init_service(a).await;
+
+    let access_token = "wrong_token";
+
+    let req = test::TestRequest::default()
+        .append_header((header::AUTHORIZATION, format!("Bearer {access_token}")))
+        .uri("/api/entries.json")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), 401);
+
+    let expected: Value = serde_json::from_str(
+        r#"{
+            "error": "invalid_grant",
+            "error_description": "The access token provided is invalid."
+            }"#,
+    )
+    .unwrap();
+
+    let body: Value = test::read_body_json(resp).await;
+
+    assert_json_eq!(expected, body);
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+async fn test_auth_no_bearer(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let auth = HttpAuthentication::with_fn(auth_extractor);
+
+    let a = App::new()
+        .app_data(web::Data::new(app_state_init(a_pool.clone())))
+        .wrap(Logger::default())
+        .wrap(auth)
+        .service(entries);
+
+    let app = test::init_service(a).await;
+
+    let req = test::TestRequest::default()
+        .uri("/api/entries.json")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), 401);
+
+    let expected: Value = serde_json::from_str(
+        r#"{
+            "error": "access_denied",
+            "error_description": "OAuth2 authentication required"
+            }"#,
+    )
+    .unwrap();
+
+    let body: Value = test::read_body_json(resp).await;
+
+    assert_json_eq!(expected, body);
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("entries", "oauth"))]
+async fn test_auth_success(pool: SqlitePool) {
+    init();
+
+    let a_pool = Arc::new(pool);
+
+    let auth = HttpAuthentication::with_fn(auth_extractor);
+
+    let a = App::new()
+        .app_data(web::Data::new(app_state_init(a_pool.clone())))
+        .wrap(Logger::default())
+        .wrap(auth)
+        .service(get_token)
+        .service(entries);
+
+    let app = test::init_service(a).await;
+
+    let access_token = {
+        let password = "test_password_123";
+        let req = test::TestRequest::get()
+        .uri(&format!(
+            "/oauth/v2/token?grant_type=password&username={}&password={}&client_id={}&client_secret={}",
+            "oauth_test_user",
+            password,
+            "test_client_id",
+            "test_client_secret"
+        ))
+        .to_request();
+
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), 200);
+
+        let body: Value = test::read_body_json(resp).await;
+
+        body.get("access_token")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+
+    let req = test::TestRequest::default()
+        .append_header((header::AUTHORIZATION, format!("Bearer {access_token}")))
+        .uri("/api/entries.json")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), 200);
+
+    let expected: Value = serde_json::from_str(include_str!("json/entries.json")).unwrap();
+
+    let body: Value = test::read_body_json(resp).await;
+
+    assert_json_eq!(expected, body);
 }

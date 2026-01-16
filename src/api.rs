@@ -12,12 +12,13 @@ use crate::{
     },
 };
 use actix_web::{
-    App, HttpServer,
-    dev::Server,
-    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
+    App, Error, HttpMessage, HttpServer,
+    dev::{Server, ServiceRequest},
+    error::{self, ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     get, post, routes,
     web::{self, Json, Query},
 };
+use actix_web_httpauth::extractors::bearer::BearerAuth;
 use anyhow::anyhow;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -137,7 +138,6 @@ pub async fn get_token(
                                 )))
                             }
                         } else {
-                            dbg!("I'm here");
                             Err(ErrorBadRequest(o_error(
                                 "invalid_grant",
                                 "Invalid username and password combination",
@@ -1061,6 +1061,40 @@ struct Links {
 #[derive(Serialize)]
 struct Link {
     href: Url,
+}
+
+pub async fn auth_extractor(
+    req: ServiceRequest,
+    credentials: Option<BearerAuth>,
+) -> Result<ServiceRequest, (Error, ServiceRequest)> {
+    // TODO looks like not the best way
+    if req.path().contains("/oauth/v2/") {
+        return Ok(req);
+    }
+
+    let Some(credentials) = credentials else {
+        return Err((
+            error::ErrorUnauthorized(o_error("access_denied", "OAuth2 authentication required")),
+            req,
+        ));
+    };
+    let token_storage = &req.app_data::<web::Data<AppState>>().unwrap().token_storage;
+
+    match token_storage.validate(credentials.token()) {
+        Ok(Some(claim)) => {
+            req.extensions_mut().insert(claim);
+
+            Ok(req)
+        }
+        Ok(None) => Err((
+            error::ErrorUnauthorized(o_error(
+                "invalid_grant",
+                "The access token provided is invalid.",
+            )),
+            req,
+        )),
+        Err(e) => Err((ErrorInternalServerError(e), req)),
+    }
 }
 
 #[cfg(test)]
