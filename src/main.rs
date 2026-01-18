@@ -2,6 +2,7 @@ use std::{env, sync::Arc};
 
 mod api;
 // TODO research why we need it here
+mod fake_ui;
 mod helpers;
 mod models;
 mod storage;

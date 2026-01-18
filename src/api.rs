@@ -1,3 +1,4 @@
+use crate::fake_ui::{developer, index, login, login_check};
 use crate::helpers::find_user;
 use crate::{
     helpers::{generate_uid, hash_str, verify_password},
@@ -829,11 +830,19 @@ pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::
                     .service(exists),
             )
             .service(
-                web::scope("").wrap(
-                    SessionMiddleware::builder(CookieSessionStore::default(), cookie_key.clone())
+                web::scope("")
+                    .wrap(
+                        SessionMiddleware::builder(
+                            CookieSessionStore::default(),
+                            cookie_key.clone(),
+                        )
                         .cookie_secure(false) // Set to true in production with HTTPS
                         .build(),
-                ),
+                    )
+                    .service(index)
+                    .service(login_check)
+                    .service(developer)
+                    .service(login),
             )
     })
     .bind(format!("0.0.0.0:{}", port))?
