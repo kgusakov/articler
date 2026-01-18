@@ -23,6 +23,7 @@ thiserror = "2.0.17"
 argon2 = {version = "0.5.3", features = ["std"]}
 tokio = "1.49.0"
 actix-web-httpauth = "0.8.2"
+actix-session = { version = "0.11.0", features = ["cookie-session"] }
 
 [dev-dependencies]
 proptest = "1.4"

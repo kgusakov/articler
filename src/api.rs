@@ -1,5 +1,6 @@
+use crate::helpers::find_user;
 use crate::{
-    helpers::{find_user, generate_uid, hash_str, verify_password},
+    helpers::{generate_uid, hash_str, verify_password},
     models::{Entry, Tag},
     storage::{
         repository::{
@@ -11,8 +12,11 @@ use crate::{
         token_storage::TokenStorage,
     },
 };
+use actix_session::SessionMiddleware;
+use actix_session::storage::CookieSessionStore;
+use actix_web::cookie::Key;
 use actix_web::{
-    App, Error, HttpMessage, HttpServer,
+    App, Error, HttpMessage, HttpServer, Responder,
     dev::{Server, ServiceRequest},
     error::{self, ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     get,
@@ -795,9 +799,10 @@ pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
     }
 }
 
-pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
+pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::Result<Server> {
     let app_data = web::Data::new(app_state);
 
+    // TODO looks like it is created multiple times as a result - need to check
     Ok(HttpServer::new(move || {
         let oauth = HttpAuthentication::with_fn(auth_extractor);
 
@@ -822,6 +827,13 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
                     .service(post_entry_tags)
                     .service(post_token)
                     .service(exists),
+            )
+            .service(
+                web::scope("").wrap(
+                    SessionMiddleware::builder(CookieSessionStore::default(), cookie_key.clone())
+                        .cookie_secure(false) // Set to true in production with HTTPS
+                        .build(),
+                ),
             )
     })
     .bind(format!("0.0.0.0:{}", port))?
@@ -1082,7 +1094,8 @@ pub async fn auth_extractor(
     credentials: Option<BearerAuth>,
 ) -> Result<ServiceRequest, (Error, ServiceRequest)> {
     // TODO looks like not the best way
-    if req.path().contains("/oauth/v2/") {
+
+    if !req.path().contains("/api") {
         return Ok(req);
     }
 
