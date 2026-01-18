@@ -15,10 +15,12 @@ use actix_web::{
     App, Error, HttpMessage, HttpServer,
     dev::{Server, ServiceRequest},
     error::{self, ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
-    get, post, routes,
+    get,
+    middleware::Logger,
+    post, routes,
     web::{self, Json, Query},
 };
-use actix_web_httpauth::extractors::bearer::BearerAuth;
+use actix_web_httpauth::{extractors::bearer::BearerAuth, middleware::HttpAuthentication};
 use anyhow::anyhow;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -81,15 +83,15 @@ struct Exists {
 
 // TODO current implementation needed only for mobile app healthchecks. Needed full implementation
 #[routes]
-#[get("/api/entries/exists")]
-#[get("/api/entries/exists.json")]
+#[get("/entries/exists")]
+#[get("/entries/exists.json")]
 pub async fn exists() -> actix_web::Result<Json<Exists>> {
     Ok(Json(Exists { exists: false }))
 }
 
 #[routes]
-#[get("/api/version.json")]
-#[get("/api/version")]
+#[get("/version.json")]
+#[get("/version")]
 pub async fn version() -> actix_web::Result<Json<String>> {
     Ok(Json(VERSION.to_string()))
 }
@@ -226,7 +228,7 @@ pub async fn post_token(
 }
 
 // TODO post with the same url is not supported
-#[post("/api/entries.json")]
+#[post("/entries.json")]
 pub async fn post_entries(
     data: web::Data<AppState>,
     request: web::Form<AddEntry>,
@@ -329,8 +331,8 @@ pub async fn post_entries(
 
 // TODO /api pref should be moved as a base prefix
 #[routes]
-#[get("/api/entries")]
-#[get("/api/entries.json")]
+#[get("/entries")]
+#[get("/entries.json")]
 pub async fn entries(
     data: web::Data<AppState>,
     request: Query<EntriesRequest>,
@@ -388,7 +390,7 @@ pub async fn entries(
     }))
 }
 
-#[get("/api/entries/{entry_id}/tags")]
+#[get("/entries/{entry_id}/tags")]
 pub async fn get_tags_by_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
@@ -416,8 +418,8 @@ pub async fn get_tags_by_entry(
 }
 
 #[routes]
-#[get("/api/tags.json")]
-#[get("/api/tags")]
+#[get("/tags.json")]
+#[get("/tags")]
 pub async fn get_tags(data: web::Data<AppState>) -> actix_web::Result<Json<Vec<Tag>>> {
     Ok(Json(
         data.tag_repository
@@ -437,8 +439,8 @@ struct TagLabel {
 }
 
 #[routes]
-#[delete("/api/tag/{tag_id}.json")]
-#[delete("/api/tag/{tag_id}")]
+#[delete("/tag/{tag_id}.json")]
+#[delete("/tag/{tag_id}")]
 pub async fn delete_tag_by_id(
     data: web::Data<AppState>,
     tag_id: web::Path<Id>,
@@ -457,8 +459,8 @@ pub async fn delete_tag_by_id(
 }
 
 #[routes]
-#[delete("/api/tag/label.json")]
-#[delete("/api/tag/label")]
+#[delete("/tag/label.json")]
+#[delete("/tag/label")]
 pub async fn delete_tag_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagLabel>,
@@ -485,8 +487,8 @@ struct TagsLabel {
 }
 
 #[routes]
-#[delete("/api/tags/label.json")]
-#[delete("/api/tags/label")]
+#[delete("/tags/label.json")]
+#[delete("/tags/label")]
 pub async fn delete_tags_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagsLabel>,
@@ -531,8 +533,8 @@ pub enum DeleteEntryResponse {
 }
 
 #[routes]
-#[delete("/api/entries/{entry_id}/tags/{tag_id}.json")]
-#[delete("/api/entries/{entry_id}/tags/{tag_id}")]
+#[delete("/entries/{entry_id}/tags/{tag_id}.json")]
+#[delete("/entries/{entry_id}/tags/{tag_id}")]
 pub async fn delete_tag_from_entry(
     data: web::Data<AppState>,
     ids: web::Path<(Id, Id)>,
@@ -571,8 +573,8 @@ pub async fn delete_tag_from_entry(
 }
 
 #[routes]
-#[delete("/api/entries/{entry_id}.json")]
-#[delete("/api/entries/{entry_id}")]
+#[delete("/entries/{entry_id}.json")]
+#[delete("/entries/{entry_id}")]
 pub async fn delete_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
@@ -634,8 +636,8 @@ struct EntryTags {
 }
 
 #[routes]
-#[post("/api/entries/{entry_id}/tags.json")]
-#[post("/api/entries/{entry_id}/tags")]
+#[post("/entries/{entry_id}/tags.json")]
+#[post("/entries/{entry_id}/tags")]
 pub async fn post_entry_tags(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
@@ -687,8 +689,8 @@ pub async fn post_entry_tags(
 }
 
 #[routes]
-#[patch("/api/entries/{entry_id}.json")]
-#[patch("/api/entries/{entry_id}")]
+#[patch("/entries/{entry_id}.json")]
+#[patch("/entries/{entry_id}")]
 pub async fn patch_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
@@ -797,22 +799,30 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
     let app_data = web::Data::new(app_state);
 
     Ok(HttpServer::new(move || {
+        let oauth = HttpAuthentication::with_fn(auth_extractor);
+
         App::new()
             .app_data(app_data.clone())
-            .service(web::scope("/").service(entries))
-            .service(web::scope("/").service(post_entries))
-            .service(web::scope("/").service(patch_entry))
-            .service(web::scope("/").service(delete_entry))
-            .service(web::scope("/").service(get_tags_by_entry))
-            .service(web::scope("/").service(get_tags))
-            .service(web::scope("/").service(delete_tag_from_entry))
-            .service(web::scope("/").service(delete_tag_by_id))
-            .service(web::scope("/").service(delete_tag_by_label))
-            .service(web::scope("/").service(delete_tags_by_label))
-            .service(web::scope("/").service(post_entry_tags))
-            .service(web::scope("/").service(post_token))
-            .service(web::scope("/").service(version))
-            .service(web::scope("/").service(exists))
+            .wrap(Logger::default())
+            .service(post_token)
+            .service(web::scope("/api").service(version))
+            .service(
+                web::scope("/api")
+                    .wrap(oauth)
+                    .service(web::scope("/").service(entries))
+                    .service(web::scope("/").service(post_entries))
+                    .service(web::scope("/").service(patch_entry))
+                    .service(web::scope("/").service(delete_entry))
+                    .service(web::scope("/").service(get_tags_by_entry))
+                    .service(web::scope("/").service(get_tags))
+                    .service(web::scope("/").service(delete_tag_from_entry))
+                    .service(web::scope("/").service(delete_tag_by_id))
+                    .service(web::scope("/").service(delete_tag_by_label))
+                    .service(web::scope("/").service(delete_tags_by_label))
+                    .service(web::scope("/").service(post_entry_tags))
+                    .service(web::scope("/").service(post_token))
+                    .service(web::scope("/").service(exists)),
+            )
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run())
