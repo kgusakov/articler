@@ -1,6 +1,6 @@
 -- Insert users
 INSERT INTO users (id, username, email, name, password_hash, created_at, updated_at) VALUES
-    (1, 'wallabag', 'wallabag@wallabag.io', 'Walla Baggger', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYNhJ5rHIVe', 1687895144, 1687895850);
+    (1, 'wallabag', 'wallabag@wallabag.io', 'Walla Baggger', '$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg', 1687895144, 1687895850);
 
 -- Insert entries
 INSERT INTO entries (
