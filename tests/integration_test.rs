@@ -20,7 +20,7 @@ use sqlx::SqlitePool;
 use wallabag_rs::api::{
     app_state_init, auth_extractor, delete_entry, delete_tag_by_id, delete_tag_by_label,
     delete_tag_from_entry, delete_tags_by_label, entries, get_tags, get_tags_by_entry, patch_entry,
-    post_entries, post_entry_tags, post_token,
+    post_entries, post_entry_tags, post_token, version,
 };
 
 static INIT: Once = Once::new();
@@ -69,6 +69,19 @@ async fn get_entries_json(pool: SqlitePool) {
         expected,
         serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
     );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn test_get_version(pool: SqlitePool) {
+    let app = init_app(pool, vec![version]).await;
+
+    let req = test::TestRequest::default()
+        .uri("/api/version.json")
+        .to_request();
+
+    let resp: Value = test::call_and_read_body_json(&app, req).await;
+
+    assert_eq!("2.6.12", resp.as_str().unwrap());
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("entries"))]

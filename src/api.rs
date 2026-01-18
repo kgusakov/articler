@@ -33,6 +33,8 @@ use url::{ParseError, Url};
 
 type Id = i64;
 
+const VERSION: &str = "2.6.12";
+
 #[derive(Deserialize, Debug)]
 struct GetToken {
     grant_type: Option<String>,
@@ -90,6 +92,13 @@ async fn find_user(
     } else {
         Ok(None)
     }
+}
+
+#[routes]
+#[get("/api/version.json")]
+#[get("/api/version")]
+pub async fn version() -> actix_web::Result<Json<String>> {
+    Ok(Json(VERSION.to_string()))
 }
 
 #[post("/oauth/v2/token")]
