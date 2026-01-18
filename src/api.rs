@@ -92,10 +92,10 @@ async fn find_user(
     }
 }
 
-#[get("/oauth/v2/token")]
-pub async fn get_token(
+#[post("/oauth/v2/token")]
+pub async fn post_token(
     data: web::Data<AppState>,
-    request: web::Query<GetToken>,
+    request: web::Form<GetToken>,
 ) -> actix_web::Result<Json<Token>> {
     let r = request.into_inner();
 
@@ -808,7 +808,7 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .service(web::scope("/").service(delete_tag_by_label))
             .service(web::scope("/").service(delete_tags_by_label))
             .service(web::scope("/").service(post_entry_tags))
-            .service(web::scope("/").service(get_token))
+            .service(web::scope("/").service(post_token))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run())
