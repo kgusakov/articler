@@ -94,6 +94,19 @@ async fn find_user(
     }
 }
 
+#[derive(Debug, Serialize)]
+struct Exists {
+    exists: bool,
+}
+
+// TODO current implementation needed only for mobile app healthchecks. Needed full implementation
+#[routes]
+#[get("/api/entries/exists")]
+#[get("/api/entries/exists.json")]
+pub async fn exists() -> actix_web::Result<Json<Exists>> {
+    Ok(Json(Exists { exists: false }))
+}
+
 #[routes]
 #[get("/api/version.json")]
 #[get("/api/version")]
@@ -818,6 +831,8 @@ pub fn http_server(port: u16, app_state: AppState) -> std::io::Result<Server> {
             .service(web::scope("/").service(delete_tags_by_label))
             .service(web::scope("/").service(post_entry_tags))
             .service(web::scope("/").service(post_token))
+            .service(web::scope("/").service(version))
+            .service(web::scope("/").service(exists))
     })
     .bind(format!("0.0.0.0:{}", port))?
     .run())

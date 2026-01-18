@@ -19,8 +19,8 @@ use sqlx::SqlitePool;
 // TODO is it appropriate way?
 use wallabag_rs::api::{
     app_state_init, auth_extractor, delete_entry, delete_tag_by_id, delete_tag_by_label,
-    delete_tag_from_entry, delete_tags_by_label, entries, get_tags, get_tags_by_entry, patch_entry,
-    post_entries, post_entry_tags, post_token, version,
+    delete_tag_from_entry, delete_tags_by_label, entries, exists, get_tags, get_tags_by_entry,
+    patch_entry, post_entries, post_entry_tags, post_token, version,
 };
 
 static INIT: Once = Once::new();
@@ -69,6 +69,21 @@ async fn get_entries_json(pool: SqlitePool) {
         expected,
         serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
     );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn test_entries_exists(pool: SqlitePool) {
+    let app = init_app(pool, vec![exists]).await;
+
+    let req = test::TestRequest::default()
+        .uri("/api/entries/exists.json")
+        .to_request();
+
+    let resp: Value = test::call_and_read_body_json(&app, req).await;
+
+    let expected: Value = serde_json::from_str(r#"{ "exists": false }"#).unwrap();
+
+    assert_json_eq!(expected, resp);
 }
 
 #[sqlx::test(migrations = "./migrations")]
