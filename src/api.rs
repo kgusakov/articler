@@ -1,5 +1,5 @@
 use crate::{
-    helpers::{generate_uid, hash_str, verify_password},
+    helpers::{find_user, generate_uid, hash_str, verify_password},
     models::{Entry, Tag},
     storage::{
         repository::{
@@ -71,26 +71,6 @@ fn o_error(error: &str, description: &str) -> OauthError {
     OauthError {
         error: error.to_string(),
         error_description: description.to_string(),
-    }
-}
-
-async fn find_user(
-    user_repository: &Arc<dyn UserRepository>,
-    username: &str,
-    password: &str,
-) -> actix_web::Result<Option<UserRow>> {
-    if let Some(user_row) = user_repository
-        .find_by_username(username)
-        .await
-        .map_err(ErrorInternalServerError)?
-    {
-        if verify_password(password, &user_row.password_hash).map_err(ErrorInternalServerError)? {
-            Ok(Some(user_row))
-        } else {
-            Ok(None)
-        }
-    } else {
-        Ok(None)
     }
 }
 

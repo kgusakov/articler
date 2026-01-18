@@ -1,10 +1,13 @@
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
+use actix_web::error::ErrorInternalServerError;
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
     password_hash::{self, PasswordHashString, SaltString, rand_core::OsRng},
 };
 use sha1::{Digest, Sha1};
+
+use crate::storage::repository::{UserRepository, UserRow};
 
 static PASSWORD_HASHER: LazyLock<Argon2> = LazyLock::new(Argon2::default);
 
@@ -29,6 +32,26 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, password_hash
 
 pub fn generate_uid() -> String {
     format!("{:x}", rand::random::<u64>())
+}
+
+pub async fn find_user(
+    user_repository: &Arc<dyn UserRepository>,
+    username: &str,
+    password: &str,
+) -> actix_web::Result<Option<UserRow>> {
+    if let Some(user_row) = user_repository
+        .find_by_username(username)
+        .await
+        .map_err(ErrorInternalServerError)?
+    {
+        if verify_password(password, &user_row.password_hash).map_err(ErrorInternalServerError)? {
+            Ok(Some(user_row))
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
 }
 
 #[cfg(test)]
