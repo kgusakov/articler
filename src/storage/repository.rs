@@ -1365,7 +1365,7 @@ mod tests {
         let user = user_repo
             .find_by_username_and_password(
                 "wallabag",
-                "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYNhJ5rHIVe",
+                "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
             )
             .await
             .unwrap();
@@ -1377,7 +1377,8 @@ mod tests {
         assert_eq!(user.email, "wallabag@wallabag.io", "Email should match");
         assert_eq!(user.name, "Walla Baggger", "Name should match");
         assert_eq!(
-            user.password_hash, "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYNhJ5rHIVe",
+            user.password_hash,
+            "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
             "Password hash should match"
         );
 
@@ -1396,7 +1397,7 @@ mod tests {
         let no_user = user_repo
             .find_by_username_and_password(
                 "nonexistent",
-                "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYNhJ5rHIVe",
+                "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
             )
             .await
             .unwrap();
@@ -1530,7 +1531,10 @@ mod tests {
         let client = client.unwrap();
         assert_eq!(client.id, 3, "Client id should be 3");
         assert_eq!(client.user_id, 1, "User id should be 1");
-        assert_eq!(client.client_id, "android_client_id", "Client ID should match");
+        assert_eq!(
+            client.client_id, "android_client_id",
+            "Client ID should match"
+        );
         assert_eq!(
             client.client_secret, "android_client_secret",
             "Client secret should match"
