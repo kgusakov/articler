@@ -21,18 +21,18 @@ INSERT INTO users (id, username, email, name, password_hash, created_at, updated
     (95, 'invalid_refresh_user', 'invalid@test.com', 'Invalid Refresh User', 'dummy_hash', 1687895144, 1687895850);
 
 -- Insert OAuth clients
-INSERT INTO clients (id, user_id, client_id, client_secret, created_at) VALUES
+INSERT INTO clients (id, user_id, client_id, client_secret, name, created_at) VALUES
     -- Client for user 99 (oauth_test_user)
-    (99, 99, 'test_client_id', 'test_client_secret', 1687895200),
+    (99, 99, 'test_client_id', 'test_client_secret', 'Test client 99', 1687895200),
 
     -- Client for user 98 (test_user_invalid)
-    (98, 98, 'test_client', 'test_secret', 1687895200),
+    (98, 98, 'test_client', 'test_secret', 'Test client 98', 1687895200),
 
     -- Client for user 97 (test_user_client)
-    (97, 97, 'valid_client', 'valid_secret', 1687895200),
+    (97, 97, 'valid_client', 'valid_secret', 'Test client 97', 1687895200),
 
     -- Client for user 96 (refresh_test_user)
-    (96, 96, 'refresh_client', 'refresh_secret', 1687895200),
+    (96, 96, 'refresh_client', 'refresh_secret', 'Test client 96', 1687895200),
 
     -- Client for user 95 (invalid_refresh_user)
-    (95, 95, 'invalid_refresh_client', 'invalid_refresh_secret', 1687895200);
+    (95, 95, 'invalid_refresh_client', 'invalid_refresh_secret', 'Test client 95', 1687895200);

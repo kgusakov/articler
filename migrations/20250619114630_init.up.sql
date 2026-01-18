@@ -79,6 +79,7 @@ CREATE INDEX IF NOT EXISTS idx_annotation_ranges_annotation_id ON annotation_ran
 
 CREATE TABLE IF NOT EXISTS clients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
     client_id TEXT NOT NULL UNIQUE,
     client_secret TEXT NOT NULL,
     user_id INTEGER NOT NULL,

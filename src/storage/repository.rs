@@ -83,6 +83,7 @@ impl<'r> FromRow<'r, SqliteRow> for UserRow {
 #[derive(Debug, Clone)]
 pub struct ClientRow {
     pub id: Id,
+    pub name: String,
     pub client_id: String,
     pub client_secret: String,
     pub user_id: Id,
@@ -93,6 +94,7 @@ impl<'r> FromRow<'r, SqliteRow> for ClientRow {
     fn from_row(row: &'r SqliteRow) -> std::result::Result<ClientRow, SqlxError> {
         Ok(ClientRow {
             id: row.try_get("id")?,
+            name: row.try_get("name")?,
             client_id: row.try_get("client_id")?,
             client_secret: row.try_get("client_secret")?,
             user_id: row.try_get("user_id")?,
@@ -217,6 +219,12 @@ pub trait ClientRepository: Send + Sync {
         client_id: &str,
         client_secret: &str,
     ) -> Result<Option<ClientRow>>;
+
+    async fn find_by_client_name_and_user_id(
+        &self,
+        user_id: Id,
+        client_name: &str,
+    ) -> Result<Option<ClientRow>>;
 }
 
 #[async_trait]
@@ -251,6 +259,23 @@ impl ClientRepository for SqliteClientRepository {
         ))
         .bind(client_id)
         .bind(client_secret)
+        .fetch_optional(self.pool.as_ref())
+        .await?;
+
+        Ok(result)
+    }
+
+    async fn find_by_client_name_and_user_id(
+        &self,
+        user_id: Id,
+        client_name: &str,
+    ) -> Result<Option<ClientRow>> {
+        let result = sqlx::query_as::<_, ClientRow>(&format!(
+            "SELECT * FROM {} WHERE user_id = ? AND name = ?",
+            CLIENTS_TABLE
+        ))
+        .bind(user_id)
+        .bind(client_name)
         .fetch_optional(self.pool.as_ref())
         .await?;
 
@@ -1474,6 +1499,68 @@ mod tests {
         // Test failure with all wrong parameters
         let no_client = client_repo
             .find_by_user_id_client_id_and_secret(999, "wrong_client", "wrong_secret")
+            .await
+            .unwrap();
+
+        assert!(
+            no_client.is_none(),
+            "Should not find client with all wrong parameters"
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "./migrations",
+        fixtures("../../tests/fixtures/entries.sql")
+    )]
+    async fn test_find_by_client_name_and_user_id(pool: SqlitePool) {
+        let pool = Arc::new(pool);
+        let client_repo = SqliteClientRepository::new(pool);
+
+        // Test successful lookup with valid user_id and client name
+        let client = client_repo
+            .find_by_client_name_and_user_id(1, "Android app")
+            .await
+            .unwrap();
+
+        assert!(
+            client.is_some(),
+            "Should find client with user_id=1 and name='Android app'"
+        );
+
+        let client = client.unwrap();
+        assert_eq!(client.id, 3, "Client id should be 3");
+        assert_eq!(client.user_id, 1, "User id should be 1");
+        assert_eq!(client.client_id, "android_client_id", "Client ID should match");
+        assert_eq!(
+            client.client_secret, "android_client_secret",
+            "Client secret should match"
+        );
+
+        // Test failure with wrong user_id
+        let no_client = client_repo
+            .find_by_client_name_and_user_id(999, "Android app")
+            .await
+            .unwrap();
+
+        assert!(
+            no_client.is_none(),
+            "Should not find client with wrong user_id"
+        );
+
+        // Test failure with wrong client name
+        let no_client = client_repo
+            .find_by_client_name_and_user_id(1, "Nonexistent App")
+            .await
+            .unwrap();
+
+        assert!(
+            no_client.is_none(),
+            "Should not find client with wrong name"
+        );
+
+        // Test failure with both wrong parameters
+        let no_client = client_repo
+            .find_by_client_name_and_user_id(999, "Nonexistent App")
             .await
             .unwrap();
 
