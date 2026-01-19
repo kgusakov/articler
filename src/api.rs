@@ -241,7 +241,7 @@ pub async fn post_token(
 pub async fn post_entries(
     data: web::Data<AppState>,
     request: web::Form<AddEntry>,
-    userInfo: UserInfo,
+    user_info: UserInfo,
 ) -> actix_web::Result<Json<AddEntryResponse>> {
     //
     // Check if url already exist:
@@ -269,7 +269,7 @@ pub async fn post_entries(
 
     // TODO can we remove all these ugly to_string?
     let create_entry = CreateEntry {
-        user_id: userInfo.user_id,
+        user_id: user_info.user_id,
         // TODO actually here we must have url without redirects already
         url: request.url.to_string(),
         hashed_url: hash_str(request.url.as_str()),
@@ -297,8 +297,7 @@ pub async fn post_entries(
 
     let tag_to_create_tag = |label: String| -> CreateTag {
         CreateTag {
-            // TODO replace hardcoded value
-            user_id: 1,
+            user_id: user_info.user_id,
             label: label.clone(),
             slug: slugify(label),
         }
@@ -405,18 +404,19 @@ pub async fn entries(
 pub async fn get_tags_by_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
+    user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
     let entry_id = entry_id.into_inner();
 
     if data
         .entry_repository
-        .exists_by_id(entry_id)
+        .exists_by_id(user_info.user_id, entry_id)
         .await
         .map_err(ErrorInternalServerError)?
     {
         Ok(Json(
             data.tag_repository
-                .find_by_entry_id(entry_id)
+                .find_by_entry_id(user_info.user_id, entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?
                 .into_iter()
@@ -431,10 +431,13 @@ pub async fn get_tags_by_entry(
 #[routes]
 #[get("/tags.json")]
 #[get("/tags")]
-pub async fn get_tags(data: web::Data<AppState>) -> actix_web::Result<Json<Vec<Tag>>> {
+pub async fn get_tags(
+    data: web::Data<AppState>,
+    user_info: UserInfo,
+) -> actix_web::Result<Json<Vec<Tag>>> {
     Ok(Json(
         data.tag_repository
-            .get_all()
+            .get_all(user_info.user_id)
             .await
             .map_err(ErrorInternalServerError)?
             .into_iter()
@@ -455,10 +458,11 @@ struct TagLabel {
 pub async fn delete_tag_by_id(
     data: web::Data<AppState>,
     tag_id: web::Path<Id>,
+    user_info: UserInfo,
 ) -> actix_web::Result<Json<Tag>> {
     let result = data
         .tag_repository
-        .delete_by_id(tag_id.into_inner())
+        .delete_by_id(user_info.user_id, tag_id.into_inner())
         .await
         .map_err(ErrorInternalServerError)?
         .map(|tr| tr.into());
@@ -475,10 +479,11 @@ pub async fn delete_tag_by_id(
 pub async fn delete_tag_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagLabel>,
+    user_info: UserInfo,
 ) -> actix_web::Result<Json<Tag>> {
     let result = data
         .tag_repository
-        .delete_by_label(&label.label)
+        .delete_by_label(user_info.user_id, &label.label)
         .await
         .map_err(ErrorInternalServerError)?
         .map(|tr| tr.into());
@@ -503,10 +508,11 @@ struct TagsLabel {
 pub async fn delete_tags_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagsLabel>,
+    user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
     let result = data
         .tag_repository
-        .delete_all_by_label(&label.labels)
+        .delete_all_by_label(user_info.user_id, &label.labels)
         .await
         .map_err(ErrorInternalServerError)?
         .into_iter()
@@ -549,23 +555,24 @@ pub enum DeleteEntryResponse {
 pub async fn delete_tag_from_entry(
     data: web::Data<AppState>,
     ids: web::Path<(Id, Id)>,
+    user_info: UserInfo,
 ) -> actix_web::Result<Json<Entry>> {
     let (entry_id, tag_id) = ids.into_inner();
 
     if data
         .entry_repository
-        .exists_by_id(entry_id)
+        .exists_by_id(user_info.user_id, entry_id)
         .await
         .map_err(ErrorInternalServerError)?
     {
         data.entry_repository
-            .delete_tag_by_tag_id(entry_id, tag_id)
+            .delete_tag_by_tag_id(user_info.user_id, entry_id, tag_id)
             .await
             .map_err(ErrorInternalServerError)?;
 
         if let Some((entry_row, tag_rows)) = data
             .entry_repository
-            .find_by_id(entry_id)
+            .find_by_id(user_info.user_id, entry_id)
             .await
             .map_err(ErrorInternalServerError)?
         {
@@ -590,6 +597,7 @@ pub async fn delete_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
     request: Query<DeleteEntryRequest>,
+    user_info: UserInfo,
 ) -> actix_web::Result<Json<DeleteEntryResponse>> {
     let request = request.into_inner();
     let entry_id = entry_id.into_inner();
@@ -598,7 +606,7 @@ pub async fn delete_entry(
         Expect::Id => {
             let deleted = data
                 .entry_repository
-                .delete_by_id(entry_id)
+                .delete_by_id(user_info.user_id, entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?;
 
@@ -611,7 +619,7 @@ pub async fn delete_entry(
         Expect::Full => {
             let full_entry = data
                 .entry_repository
-                .find_by_id(entry_id)
+                .find_by_id(user_info.user_id, entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?;
 
@@ -620,7 +628,7 @@ pub async fn delete_entry(
 
             let deleted = data
                 .entry_repository
-                .delete_by_id(entry_id)
+                .delete_by_id(user_info.user_id, entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?;
 
@@ -653,12 +661,13 @@ pub async fn post_entry_tags(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
     request: web::Form<EntryTags>,
+    user_info: UserInfo,
 ) -> actix_web::Result<Json<Entry>> {
     let entry_id = entry_id.into_inner();
     // TODO dirty design - looks like we need entry repository method for it
     if data
         .entry_repository
-        .find_by_id(entry_id)
+        .find_by_id(user_info.user_id, entry_id)
         .await
         .map_err(ErrorInternalServerError)?
         .is_some()
@@ -677,13 +686,13 @@ pub async fn post_entry_tags(
             .collect();
 
         data.tag_repository
-            .update_tags_by_entry_id(entry_id, full_tags)
+            .update_tags_by_entry_id(user_info.user_id, entry_id, full_tags)
             .await
             .map_err(ErrorInternalServerError)?;
 
         let (entry_row, tag_rows) = data
             .entry_repository
-            .find_by_id(entry_id)
+            .find_by_id(user_info.user_id, entry_id)
             .await
             .map_err(ErrorInternalServerError)?
             .ok_or(ErrorNotFound("Entry not found"))?;
@@ -706,6 +715,7 @@ pub async fn patch_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
     request: Json<UpdateEntry>,
+    user_info: UserInfo,
 ) -> actix_web::Result<Json<Entry>> {
     let entry_id = entry_id.into_inner();
     let request = request.into_inner();
@@ -746,7 +756,7 @@ pub async fn patch_entry(
 
     let updated = data
         .entry_repository
-        .update_by_id(entry_id, repo_update)
+        .update_by_id(user_info.user_id, entry_id, repo_update)
         .await
         .map_err(ErrorInternalServerError)?;
 
@@ -767,14 +777,14 @@ pub async fn patch_entry(
             .collect();
 
         data.tag_repository
-            .update_tags_by_entry_id(entry_id, full_tags)
+            .update_tags_by_entry_id(user_info.user_id, entry_id, full_tags)
             .await
             .map_err(ErrorInternalServerError)?;
     };
 
     let (entry_row, tag_rows) = data
         .entry_repository
-        .find_by_id(entry_id)
+        .find_by_id(user_info.user_id, entry_id)
         .await
         .map_err(ErrorInternalServerError)?
         .ok_or_else(|| ErrorNotFound("Entry not found"))?;

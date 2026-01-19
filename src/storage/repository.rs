@@ -126,19 +126,20 @@ pub trait TagRepository: Send + Sync {
 
     async fn update_tags_by_entry_id(
         &self,
+        user_id: Id,
         entry_id: Id,
         tags: Vec<CreateTag>,
     ) -> Result<Vec<TagRow>>;
 
-    async fn find_by_entry_id(&self, entry_id: Id) -> Result<Vec<TagRow>>;
+    async fn find_by_entry_id(&self, user_id: Id, entry_id: Id) -> Result<Vec<TagRow>>;
 
-    async fn get_all(&self) -> Result<Vec<TagRow>>;
+    async fn get_all(&self, user_id: Id) -> Result<Vec<TagRow>>;
 
-    async fn delete_by_label(&self, label: &str) -> Result<Option<TagRow>>;
+    async fn delete_by_label(&self, user_id: Id, label: &str) -> Result<Option<TagRow>>;
 
-    async fn delete_by_id(&self, id: Id) -> Result<Option<TagRow>>;
+    async fn delete_by_id(&self, user_id: Id, id: Id) -> Result<Option<TagRow>>;
 
-    async fn delete_all_by_label(&self, labels: &Vec<String>) -> Result<Vec<TagRow>>;
+    async fn delete_all_by_label(&self, user_id: Id, labels: &Vec<String>) -> Result<Vec<TagRow>>;
 }
 
 pub struct SqliteUserRepository {
@@ -347,24 +348,27 @@ impl TagRepository for SqliteTagRepository {
 
     async fn update_tags_by_entry_id(
         &self,
+        user_id: Id,
         entry_id: Id,
         tags: Vec<CreateTag>,
     ) -> Result<Vec<TagRow>> {
         let result_tags = self.create_and_link_tags(entry_id, &tags).await?;
 
         let mut builder = QueryBuilder::new(format!(
-            "DELETE FROM {} WHERE entry_id = ",
-            ENTRIES_TAG_TABLE
+            "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE entry_id =",
         ));
 
         builder.push_bind(entry_id);
 
+        builder.push(" AND user_id = ");
+        builder.push_bind(user_id);
+        builder.push(") ");
+
         builder.push(format!(
             r#"
              AND tag_id NOT IN (
-                SELECT id FROM {} t WHERE t.label IN (
+                SELECT id FROM {TAGS_TABLE} t WHERE t.label IN (
         "#,
-            TAGS_TABLE
         ));
 
         let mut separated = builder.separated(", ");
@@ -379,41 +383,46 @@ impl TagRepository for SqliteTagRepository {
         Ok(result_tags)
     }
 
-    async fn find_by_entry_id(&self, entry_id: Id) -> Result<Vec<TagRow>> {
+    async fn find_by_entry_id(&self, user_id: Id, entry_id: Id) -> Result<Vec<TagRow>> {
         // TODO why manual ? + Ok() here needed for type inference?
         Ok(sqlx::query_as::<_, TagRow>(&format!(
             r#"
-            SELECT t.* FROM {} t
-            INNER JOIN {} et ON et.entry_id = ? AND et.tag_id = t.id
+            SELECT t.* FROM {TAGS_TABLE} t
+            INNER JOIN {ENTRIES_TAG_TABLE} et ON et.entry_id = ? AND et.tag_id = t.id
+            WHERE t.user_id = ?
         "#,
-            TAGS_TABLE, ENTRIES_TAG_TABLE
         ))
         .bind(entry_id)
+        .bind(user_id)
         .fetch_all(&self.pool)
         .await?)
     }
 
-    async fn get_all(&self) -> Result<Vec<TagRow>> {
+    async fn get_all(&self, user_id: Id) -> Result<Vec<TagRow>> {
         Ok(
-            sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {} t", TAGS_TABLE))
+            sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {TAGS_TABLE} t",))
+                .bind(user_id)
                 .fetch_all(&self.pool)
                 .await?,
         )
     }
 
-    async fn delete_by_label(&self, label: &str) -> Result<Option<TagRow>> {
+    async fn delete_by_label(&self, user_id: Id, label: &str) -> Result<Option<TagRow>> {
         Ok(sqlx::query_as::<_, TagRow>(&format!(
-            "DELETE FROM {} WHERE label = ? RETURNING *",
-            TAGS_TABLE
+            "DELETE FROM {TAGS_TABLE} WHERE user_id = ? AND label = ? RETURNING *",
         ))
+        .bind(user_id)
         .bind(label)
         .fetch_optional(&self.pool)
         .await?)
     }
 
-    async fn delete_all_by_label(&self, labels: &Vec<String>) -> Result<Vec<TagRow>> {
-        let mut builder =
-            QueryBuilder::new(&format!("DELETE FROM {} WHERE label IN (", TAGS_TABLE));
+    async fn delete_all_by_label(&self, user_id: Id, labels: &Vec<String>) -> Result<Vec<TagRow>> {
+        let mut builder = QueryBuilder::new(&format!("DELETE FROM {TAGS_TABLE} WHERE user_id ="));
+
+        builder.push_bind(user_id);
+
+        builder.push(" AND label IN (");
 
         let mut labels_separated = builder.separated(", ");
         for label in labels {
@@ -428,11 +437,11 @@ impl TagRepository for SqliteTagRepository {
             .await?)
     }
 
-    async fn delete_by_id(&self, id: Id) -> Result<Option<TagRow>> {
+    async fn delete_by_id(&self, user_id: Id, id: Id) -> Result<Option<TagRow>> {
         Ok(sqlx::query_as::<_, TagRow>(&format!(
-            "DELETE FROM {} WHERE id = ? RETURNING *",
-            TAGS_TABLE
+            "DELETE FROM {TAGS_TABLE} WHERE user_id = ? AND id = ? RETURNING *",
         ))
+        .bind(user_id)
         .bind(id)
         .fetch_optional(&self.pool)
         .await?)
@@ -613,15 +622,15 @@ pub trait EntryRepository: Send + Sync {
         tags: &Vec<CreateTag>,
     ) -> Result<(EntryRow, Vec<TagRow>)>;
 
-    async fn find_by_id(&self, id: Id) -> Result<Option<FullEntry>>;
+    async fn find_by_id(&self, user_id: Id, id: Id) -> Result<Option<FullEntry>>;
 
-    async fn exists_by_id(&self, id: Id) -> Result<bool>;
+    async fn exists_by_id(&self, user_id: Id, id: Id) -> Result<bool>;
 
-    async fn update_by_id(&self, id: Id, update: UpdateEntry) -> Result<bool>;
+    async fn update_by_id(&self, user_id: Id, id: Id, update: UpdateEntry) -> Result<bool>;
 
-    async fn delete_by_id(&self, id: Id) -> Result<bool>;
+    async fn delete_by_id(&self, user_id: Id, id: Id) -> Result<bool>;
 
-    async fn delete_tag_by_tag_id(&self, id: Id, tag_id: Id) -> Result<bool>;
+    async fn delete_tag_by_tag_id(&self, user_id: Id, id: Id, tag_id: Id) -> Result<bool>;
 }
 
 #[derive(Clone)]
@@ -749,11 +758,11 @@ impl EntryRepository for SqliteEntryRepository {
         Ok(entrs_with_relations)
     }
 
-    async fn exists_by_id(&self, id: Id) -> Result<bool> {
+    async fn exists_by_id(&self, user_id: Id, id: Id) -> Result<bool> {
         let result: i32 = sqlx::query_scalar(&format!(
-            "SELECT EXISTS(SELECT 1 FROM {} WHERE id = ?)",
-            ENTRIES_TABLE
+            "SELECT EXISTS(SELECT 1 FROM {ENTRIES_TABLE} WHERE user_id = ? AND id = ?)",
         ))
+        .bind(user_id)
         .bind(id)
         .fetch_one(&self.pool)
         .await?;
@@ -761,13 +770,13 @@ impl EntryRepository for SqliteEntryRepository {
         Ok(result == 1)
     }
 
-    async fn delete_tag_by_tag_id(&self, id: Id, tag_id: Id) -> Result<bool> {
+    async fn delete_tag_by_tag_id(&self, user_id: Id, id: Id, tag_id: Id) -> Result<bool> {
         let result = sqlx::query(&format!(
-            "DELETE FROM {}  WHERE entry_id = ? AND tag_id = ?",
-            ENTRIES_TAG_TABLE
+            r#"DELETE FROM {ENTRIES_TAG_TABLE} WHERE tag_id = ? AND entry_id in (SELECT id FROM {ENTRIES_TABLE} WHERE id = ? AND user_id = ?)"#
         ))
-        .bind(id)
         .bind(tag_id)
+        .bind(id)
+        .bind(user_id)
         .execute(&self.pool)
         .await?;
 
@@ -892,11 +901,14 @@ impl EntryRepository for SqliteEntryRepository {
         Ok((entry, tags))
     }
 
-    async fn find_by_id(&self, id: Id) -> Result<Option<FullEntry>> {
-        let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+    async fn find_by_id(&self, user_id: Id, id: Id) -> Result<Option<FullEntry>> {
+        let entry = sqlx::query_as::<_, EntryRow>(&format!(
+            "SELECT * FROM {ENTRIES_TABLE} WHERE user_id = ? AND id = ?"
+        ))
+        .bind(user_id)
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
 
         let entry = match entry {
             Some(e) => e,
@@ -918,7 +930,7 @@ impl EntryRepository for SqliteEntryRepository {
         Ok(Some((entry, tags)))
     }
 
-    async fn update_by_id(&self, id: Id, update: UpdateEntry) -> Result<bool> {
+    async fn update_by_id(&self, user_id: Id, id: Id, update: UpdateEntry) -> Result<bool> {
         let mut query_builder = QueryBuilder::new(format!("UPDATE {} SET ", ENTRIES_TABLE));
 
         let mut separated = query_builder.separated(", ");
@@ -999,13 +1011,17 @@ impl EntryRepository for SqliteEntryRepository {
         query_builder.push(" WHERE id = ");
         query_builder.push_bind(id);
 
+        query_builder.push(" AND user_id = ");
+        query_builder.push_bind(user_id);
+
         let result = query_builder.build().execute(&self.pool).await?;
 
         Ok(result.rows_affected() > 0)
     }
 
-    async fn delete_by_id(&self, id: Id) -> Result<bool> {
-        let result = sqlx::query("DELETE FROM entries WHERE id = ?")
+    async fn delete_by_id(&self, user_id: Id, id: Id) -> Result<bool> {
+        let result = sqlx::query("DELETE FROM entries WHERE user_id = ? AND id = ?")
+            .bind(user_id)
             .bind(id)
             .execute(&self.pool)
             .await?;
@@ -1041,10 +1057,10 @@ mod tests {
         let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
         let entry_repo = SqliteEntryRepository::new(pool.clone(), tag_repo);
 
-        let exists = entry_repo.exists_by_id(1).await.unwrap();
+        let exists = entry_repo.exists_by_id(1, 1).await.unwrap();
         assert!(exists, "Entry 1 should exist");
 
-        let not_exists = entry_repo.exists_by_id(999).await.unwrap();
+        let not_exists = entry_repo.exists_by_id(1, 999).await.unwrap();
         assert!(!not_exists, "Entry 999 should not exist");
     }
 
@@ -1057,18 +1073,18 @@ mod tests {
         let entry_repo = SqliteEntryRepository::new(pool, tag_repo.clone());
 
         // Entry 2 initially has 2 tags (label1/id=1, label2/id=2)
-        let tags_before = tag_repo.find_by_entry_id(2).await.unwrap();
+        let tags_before = tag_repo.find_by_entry_id(1, 2).await.unwrap();
         assert_eq!(tags_before.len(), 2, "Entry 2 should have 2 tags initially");
 
         // Delete tag_id=1 from entry 2
-        let deleted = entry_repo.delete_tag_by_tag_id(2, 1).await.unwrap();
+        let deleted = entry_repo.delete_tag_by_tag_id(1, 2, 1).await.unwrap();
         assert!(
             deleted,
             "Should successfully delete existing tag association"
         );
 
         // Verify only 1 tag remains
-        let tags_after = tag_repo.find_by_entry_id(2).await.unwrap();
+        let tags_after = tag_repo.find_by_entry_id(1, 2).await.unwrap();
         assert_eq!(
             tags_after.len(),
             1,
@@ -1077,14 +1093,14 @@ mod tests {
         assert_eq!(tags_after[0].id, 2, "Only label2 should remain");
 
         // Try to delete same tag again - should return false
-        let not_deleted = entry_repo.delete_tag_by_tag_id(2, 1).await.unwrap();
+        let not_deleted = entry_repo.delete_tag_by_tag_id(1, 2, 1).await.unwrap();
         assert!(
             !not_deleted,
             "Should return false for non-existent association"
         );
 
         // Try to delete tag from non-existent entry
-        let not_deleted = entry_repo.delete_tag_by_tag_id(999, 1).await.unwrap();
+        let not_deleted = entry_repo.delete_tag_by_tag_id(1, 999, 1).await.unwrap();
         assert!(!not_deleted, "Should return false for non-existent entry");
     }
 
@@ -1096,11 +1112,11 @@ mod tests {
         let tag_repo = Arc::new(SqliteTagRepository::new(pool));
 
         // Verify initial 6 tags from fixtures
-        let initial_tags = tag_repo.get_all().await.unwrap();
+        let initial_tags = tag_repo.get_all(1).await.unwrap();
         assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
 
         // Delete "label1" by label
-        let deleted_tag = tag_repo.delete_by_label("label1").await.unwrap();
+        let deleted_tag = tag_repo.delete_by_label(1, "label1").await.unwrap();
         assert!(deleted_tag.is_some(), "Should return deleted tag");
         let deleted = deleted_tag.unwrap();
         assert_eq!(
@@ -1113,11 +1129,11 @@ mod tests {
         );
 
         // Verify only 5 tags remain
-        let tags_after = tag_repo.get_all().await.unwrap();
+        let tags_after = tag_repo.get_all(1).await.unwrap();
         assert_eq!(tags_after.len(), 5, "Should have 5 tags after deletion");
 
         // Verify CASCADE behavior: entry 2 should lose label1 but keep label2
-        let entry_tags = tag_repo.find_by_entry_id(2).await.unwrap();
+        let entry_tags = tag_repo.find_by_entry_id(1, 2).await.unwrap();
         assert_eq!(
             entry_tags.len(),
             1,
@@ -1129,14 +1145,14 @@ mod tests {
         );
 
         // Try deleting non-existent label
-        let not_deleted = tag_repo.delete_by_label("nonexistent").await.unwrap();
+        let not_deleted = tag_repo.delete_by_label(1, "nonexistent").await.unwrap();
         assert!(
             not_deleted.is_none(),
             "Should return None for non-existent label"
         );
 
         // Verify count unchanged after failed deletion
-        let final_tags = tag_repo.get_all().await.unwrap();
+        let final_tags = tag_repo.get_all(1).await.unwrap();
         assert_eq!(
             final_tags.len(),
             5,
@@ -1152,7 +1168,7 @@ mod tests {
         let tag_repo = Arc::new(SqliteTagRepository::new(pool));
 
         // Verify initial 6 tags from fixtures
-        let initial_tags = tag_repo.get_all().await.unwrap();
+        let initial_tags = tag_repo.get_all(1).await.unwrap();
         assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
 
         // Delete multiple tags: label1, label2, label3
@@ -1162,7 +1178,7 @@ mod tests {
             "label3".to_string(),
         ];
         let deleted_tags = tag_repo
-            .delete_all_by_label(&labels_to_delete)
+            .delete_all_by_label(1, &labels_to_delete)
             .await
             .unwrap();
 
@@ -1176,7 +1192,7 @@ mod tests {
         assert!(deleted_labels.contains(&"label3".to_string()));
 
         // Verify only 3 tags remain in database
-        let remaining_tags = tag_repo.get_all().await.unwrap();
+        let remaining_tags = tag_repo.get_all(1).await.unwrap();
         assert_eq!(remaining_tags.len(), 3, "Should have 3 tags after deletion");
 
         // Verify remaining tags are label4, label5, label6
@@ -1187,7 +1203,7 @@ mod tests {
         assert!(remaining_labels.contains(&"label6".to_string()));
 
         // Verify CASCADE behavior: entry 2 should have no tags (had label1 and label2)
-        let entry_tags = tag_repo.find_by_entry_id(2).await.unwrap();
+        let entry_tags = tag_repo.find_by_entry_id(1, 2).await.unwrap();
         assert_eq!(
             entry_tags.len(),
             0,
@@ -1195,7 +1211,7 @@ mod tests {
         );
 
         // Test deleting with empty vector
-        let empty_result = tag_repo.delete_all_by_label(&vec![]).await.unwrap();
+        let empty_result = tag_repo.delete_all_by_label(1, &vec![]).await.unwrap();
         assert_eq!(
             empty_result.len(),
             0,
@@ -1208,7 +1224,10 @@ mod tests {
             "nonexistent".to_string(),
             "label5".to_string(),
         ];
-        let mixed_deleted = tag_repo.delete_all_by_label(&mixed_labels).await.unwrap();
+        let mixed_deleted = tag_repo
+            .delete_all_by_label(1, &mixed_labels)
+            .await
+            .unwrap();
         assert_eq!(mixed_deleted.len(), 2, "Should only delete existing tags");
 
         let mixed_deleted_labels: Vec<String> =
@@ -1218,14 +1237,14 @@ mod tests {
         assert!(!mixed_deleted_labels.contains(&"nonexistent".to_string()));
 
         // Verify only 1 tag remains (label6)
-        let final_tags = tag_repo.get_all().await.unwrap();
+        let final_tags = tag_repo.get_all(1).await.unwrap();
         assert_eq!(final_tags.len(), 1, "Should have 1 tag remaining");
         assert_eq!(final_tags[0].label, "label6");
 
         // Test deleting all non-existent labels
         let nonexistent_labels = vec!["fake1".to_string(), "fake2".to_string()];
         let none_deleted = tag_repo
-            .delete_all_by_label(&nonexistent_labels)
+            .delete_all_by_label(1, &nonexistent_labels)
             .await
             .unwrap();
         assert_eq!(
@@ -1235,7 +1254,7 @@ mod tests {
         );
 
         // Verify count unchanged
-        let unchanged_tags = tag_repo.get_all().await.unwrap();
+        let unchanged_tags = tag_repo.get_all(1).await.unwrap();
         assert_eq!(unchanged_tags.len(), 1, "Should still have 1 tag");
     }
 
@@ -1247,7 +1266,7 @@ mod tests {
         let tag_repo = Arc::new(SqliteTagRepository::new(pool));
 
         // Verify initial 6 tags from fixtures
-        let initial_tags = tag_repo.get_all().await.unwrap();
+        let initial_tags = tag_repo.get_all(1).await.unwrap();
         assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
 
         // Find tag with label "label1" to get its ID
@@ -1258,7 +1277,7 @@ mod tests {
         let tag_id = tag_to_delete.id;
 
         // Delete tag by ID
-        let deleted_tag = tag_repo.delete_by_id(tag_id).await.unwrap();
+        let deleted_tag = tag_repo.delete_by_id(1, tag_id).await.unwrap();
         assert!(deleted_tag.is_some(), "Should return deleted tag");
         let deleted = deleted_tag.unwrap();
         assert_eq!(deleted.id, tag_id, "Deleted tag should have correct ID");
@@ -1272,7 +1291,7 @@ mod tests {
         );
 
         // Verify only 5 tags remain
-        let remaining_tags = tag_repo.get_all().await.unwrap();
+        let remaining_tags = tag_repo.get_all(1).await.unwrap();
         assert_eq!(remaining_tags.len(), 5, "Should have 5 tags after deletion");
 
         // Verify the deleted tag is not in remaining tags
@@ -1282,7 +1301,7 @@ mod tests {
         );
 
         // Verify CASCADE behavior: entry 2 should lose label1 but keep label2
-        let entry_tags = tag_repo.find_by_entry_id(2).await.unwrap();
+        let entry_tags = tag_repo.find_by_entry_id(1, 2).await.unwrap();
         assert_eq!(
             entry_tags.len(),
             1,
@@ -1294,14 +1313,14 @@ mod tests {
         );
 
         // Try deleting non-existent tag by ID
-        let not_deleted = tag_repo.delete_by_id(999).await.unwrap();
+        let not_deleted = tag_repo.delete_by_id(1, 999).await.unwrap();
         assert!(
             not_deleted.is_none(),
             "Should return None for non-existent ID"
         );
 
         // Verify count unchanged after failed deletion
-        let final_tags = tag_repo.get_all().await.unwrap();
+        let final_tags = tag_repo.get_all(1).await.unwrap();
         assert_eq!(
             final_tags.len(),
             5,
@@ -1318,30 +1337,30 @@ mod tests {
         let entry_repo = SqliteEntryRepository::new(pool, tag_repo.clone());
 
         // Verify entry 1 exists
-        let entry_before = entry_repo.find_by_id(1).await.unwrap();
+        let entry_before = entry_repo.find_by_id(1, 1).await.unwrap();
         assert!(entry_before.is_some(), "Entry 1 should exist");
 
         // Delete entry 1
-        let deleted = entry_repo.delete_by_id(1).await.unwrap();
+        let deleted = entry_repo.delete_by_id(1, 1).await.unwrap();
         assert!(deleted, "Should return true when entry is deleted");
 
         // Verify entry 1 no longer exists
-        let entry_after = entry_repo.find_by_id(1).await.unwrap();
+        let entry_after = entry_repo.find_by_id(1, 1).await.unwrap();
         assert!(
             entry_after.is_none(),
             "Entry 1 should not exist after deletion"
         );
 
         // Try deleting the same entry again
-        let not_deleted = entry_repo.delete_by_id(1).await.unwrap();
+        let not_deleted = entry_repo.delete_by_id(1, 1).await.unwrap();
         assert!(!not_deleted, "Should return false when entry doesn't exist");
 
         // Try deleting non-existent entry
-        let not_deleted = entry_repo.delete_by_id(999).await.unwrap();
+        let not_deleted = entry_repo.delete_by_id(1, 999).await.unwrap();
         assert!(!not_deleted, "Should return false for non-existent entry");
 
         // Verify entry 2 still exists (wasn't affected)
-        let entry_2 = entry_repo.find_by_id(2).await.unwrap();
+        let entry_2 = entry_repo.find_by_id(1, 2).await.unwrap();
         assert!(entry_2.is_some(), "Entry 2 should still exist");
     }
 

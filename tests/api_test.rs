@@ -313,7 +313,7 @@ async fn delete_entry_expect_id(pool: SqlitePool) {
     );
 
     assert!(
-        entry_rep.find_by_id(1).await.unwrap().is_none(),
+        entry_rep.find_by_id(1, 1).await.unwrap().is_none(),
         "Entry should be deleted from database"
     );
 }
@@ -341,7 +341,7 @@ async fn delete_entry_expect_full(pool: SqlitePool) {
     );
 
     assert!(
-        entry_rep.find_by_id(2).await.unwrap().is_none(),
+        entry_rep.find_by_id(1, 2).await.unwrap().is_none(),
         "Entry should be deleted from database"
     );
 }
