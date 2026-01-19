@@ -4,13 +4,14 @@ use actix_http::Request;
 use actix_web::{
     App, Error,
     body::MessageBody,
+    cookie::Key,
     dev::{Service, ServiceResponse},
     middleware::Logger,
     test, web,
 };
 use serde_json::Value;
 use sqlx::SqlitePool;
-use wallabag_rs::api::{app_state_init, post_token};
+use wallabag_rs::api::{app, app_state_init, post_token};
 
 static INIT: Once = Once::new();
 
@@ -20,32 +21,19 @@ fn init() {
     });
 }
 
-async fn init_app<F>(
+async fn init_app(
     pool: SqlitePool,
-    service_factory: Vec<F>,
-) -> impl Service<Request, Response = ServiceResponse<impl MessageBody>, Error = Error>
-where
-    F: actix_web::dev::HttpServiceFactory + 'static,
-{
+) -> impl Service<Request, Response = ServiceResponse<impl MessageBody>, Error = Error> {
     init();
 
-    let mut app = App::new()
-        .app_data(web::Data::new(app_state_init(pool)))
-        .wrap(Logger::default());
+    let cookie_key = Key::from(&[0u8; 64]);
 
-    let mut scope = web::scope("");
-    for s in service_factory {
-        scope = scope.service(s);
-    }
-
-    app = app.service(scope);
-
-    test::init_service(app).await
+    test::init_service(app(web::Data::new(app_state_init(pool.into())), cookie_key)).await
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]
 async fn test_oauth_post_token_password_grant_success(pool: SqlitePool) {
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let password = "test_password_123";
     let req = test::TestRequest::post()
@@ -82,7 +70,7 @@ async fn test_oauth_post_token_password_grant_success(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]
 async fn test_oauth_missing_grant_type(pool: SqlitePool) {
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
@@ -113,7 +101,7 @@ async fn test_oauth_missing_grant_type(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]
 async fn test_oauth_invalid_grant_type(pool: SqlitePool) {
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
@@ -149,7 +137,7 @@ async fn test_oauth_invalid_grant_type(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]
 async fn test_oauth_invalid_credentials(pool: SqlitePool) {
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
@@ -189,7 +177,7 @@ async fn test_oauth_invalid_credentials(pool: SqlitePool) {
 async fn test_oauth_invalid_client(pool: SqlitePool) {
     let password = "test_password";
 
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
@@ -223,7 +211,7 @@ async fn test_oauth_invalid_client(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]
 async fn test_oauth_missing_username(pool: SqlitePool) {
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
@@ -256,7 +244,7 @@ async fn test_oauth_missing_username(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]
 async fn test_oauth_missing_password(pool: SqlitePool) {
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
@@ -289,7 +277,7 @@ async fn test_oauth_missing_password(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]
 async fn test_oauth_missing_client_id(pool: SqlitePool) {
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
@@ -326,7 +314,7 @@ async fn test_oauth_missing_client_id(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]
 async fn test_oauth_missing_client_secret(pool: SqlitePool) {
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
@@ -363,7 +351,7 @@ async fn test_oauth_missing_client_secret(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]
 async fn test_oauth_refresh_token_grant_success(pool: SqlitePool) {
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let password = "test_password";
 
@@ -420,7 +408,7 @@ async fn test_oauth_refresh_token_grant_success(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]
 async fn test_oauth_refresh_with_invalid_token(pool: SqlitePool) {
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
@@ -457,7 +445,7 @@ async fn test_oauth_refresh_with_invalid_token(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]
 async fn test_oauth_refresh_missing_refresh_token(pool: SqlitePool) {
-    let app = init_app(pool, vec![post_token]).await;
+    let app = init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")

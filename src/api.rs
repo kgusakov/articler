@@ -13,9 +13,13 @@ use crate::{
         token_storage::TokenStorage,
     },
 };
+use actix_http::Request;
+use actix_service::IntoServiceFactory;
 use actix_session::SessionMiddleware;
 use actix_session::storage::CookieSessionStore;
+use actix_web::body::MessageBody;
 use actix_web::cookie::Key;
+use actix_web::dev::{AppConfig, Service, ServiceFactory, ServiceResponse};
 use actix_web::{
     App, Error, HttpMessage, HttpServer, Responder,
     dev::{Server, ServiceRequest},
@@ -94,9 +98,6 @@ pub async fn exists() -> actix_web::Result<Json<Exists>> {
     Ok(Json(Exists { exists: false }))
 }
 
-#[routes]
-#[get("/version.json")]
-#[get("/version")]
 pub async fn version() -> actix_web::Result<Json<String>> {
     Ok(Json(VERSION.to_string()))
 }
@@ -444,8 +445,8 @@ struct TagLabel {
 }
 
 #[routes]
-#[delete("/tag/{tag_id}.json")]
-#[delete("/tag/{tag_id}")]
+#[delete("/tags/{tag_id}.json")]
+#[delete("/tags/{tag_id}")]
 pub async fn delete_tag_by_id(
     data: web::Data<AppState>,
     tag_id: web::Path<Id>,
@@ -804,49 +805,64 @@ pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::
     let app_data = web::Data::new(app_state);
 
     // TODO looks like it is created multiple times as a result - need to check
-    Ok(HttpServer::new(move || {
-        let oauth = HttpAuthentication::with_fn(auth_extractor);
+    Ok(
+        HttpServer::new(move || app(app_data.clone(), cookie_key.clone()))
+            .bind(format!("0.0.0.0:{}", port))?
+            .run(),
+    )
+}
 
-        App::new()
-            .app_data(app_data.clone())
-            .wrap(Logger::default())
-            .service(post_token)
-            .service(web::scope("/api").service(version))
-            .service(
-                web::scope("/api")
-                    .wrap(oauth)
-                    .service(entries)
-                    .service(post_entries)
-                    .service(patch_entry)
-                    .service(delete_entry)
-                    .service(get_tags_by_entry)
-                    .service(get_tags)
-                    .service(delete_tag_from_entry)
-                    .service(delete_tag_by_id)
-                    .service(delete_tag_by_label)
-                    .service(delete_tags_by_label)
-                    .service(post_entry_tags)
-                    .service(post_token)
-                    .service(exists),
-            )
-            .service(
-                web::scope("")
-                    .wrap(
-                        SessionMiddleware::builder(
-                            CookieSessionStore::default(),
-                            cookie_key.clone(),
-                        )
+pub fn app(
+    app_data: web::Data<AppState>,
+    cookie_key: Key,
+) -> App<
+    impl ServiceFactory<
+        ServiceRequest,
+        Config = (),
+        Response = ServiceResponse<impl MessageBody>,
+        Error = actix_web::Error,
+        InitError = (),
+    >,
+> {
+    let oauth = HttpAuthentication::with_fn(auth_extractor);
+
+    App::new()
+        .app_data(app_data.clone())
+        .wrap(Logger::default())
+        .service(post_token)
+        // Don't use scope here - it will "eat" all other apis
+        // At the same time version must be not under oauth
+        .route("/api/version", web::get().to(version))
+        .route("/api/version.json", web::get().to(version))
+        .service(
+            web::scope("/api")
+                .wrap(oauth)
+                .service(entries)
+                .service(post_entries)
+                .service(patch_entry)
+                .service(delete_entry)
+                .service(get_tags_by_entry)
+                .service(get_tags)
+                .service(delete_tag_from_entry)
+                .service(delete_tags_by_label)
+                .service(delete_tag_by_id)
+                .service(delete_tag_by_label)
+                .service(post_entry_tags)
+                .service(post_token)
+                .service(exists),
+        )
+        .service(
+            web::scope("")
+                .wrap(
+                    SessionMiddleware::builder(CookieSessionStore::default(), cookie_key.clone())
                         .cookie_secure(false) // Set to true in production with HTTPS
                         .build(),
-                    )
-                    .service(index)
-                    .service(login_check)
-                    .service(developer)
-                    .service(login),
-            )
-    })
-    .bind(format!("0.0.0.0:{}", port))?
-    .run())
+                )
+                .service(index)
+                .service(login_check)
+                .service(developer)
+                .service(login),
+        )
 }
 
 #[derive(Serialize)]

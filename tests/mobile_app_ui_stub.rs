@@ -13,7 +13,10 @@ use actix_web::{
 };
 use regex::Regex;
 use sqlx::SqlitePool;
-use wallabag_rs::fake_ui::{developer, index, login, login_check};
+use wallabag_rs::{
+    api::app,
+    fake_ui::{developer, index, login, login_check},
+};
 use wallabag_rs::{api::app_state_init, helpers::hash_password};
 
 static INIT: Once = Once::new();
@@ -29,29 +32,12 @@ async fn init_ui_app(
 ) -> impl Service<Request, Response = ServiceResponse<impl MessageBody>, Error = Error> {
     init();
 
-    let k: &Vec<u8> = &(0..64).collect();
-    let secret_key = Key::from(k);
+    let cookie_key = Key::from(&[0u8; 64]);
 
-    let app = App::new()
-        .app_data(web::Data::new(app_state_init(pool)))
-        .wrap(Logger::default())
-        .service(
-            web::scope("")
-                .wrap(
-                    SessionMiddleware::builder(CookieSessionStore::default(), secret_key.clone())
-                        .cookie_secure(false)
-                        .build(),
-                )
-                .service(index)
-                .service(login_check)
-                .service(developer)
-                .service(login),
-        );
-
-    test::init_service(app).await
+    test::init_service(app(web::Data::new(app_state_init(pool.into())), cookie_key)).await
 }
 
-#[sqlx::test(migrations = "./migrations", fixtures("entries"))]
+#[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
 async fn android_app_login_flow(pool: SqlitePool) {
     let app = init_ui_app(pool).await;
 

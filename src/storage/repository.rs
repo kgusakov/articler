@@ -1033,7 +1033,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "./migrations",
-        fixtures("../../tests/fixtures/entries.sql")
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_exists_by_id(pool: SqlitePool) {
         let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
@@ -1048,7 +1048,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "./migrations",
-        fixtures("../../tests/fixtures/entries.sql")
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_tag_by_tag_id(pool: SqlitePool) {
         let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
@@ -1088,7 +1088,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "./migrations",
-        fixtures("../../tests/fixtures/entries.sql")
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_by_label(pool: SqlitePool) {
         let tag_repo = Arc::new(SqliteTagRepository::new(pool));
@@ -1144,7 +1144,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "./migrations",
-        fixtures("../../tests/fixtures/entries.sql")
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_all_by_label(pool: SqlitePool) {
         let tag_repo = Arc::new(SqliteTagRepository::new(pool));
@@ -1239,7 +1239,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "./migrations",
-        fixtures("../../tests/fixtures/entries.sql")
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_tag_delete_by_id(pool: SqlitePool) {
         let tag_repo = Arc::new(SqliteTagRepository::new(pool));
@@ -1309,7 +1309,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "./migrations",
-        fixtures("../../tests/fixtures/entries.sql")
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_entry_delete_by_id(pool: SqlitePool) {
         let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
@@ -1345,7 +1345,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "./migrations",
-        fixtures("../../tests/fixtures/entries.sql")
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_username_and_password(pool: SqlitePool) {
         let user_repo = SqliteUserRepository::new(pool);
@@ -1410,7 +1410,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "./migrations",
-        fixtures("../../tests/fixtures/entries.sql")
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_user_id_client_id_and_secret(pool: SqlitePool) {
         let client_repo = SqliteClientRepository::new(pool);
@@ -1499,7 +1499,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "./migrations",
-        fixtures("../../tests/fixtures/entries.sql")
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_client_name_and_user_id(pool: SqlitePool) {
         let client_repo = SqliteClientRepository::new(pool);
