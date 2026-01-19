@@ -19,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
 
     let db_path = env::var("DATABASE_URL").expect("Environment variable DATABASE_URL is not set");
     let cookie_key = env::var("COOKIE_KEY").expect("Environment variable COOKIE_KEY is not set");
-    let pool = Arc::new(SqlitePoolOptions::new().connect(&db_path).await?);
+    let pool = SqlitePoolOptions::new().connect(&db_path).await?;
 
     let port = env::var("HTTP_PORT")
         .expect("Set HTTP_PORT env variable")

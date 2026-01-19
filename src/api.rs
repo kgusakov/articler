@@ -788,14 +788,14 @@ pub struct AppState {
     pub token_storage: TokenStorage,
 }
 
-pub fn app_state_init(pool: Arc<Pool<Sqlite>>) -> AppState {
+pub fn app_state_init(pool: Pool<Sqlite>) -> AppState {
     let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
 
     AppState {
         tag_repository: tag_repo.clone(),
         entry_repository: Arc::new(SqliteEntryRepository::new(pool.clone(), tag_repo.clone())),
         user_repository: Arc::new(SqliteUserRepository::new(pool.clone())),
-        client_repository: Arc::new(SqliteClientRepository::new(pool.clone())),
+        client_repository: Arc::new(SqliteClientRepository::new(pool)),
         token_storage: TokenStorage::default(),
     }
 }

@@ -105,11 +105,11 @@ impl<'r> FromRow<'r, SqliteRow> for ClientRow {
 
 #[derive(Clone)]
 pub struct SqliteTagRepository {
-    pool: Arc<SqlitePool>,
+    pool: SqlitePool,
 }
 
 impl SqliteTagRepository {
-    pub fn new(pool: Arc<SqlitePool>) -> Self {
+    pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 }
@@ -142,11 +142,11 @@ pub trait TagRepository: Send + Sync {
 }
 
 pub struct SqliteUserRepository {
-    pool: Arc<SqlitePool>,
+    pool: SqlitePool,
 }
 
 impl SqliteUserRepository {
-    pub fn new(pool: Arc<SqlitePool>) -> Self {
+    pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 }
@@ -176,7 +176,7 @@ impl UserRepository for SqliteUserRepository {
         ))
         .bind(username)
         .bind(password_hash)
-        .fetch_optional(self.pool.as_ref())
+        .fetch_optional(&self.pool)
         .await?;
 
         Ok(result)
@@ -188,7 +188,7 @@ impl UserRepository for SqliteUserRepository {
             USERS_TABLE
         ))
         .bind(username)
-        .fetch_optional(self.pool.as_ref())
+        .fetch_optional(&self.pool)
         .await?;
 
         Ok(result)
@@ -196,11 +196,11 @@ impl UserRepository for SqliteUserRepository {
 }
 
 pub struct SqliteClientRepository {
-    pool: Arc<SqlitePool>,
+    pool: SqlitePool,
 }
 
 impl SqliteClientRepository {
-    pub fn new(pool: Arc<SqlitePool>) -> Self {
+    pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 }
@@ -242,7 +242,7 @@ impl ClientRepository for SqliteClientRepository {
         .bind(user_id)
         .bind(client_id)
         .bind(client_secret)
-        .fetch_optional(self.pool.as_ref())
+        .fetch_optional(&self.pool)
         .await?;
 
         Ok(result)
@@ -259,7 +259,7 @@ impl ClientRepository for SqliteClientRepository {
         ))
         .bind(client_id)
         .bind(client_secret)
-        .fetch_optional(self.pool.as_ref())
+        .fetch_optional(&self.pool)
         .await?;
 
         Ok(result)
@@ -276,7 +276,7 @@ impl ClientRepository for SqliteClientRepository {
         ))
         .bind(user_id)
         .bind(client_name)
-        .fetch_optional(self.pool.as_ref())
+        .fetch_optional(&self.pool)
         .await?;
 
         Ok(result)
@@ -311,7 +311,7 @@ impl TagRepository for SqliteTagRepository {
                 .push_bind(tag.slug.clone());
         });
         tag_builder.push(" ON CONFLICT DO NOTHING");
-        tag_builder.build().execute(self.pool.as_ref()).await?;
+        tag_builder.build().execute(&self.pool).await?;
 
         let mut insert_query =
             QueryBuilder::new(format!(r#"INSERT INTO {} SELECT "#, ENTRIES_TAG_TABLE));
@@ -327,7 +327,7 @@ impl TagRepository for SqliteTagRepository {
         }
         separated.push_unseparated(") ON CONFLICT DO NOTHING");
 
-        insert_query.build().execute(self.pool.as_ref()).await?;
+        insert_query.build().execute(&self.pool).await?;
 
         let mut get_tags =
             QueryBuilder::new(format!("SELECT * from {} WHERE label IN (", TAGS_TABLE));
@@ -341,7 +341,7 @@ impl TagRepository for SqliteTagRepository {
 
         Ok(get_tags
             .build_query_as::<TagRow>()
-            .fetch_all(self.pool.as_ref())
+            .fetch_all(&self.pool)
             .await?)
     }
 
@@ -374,7 +374,7 @@ impl TagRepository for SqliteTagRepository {
 
         separated.push_unseparated("))");
 
-        builder.build().execute(self.pool.as_ref()).await?;
+        builder.build().execute(&self.pool).await?;
 
         Ok(result_tags)
     }
@@ -389,14 +389,14 @@ impl TagRepository for SqliteTagRepository {
             TAGS_TABLE, ENTRIES_TAG_TABLE
         ))
         .bind(entry_id)
-        .fetch_all(self.pool.as_ref())
+        .fetch_all(&self.pool)
         .await?)
     }
 
     async fn get_all(&self) -> Result<Vec<TagRow>> {
         Ok(
             sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {} t", TAGS_TABLE))
-                .fetch_all(self.pool.as_ref())
+                .fetch_all(&self.pool)
                 .await?,
         )
     }
@@ -407,7 +407,7 @@ impl TagRepository for SqliteTagRepository {
             TAGS_TABLE
         ))
         .bind(label)
-        .fetch_optional(self.pool.as_ref())
+        .fetch_optional(&self.pool)
         .await?)
     }
 
@@ -424,7 +424,7 @@ impl TagRepository for SqliteTagRepository {
 
         Ok(builder
             .build_query_as::<TagRow>()
-            .fetch_all(self.pool.as_ref())
+            .fetch_all(&self.pool)
             .await?)
     }
 
@@ -434,7 +434,7 @@ impl TagRepository for SqliteTagRepository {
             TAGS_TABLE
         ))
         .bind(id)
-        .fetch_optional(self.pool.as_ref())
+        .fetch_optional(&self.pool)
         .await?)
     }
 }
@@ -625,12 +625,12 @@ pub trait EntryRepository: Send + Sync {
 
 #[derive(Clone)]
 pub struct SqliteEntryRepository {
-    pool: Arc<SqlitePool>,
+    pool: SqlitePool,
     tag_repo: Arc<dyn TagRepository>,
 }
 
 impl SqliteEntryRepository {
-    pub fn new(pool: Arc<SqlitePool>, tag_repo: Arc<dyn TagRepository>) -> Self {
+    pub fn new(pool: SqlitePool, tag_repo: Arc<dyn TagRepository>) -> Self {
         Self { pool, tag_repo }
     }
 }
@@ -718,7 +718,7 @@ impl EntryRepository for SqliteEntryRepository {
             ));
         }
 
-        let raw_rows = q_builder.build().fetch_all(self.pool.as_ref()).await?;
+        let raw_rows = q_builder.build().fetch_all(&self.pool).await?;
 
         let mut entrs = IndexMap::<i32, Vec<&SqliteRow>>::new();
 
@@ -753,7 +753,7 @@ impl EntryRepository for SqliteEntryRepository {
             ENTRIES_TABLE
         ))
         .bind(id)
-        .fetch_one(self.pool.as_ref())
+        .fetch_one(&self.pool)
         .await?;
 
         Ok(result == 1)
@@ -766,7 +766,7 @@ impl EntryRepository for SqliteEntryRepository {
         ))
         .bind(id)
         .bind(tag_id)
-        .execute(self.pool.as_ref())
+        .execute(&self.pool)
         .await?;
 
         Ok(result.rows_affected() > 0)
@@ -821,11 +821,7 @@ impl EntryRepository for SqliteEntryRepository {
             ));
         }
 
-        Ok(q_builder
-            .build()
-            .fetch_one(self.pool.as_ref())
-            .await?
-            .get(0))
+        Ok(q_builder.build().fetch_one(&self.pool).await?.get(0))
     }
 
     async fn create(
@@ -867,7 +863,7 @@ impl EntryRepository for SqliteEntryRepository {
         .bind(entry.published_by)
         .bind(entry.is_public)
         .bind(entry.uid)
-        .fetch_one(self.pool.as_ref())
+        .fetch_one(&self.pool)
         .await?;
 
         if !tags.is_empty() {
@@ -876,7 +872,7 @@ impl EntryRepository for SqliteEntryRepository {
 
         let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
             .bind(id)
-            .fetch_one(self.pool.as_ref())
+            .fetch_one(&self.pool)
             .await?;
 
         let tags = sqlx::query_as::<_, TagRow>(&format!(
@@ -888,7 +884,7 @@ impl EntryRepository for SqliteEntryRepository {
             ENTRIES_TAG_TABLE, TAGS_TABLE
         ))
         .bind(entry.id)
-        .fetch_all(self.pool.as_ref())
+        .fetch_all(&self.pool)
         .await?;
 
         Ok((entry, tags))
@@ -897,7 +893,7 @@ impl EntryRepository for SqliteEntryRepository {
     async fn find_by_id(&self, id: Id) -> Result<Option<FullEntry>> {
         let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
             .bind(id)
-            .fetch_optional(self.pool.as_ref())
+            .fetch_optional(&self.pool)
             .await?;
 
         let entry = match entry {
@@ -914,7 +910,7 @@ impl EntryRepository for SqliteEntryRepository {
             ENTRIES_TAG_TABLE, TAGS_TABLE
         ))
         .bind(id)
-        .fetch_all(self.pool.as_ref())
+        .fetch_all(&self.pool)
         .await?;
 
         Ok(Some((entry, tags)))
@@ -1001,7 +997,7 @@ impl EntryRepository for SqliteEntryRepository {
         query_builder.push(" WHERE id = ");
         query_builder.push_bind(id);
 
-        let result = query_builder.build().execute(self.pool.as_ref()).await?;
+        let result = query_builder.build().execute(&self.pool).await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -1009,7 +1005,7 @@ impl EntryRepository for SqliteEntryRepository {
     async fn delete_by_id(&self, id: Id) -> Result<bool> {
         let result = sqlx::query("DELETE FROM entries WHERE id = ?")
             .bind(id)
-            .execute(self.pool.as_ref())
+            .execute(&self.pool)
             .await?;
 
         Ok(result.rows_affected() > 0)
@@ -1040,7 +1036,6 @@ mod tests {
         fixtures("../../tests/fixtures/entries.sql")
     )]
     async fn test_exists_by_id(pool: SqlitePool) {
-        let pool = Arc::new(pool);
         let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
         let entry_repo = SqliteEntryRepository::new(pool.clone(), tag_repo);
 
@@ -1056,9 +1051,8 @@ mod tests {
         fixtures("../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_tag_by_tag_id(pool: SqlitePool) {
-        let pool = Arc::new(pool);
         let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
-        let entry_repo = SqliteEntryRepository::new(pool.clone(), tag_repo.clone());
+        let entry_repo = SqliteEntryRepository::new(pool, tag_repo.clone());
 
         // Entry 2 initially has 2 tags (label1/id=1, label2/id=2)
         let tags_before = tag_repo.find_by_entry_id(2).await.unwrap();
@@ -1097,8 +1091,7 @@ mod tests {
         fixtures("../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_by_label(pool: SqlitePool) {
-        let pool = Arc::new(pool);
-        let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
+        let tag_repo = Arc::new(SqliteTagRepository::new(pool));
 
         // Verify initial 6 tags from fixtures
         let initial_tags = tag_repo.get_all().await.unwrap();
@@ -1154,8 +1147,7 @@ mod tests {
         fixtures("../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_all_by_label(pool: SqlitePool) {
-        let pool = Arc::new(pool);
-        let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
+        let tag_repo = Arc::new(SqliteTagRepository::new(pool));
 
         // Verify initial 6 tags from fixtures
         let initial_tags = tag_repo.get_all().await.unwrap();
@@ -1250,8 +1242,7 @@ mod tests {
         fixtures("../../tests/fixtures/entries.sql")
     )]
     async fn test_tag_delete_by_id(pool: SqlitePool) {
-        let pool = Arc::new(pool);
-        let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
+        let tag_repo = Arc::new(SqliteTagRepository::new(pool));
 
         // Verify initial 6 tags from fixtures
         let initial_tags = tag_repo.get_all().await.unwrap();
@@ -1321,9 +1312,8 @@ mod tests {
         fixtures("../../tests/fixtures/entries.sql")
     )]
     async fn test_entry_delete_by_id(pool: SqlitePool) {
-        let pool = Arc::new(pool);
         let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
-        let entry_repo = SqliteEntryRepository::new(pool.clone(), tag_repo.clone());
+        let entry_repo = SqliteEntryRepository::new(pool, tag_repo.clone());
 
         // Verify entry 1 exists
         let entry_before = entry_repo.find_by_id(1).await.unwrap();
@@ -1358,8 +1348,7 @@ mod tests {
         fixtures("../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_username_and_password(pool: SqlitePool) {
-        let pool = Arc::new(pool);
-        let user_repo = SqliteUserRepository::new(pool.clone());
+        let user_repo = SqliteUserRepository::new(pool);
 
         // Test successful lookup with correct credentials
         let user = user_repo
@@ -1424,8 +1413,7 @@ mod tests {
         fixtures("../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_user_id_client_id_and_secret(pool: SqlitePool) {
-        let pool = Arc::new(pool);
-        let client_repo = SqliteClientRepository::new(pool.clone());
+        let client_repo = SqliteClientRepository::new(pool);
 
         // Test successful lookup with correct credentials
         let client = client_repo
@@ -1514,7 +1502,6 @@ mod tests {
         fixtures("../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_client_name_and_user_id(pool: SqlitePool) {
-        let pool = Arc::new(pool);
         let client_repo = SqliteClientRepository::new(pool);
 
         // Test successful lookup with valid user_id and client name

@@ -40,10 +40,8 @@ where
 {
     init();
 
-    let a_pool = Arc::new(pool);
-
     let mut app = App::new()
-        .app_data(web::Data::new(app_state_init(a_pool.clone())))
+        .app_data(web::Data::new(app_state_init(pool)))
         .wrap(Logger::default());
 
     let mut scope = web::scope("/api");
@@ -264,8 +262,7 @@ fn assert_json_date_between(
 
 #[sqlx::test(migrations = "./migrations", fixtures("entries"))]
 async fn delete_entry_expect_id(pool: SqlitePool) {
-    let a_pool = Arc::new(pool);
-    let app_state = app_state_init(a_pool.clone());
+    let app_state = app_state_init(pool);
     let entry_rep = app_state.entry_repository.clone();
 
     let app = test::init_service(
@@ -297,8 +294,7 @@ async fn delete_entry_expect_id(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "./migrations", fixtures("entries"))]
 async fn delete_entry_expect_full(pool: SqlitePool) {
-    let a_pool = Arc::new(pool);
-    let app_state = app_state_init(a_pool.clone());
+    let app_state = app_state_init(pool);
     let entry_rep = app_state.entry_repository.clone();
 
     let app = test::init_service(
@@ -925,12 +921,10 @@ async fn post_entry_tags_not_found(pool: SqlitePool) {
 async fn test_auth_wrong_bearer(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
     let auth = HttpAuthentication::with_fn(auth_extractor);
 
     let a = App::new()
-        .app_data(web::Data::new(app_state_init(a_pool.clone())))
+        .app_data(web::Data::new(app_state_init(pool)))
         .wrap(Logger::default())
         .wrap(auth)
         .service(entries);
@@ -965,12 +959,10 @@ async fn test_auth_wrong_bearer(pool: SqlitePool) {
 async fn test_auth_no_bearer(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
     let auth = HttpAuthentication::with_fn(auth_extractor);
 
     let a = App::new()
-        .app_data(web::Data::new(app_state_init(a_pool.clone())))
+        .app_data(web::Data::new(app_state_init(pool)))
         .wrap(Logger::default())
         .wrap(auth)
         .service(entries);
@@ -1002,12 +994,10 @@ async fn test_auth_no_bearer(pool: SqlitePool) {
 async fn test_auth_success(pool: SqlitePool) {
     init();
 
-    let a_pool = Arc::new(pool);
-
     let auth = HttpAuthentication::with_fn(auth_extractor);
 
     let a = App::new()
-        .app_data(web::Data::new(app_state_init(a_pool.clone())))
+        .app_data(web::Data::new(app_state_init(pool)))
         .wrap(Logger::default())
         .service(post_token)
         .service(web::scope("/api").wrap(auth).service(entries));

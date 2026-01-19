@@ -29,12 +29,11 @@ async fn init_ui_app(
 ) -> impl Service<Request, Response = ServiceResponse<impl MessageBody>, Error = Error> {
     init();
 
-    let a_pool = Arc::new(pool);
     let k: &Vec<u8> = &(0..64).collect();
     let secret_key = Key::from(k);
 
     let app = App::new()
-        .app_data(web::Data::new(app_state_init(a_pool.clone())))
+        .app_data(web::Data::new(app_state_init(pool)))
         .wrap(Logger::default())
         .service(
             web::scope("")

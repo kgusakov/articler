@@ -29,10 +29,8 @@ where
 {
     init();
 
-    let a_pool = Arc::new(pool);
-
     let mut app = App::new()
-        .app_data(web::Data::new(app_state_init(a_pool.clone())))
+        .app_data(web::Data::new(app_state_init(pool)))
         .wrap(Logger::default());
 
     let mut scope = web::scope("");
