@@ -17,6 +17,8 @@ use actix_http::Request;
 use actix_service::IntoServiceFactory;
 use actix_session::SessionMiddleware;
 use actix_session::storage::CookieSessionStore;
+use actix_utils::future::{Ready, ready};
+use actix_web::FromRequest;
 use actix_web::body::MessageBody;
 use actix_web::cookie::Key;
 use actix_web::dev::{AppConfig, Service, ServiceFactory, ServiceResponse};
@@ -39,6 +41,7 @@ use serde_with::formats::CommaSeparator;
 use serde_with::serde_as;
 use slug::slugify;
 use sqlx::{Pool, Sqlite};
+use std::pin::Pin;
 use std::{str::FromStr, sync::Arc};
 use url::{ParseError, Url};
 
@@ -238,6 +241,7 @@ pub async fn post_token(
 pub async fn post_entries(
     data: web::Data<AppState>,
     request: web::Form<AddEntry>,
+    userInfo: UserInfo,
 ) -> actix_web::Result<Json<AddEntryResponse>> {
     //
     // Check if url already exist:
@@ -265,8 +269,7 @@ pub async fn post_entries(
 
     // TODO can we remove all these ugly to_string?
     let create_entry = CreateEntry {
-        // TODO replace hardcoded value
-        user_id: 1,
+        user_id: userInfo.user_id,
         // TODO actually here we must have url without redirects already
         url: request.url.to_string(),
         hashed_url: hash_str(request.url.as_str()),
@@ -342,10 +345,12 @@ pub async fn post_entries(
 pub async fn entries(
     data: web::Data<AppState>,
     request: Query<EntriesRequest>,
+    user_info: UserInfo,
 ) -> actix_web::Result<Json<Entries>> {
     let request = request.into_inner();
 
     let params = EntriesCriteria {
+        user_id: user_info.user_id,
         archive: request.archive,
         starred: request.starred,
         sort: Some(request.sort.into()),
@@ -1114,6 +1119,29 @@ struct Link {
     href: Url,
 }
 
+#[derive(Debug, Clone)]
+struct UserInfo {
+    user_id: Id,
+    client_id: Id,
+}
+
+impl FromRequest for UserInfo {
+    type Error = Error;
+
+    type Future = Ready<Result<Self, Self::Error>>;
+
+    fn from_request(
+        req: &actix_web::HttpRequest,
+        payload: &mut actix_http::Payload,
+    ) -> Self::Future {
+        if let Some(user_info) = req.extensions().get::<UserInfo>() {
+            ready(Ok(user_info.clone()))
+        } else {
+            ready(Err(actix_web::error::ErrorUnauthorized("No user info")))
+        }
+    }
+}
+
 pub async fn auth_extractor(
     req: ServiceRequest,
     credentials: Option<BearerAuth>,
@@ -1134,7 +1162,10 @@ pub async fn auth_extractor(
 
     match token_storage.validate(credentials.token()) {
         Ok(Some(claim)) => {
-            req.extensions_mut().insert(claim);
+            req.extensions_mut().insert(UserInfo {
+                user_id: claim.user_id,
+                client_id: claim.client_id,
+            });
 
             Ok(req)
         }

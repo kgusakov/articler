@@ -587,6 +587,7 @@ pub enum Detail {
 
 #[derive(Default)]
 pub struct EntriesCriteria {
+    pub user_id: Id,
     pub archive: Option<bool>,
     pub starred: Option<bool>,
     pub sort: Option<SortColumn>,
@@ -639,12 +640,13 @@ impl SqliteEntryRepository {
 impl EntryRepository for SqliteEntryRepository {
     async fn find_all(&self, params: &EntriesCriteria) -> Result<Vec<(EntryRow, Vec<TagRow>)>> {
         let mut q_builder = QueryBuilder::new(format!(
-            r#"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {} as e LEFT JOIN {} et on et.entry_id = e.id LEFT JOIN {} t on t.id = et.tag_id
+            r#"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
             WHERE e.id in (
-                SELECT id FROM {}
-                WHERE 1=1"#,
-            ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE, ENTRIES_TABLE
+                SELECT id FROM {ENTRIES_TABLE}
+                WHERE user_id = "#
         ));
+
+        q_builder.push_bind(params.user_id);
 
         if let Some(a) = params.archive {
             q_builder.push(" AND is_archived = ");

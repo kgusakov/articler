@@ -1029,15 +1029,15 @@ async fn test_auth_success(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let access_token = {
-        let password = "test_password_123";
+        let password = "wallabag";
         let req = test::TestRequest::post()
             .uri("/oauth/v2/token")
             .set_form(&[
                 ("grant_type", "password"),
-                ("username", "oauth_test_user"),
+                ("username", "wallabag"),
                 ("password", password),
-                ("client_id", "test_client_id"),
-                ("client_secret", "test_client_secret"),
+                ("client_id", "client_1"),
+                ("client_secret", "secret_1"),
             ])
             .to_request();
 
