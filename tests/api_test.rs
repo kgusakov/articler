@@ -182,6 +182,26 @@ async fn get_entries_with_pages(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
+async fn get_entries_page_out_of_range(pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    // With 6 entries and perPage=2, total pages = ceil(6/2) = 3
+    // Requesting page=10 should return 404
+    let req = test::TestRequest::default()
+        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
+        .uri("/api/entries?page=10&perPage=2")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(
+        resp.status(),
+        404,
+        "Should return 404 when requested page exceeds total pages"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
 async fn get_entries_archived(pool: SqlitePool) {
     let app = init_app(pool).await;
 

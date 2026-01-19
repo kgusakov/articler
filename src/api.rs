@@ -362,6 +362,19 @@ pub async fn entries(
         detail: Some(request.detail.into()),
         domain_name: request.domain_name,
     };
+
+    let count_without_paging = data
+        .entry_repository
+        .count(&params)
+        .await
+        .map_err(ErrorInternalServerError)?;
+
+    let pages = (count_without_paging as f64 / request.per_page as f64).ceil() as i64;
+
+    if request.page > pages {
+        return Err(ErrorNotFound("Not found"));
+    }
+
     // TODO implement all needed request filters and etc
     let entries = data
         .entry_repository
@@ -379,16 +392,10 @@ pub async fn entries(
     // TODO implement actual urls generating
     let url = Url::from_str("http://example.com").unwrap();
 
-    let count_without_paging = data
-        .entry_repository
-        .count(&params)
-        .await
-        .map_err(ErrorInternalServerError)?;
-
     Ok(web::Json(Entries {
         page: request.page,
         limit: request.per_page,
-        pages: (count_without_paging as f64 / request.per_page as f64).ceil() as i64,
+        pages: pages,
         total: count_without_paging as i64,
         embedded: Embedded { items: ents },
         _links: Links {
