@@ -777,10 +777,10 @@ impl EntryRepository for SqliteEntryRepository {
     async fn count(&self, params: &EntriesCriteria) -> Result<i64> {
         // TODO rewrite this funny stupid count
         let mut q_builder = QueryBuilder::new(format!(
-            r#"SELECT COUNT(DISTINCT e.id) FROM {} as e LEFT JOIN {} et on et.entry_id = e.id LEFT JOIN {} t on t.id = et.tag_id"#,
-            ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE,
+            r#"SELECT COUNT(DISTINCT e.id) FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"#,
         ));
-        q_builder.push(" WHERE 1=1");
+        q_builder.push(" WHERE e.user_id = ");
+        q_builder.push_bind(params.user_id);
 
         if let Some(a) = params.archive {
             q_builder.push(" AND is_archived = ");
