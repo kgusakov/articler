@@ -898,6 +898,7 @@ pub struct Entries {
     limit: i64,
     pages: i64,
     total: i64,
+    #[serde(rename(serialize = "_embedded"))]
     embedded: Embedded,
     _links: Links,
 }
