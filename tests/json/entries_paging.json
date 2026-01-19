@@ -3,7 +3,7 @@
     "limit": 1,
     "pages": 6,
     "total": 6,
-    "embedded": {
+    "_embedded": {
         "items": [
             {
                 "id": 2,

@@ -388,13 +388,14 @@ async fn delete_entry_not_found(pool: SqlitePool) {
 async fn patch_entry_basic_fields(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    let payload = r#"{"title":"Updated Title","content":"Updated Content","language":"fr"}"#;
-
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/1.json")
-        .set_payload(payload)
-        .insert_header(("content-type", "application/json"))
+        .set_form(&[
+            ("title", "Updated Title"),
+            ("content", "Updated Content"),
+            ("language", "fr"),
+        ])
         .to_request();
 
     let before_call_time = Utc::now();
@@ -418,13 +419,10 @@ async fn patch_entry_archive_and_star(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Archive and star entry 1 (which is not archived and not starred)
-    let payload = r#"{"archive":1,"starred":1}"#;
-
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/1.json")
-        .set_payload(payload)
-        .insert_header(("content-type", "application/json"))
+        .set_form(&[("archive", "1"), ("starred", "1")])
         .to_request();
 
     let before_call_time = Utc::now();
@@ -448,13 +446,10 @@ async fn patch_entry_unarchive_and_unstar(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Unarchive and unstar entry 4 (which is archived and starred)
-    let payload = r#"{"archive":0,"starred":0}"#;
-
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/4.json")
-        .set_payload(payload)
-        .insert_header(("content-type", "application/json"))
+        .set_form(&[("archive", "0"), ("starred", "0")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -472,13 +467,10 @@ async fn patch_entry_add_tags(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Add tags to entry 1 (which has no tags)
-    let payload = r#"{"tags":"newtag1,newtag2"}"#;
-
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/1.json")
-        .set_payload(payload)
-        .insert_header(("content-type", "application/json"))
+        .set_form(&[("tags", "newtag1,newtag2")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -496,13 +488,10 @@ async fn patch_entry_replace_tags(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Replace tags on entry 2 (which has label1 and label2)
-    let payload = r#"{"tags":"label3,newtag"}"#;
-
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/2.json")
-        .set_payload(payload)
-        .insert_header(("content-type", "application/json"))
+        .set_form(&[("tags", "label3,newtag")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -520,13 +509,10 @@ async fn patch_entry_remove_all_tags(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Remove all tags from entry 2 (which has label1 and label2)
-    let payload = r#"{"tags":""}"#;
-
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/2.json")
-        .set_payload(payload)
-        .insert_header(("content-type", "application/json"))
+        .set_form(&[("tags", "")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -539,13 +525,10 @@ async fn patch_entry_remove_all_tags(pool: SqlitePool) {
 async fn patch_entry_not_found(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    let payload = r#"{"title":"Updated"}"#;
-
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/999.json")
-        .set_payload(payload)
-        .insert_header(("content-type", "application/json"))
+        .set_form(&[("title", "Updated")])
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -562,13 +545,10 @@ async fn patch_entry_make_public(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Make entry 1 public (which is not public)
-    let payload = r#"{"public":1}"#;
-
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/1.json")
-        .set_payload(payload)
-        .insert_header(("content-type", "application/json"))
+        .set_form(&[("public", "1")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;

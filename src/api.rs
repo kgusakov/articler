@@ -721,7 +721,7 @@ pub async fn post_entry_tags(
 pub async fn patch_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
-    request: Json<UpdateEntry>,
+    request: web::Form<UpdateEntry>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Entry>> {
     let entry_id = entry_id.into_inner();
