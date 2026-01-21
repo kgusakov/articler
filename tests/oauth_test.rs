@@ -11,7 +11,10 @@ use actix_web::{
 };
 use serde_json::Value;
 use sqlx::SqlitePool;
-use wallabag_rs::api::{app, app_state_init, post_token};
+use wallabag_rs::{
+    api::{app, app_state_init, post_token},
+    scrapper::Scrapper,
+};
 
 static INIT: Once = Once::new();
 
@@ -28,7 +31,11 @@ async fn init_app(
 
     let cookie_key = Key::from(&[0u8; 64]);
 
-    test::init_service(app(web::Data::new(app_state_init(pool.into())), cookie_key)).await
+    test::init_service(app(
+        web::Data::new(app_state_init(pool.into(), Scrapper::new(None).unwrap())),
+        cookie_key,
+    ))
+    .await
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("oauth"))]

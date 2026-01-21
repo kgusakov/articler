@@ -1,5 +1,6 @@
 use crate::fake_ui::{developer, index, login, login_check};
 use crate::helpers::find_user;
+use crate::scrapper::Scrapper;
 use crate::{
     helpers::{generate_uid, hash_str, verify_password},
     models::{Entry, Tag},
@@ -22,6 +23,7 @@ use actix_web::FromRequest;
 use actix_web::body::MessageBody;
 use actix_web::cookie::Key;
 use actix_web::dev::{AppConfig, Service, ServiceFactory, ServiceResponse};
+use actix_web::rt::task;
 use actix_web::{
     App, Error, HttpMessage, HttpServer, Responder,
     dev::{Server, ServiceRequest},
@@ -243,23 +245,39 @@ pub async fn post_entries(
     request: web::Form<AddEntry>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<AddEntryResponse>> {
-    //
+    // TODO
     // Check if url already exist:
     //    - if exist update the current entry
     //    - if not - create new one
     //
     // In both case if title and/or content is not set - both will be retrieved from the internet again
+    let default_title = "Default Title".to_string();
+
     let request = request.into_inner();
 
-    // TODO must be received by scrapper
-    let title = "Title";
-    // TODO must be received by scrapper
-    let content = "Content";
+    let (title, content) = {
+        if let Some(req_content) = request.content {
+            (request.title.unwrap_or(default_title), req_content)
+        } else {
+            let (byte_content, extracted_title) = data
+                .scrapper
+                .extract(&request.url)
+                .await
+                .map_err(ErrorInternalServerError)?;
+
+            (
+                extracted_title.unwrap_or(default_title),
+                String::from_utf8_lossy(&byte_content).into_owned(),
+            )
+        }
+    };
+
     // TODO must be received by scrapper
     let mimetype = "text/html";
     // TODO must be calculated
     let reading_time = 0;
-    // TODO url without domain must be handled in an appropriate way
+
+    // TODO domain name is empty if ip-based
     let domain_name = request.url.domain().unwrap_or("");
 
     let now = Utc::now().timestamp();
@@ -275,8 +293,8 @@ pub async fn post_entries(
         hashed_url: hash_str(request.url.as_str()),
         given_url: request.url.to_string(),
         hashed_given_url: hash_str(request.url.as_str()),
-        title: request.title.unwrap_or(title.to_string()),
-        content: request.content.unwrap_or(content.to_string()),
+        title: title,
+        content: content,
         is_archived: archived,
         archived_at: if archived { Some(now) } else { None },
         is_starred: starred,
@@ -809,9 +827,10 @@ pub struct AppState {
     pub user_repository: Arc<dyn UserRepository>,
     pub client_repository: Arc<dyn ClientRepository>,
     pub token_storage: TokenStorage,
+    pub scrapper: Scrapper,
 }
 
-pub fn app_state_init(pool: Pool<Sqlite>) -> AppState {
+pub fn app_state_init(pool: Pool<Sqlite>, scrapper: Scrapper) -> AppState {
     let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
 
     AppState {
@@ -820,6 +839,7 @@ pub fn app_state_init(pool: Pool<Sqlite>) -> AppState {
         user_repository: Arc::new(SqliteUserRepository::new(pool.clone())),
         client_repository: Arc::new(SqliteClientRepository::new(pool)),
         token_storage: TokenStorage::default(),
+        scrapper: scrapper,
     }
 }
 

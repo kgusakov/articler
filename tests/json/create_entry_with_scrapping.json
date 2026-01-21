@@ -1,0 +1,34 @@
+{
+    "title": "Test Article Title",
+    "content": "<div id=\"readability-page-1\" class=\"page\"><p>Test Article Content</p>\n        </div>",
+    "is_archived": 1,
+    "is_starred": 1,
+    "tags": [
+        {
+            "label": "label 1",
+            "slug": "label-1"
+        },
+        {
+            "label": "label 2",
+            "slug": "label-2"
+        }
+    ],
+    "annotations": [],
+    "mimetype": "text/html",
+    "language": "ru",
+    "reading_time": 0,
+    "domain_name": "",
+    "preview_picture": "https://example.com/pic.jpg",
+    "origin_url": "https://example.com/origin/url",
+    "published_at": "2023-12-01T11:00:00Z",
+    "published_by": [
+        "author1",
+        "author2"
+    ],
+    "is_public": true,
+    "_links": {
+        "self": {
+            "href": "https://example.com/"
+        }
+    }
+}

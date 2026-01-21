@@ -27,8 +27,11 @@ actix-session = { version = "0.11.0", features = ["cookie-session"] }
 actix-http = "3.11.2"
 actix-service = "2.0.3"
 actix-utils = "3.0.1"
+dom_smoothie = "0.15.0"
+reqwest = { version = "0.13.1", features = ["socks"]}
 
 [dev-dependencies]
 proptest = "1.4"
 urlencoding = "2.1"
 regex = "1.11"
+wiremock = "0.6.5"

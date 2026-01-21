@@ -14,6 +14,7 @@ use actix_web::{
 
 use actix_web_httpauth::{extractors::bearer::BearerAuth, middleware::HttpAuthentication};
 use chrono::{DateTime, Utc};
+use rand::rngs::mock;
 use serde_json::Value;
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
@@ -24,7 +25,13 @@ use wallabag_rs::{
         delete_tag_from_entry, delete_tags_by_label, entries, exists, get_tags, get_tags_by_entry,
         patch_entry, post_entries, post_entry_tags, post_token, version,
     },
+    helpers::hash_str,
+    scrapper::Scrapper,
     storage::repository::{EntryRepository, SqliteEntryRepository, SqliteTagRepository},
+};
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
 };
 
 static INIT: Once = Once::new();
@@ -42,7 +49,11 @@ async fn init_app(
 
     let cookie_key = Key::from(&[0u8; 64]);
 
-    test::init_service(app(web::Data::new(app_state_init(pool.into())), cookie_key)).await
+    test::init_service(app(
+        web::Data::new(app_state_init(pool.into(), Scrapper::new(None).unwrap())),
+        cookie_key,
+    ))
+    .await
 }
 
 async fn auhorization_header(
@@ -281,6 +292,74 @@ async fn test_post_entries(pool: SqlitePool) {
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
     assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
+    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
+
+    assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "starred_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "archived_at", &result);
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
+async fn test_post_entries_with_scrapping_needed(pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    let mock_server = MockServer::start().await;
+    let base_server_uri = mock_server.uri();
+
+    let content = r#"
+            <!DOCTYPE html><html><title>Test Article Title</title><body><p>Test Article Content</p></body></html>
+        "#;
+
+    Mock::given(method("GET"))
+        .and(path("/test-article"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(content, "text/html"))
+        .mount(&mock_server)
+        .await;
+
+    let url = format!("{base_server_uri}/test-article");
+
+    let payload = format!(
+        "url={url}&archive=1&starred=1&tags=label 1,label 2&language=ru&published_at=2023-12-01T11:00:00Z&preview_picture=https://example.com/pic.jpg&authors=author1,author2&public=1&origin_url=https://example.com/origin/url"
+    );
+
+    let req = test::TestRequest::post()
+        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
+        .uri("/api/entries.json")
+        .set_payload(payload)
+        .insert_header(("content-type", "application/x-www-form-urlencoded"))
+        .to_request();
+
+    let before_call_time = Utc::now();
+    let resp = test::call_and_read_body(&app, req).await;
+    let after_call_time = Utc::now();
+
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/create_entry_with_scrapping.json"))
+            .unwrap();
+
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
+
+    assert_eq!(url, result.get("url").unwrap().as_str().unwrap());
+    assert_eq!(
+        hash_str(&url),
+        result.get("hashed_url").unwrap().as_str().unwrap()
+    );
+
+    // TODO implement integration test with redirects
+    assert_eq!(url, result.get("given_url").unwrap().as_str().unwrap());
+    assert_eq!(
+        hash_str(&url),
+        result.get("hashed_given_url").unwrap().as_str().unwrap()
+    );
+
     assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
 
     assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);

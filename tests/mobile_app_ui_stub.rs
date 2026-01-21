@@ -16,6 +16,7 @@ use sqlx::SqlitePool;
 use wallabag_rs::{
     api::app,
     fake_ui::{developer, index, login, login_check},
+    scrapper::Scrapper,
 };
 use wallabag_rs::{api::app_state_init, helpers::hash_password};
 
@@ -34,7 +35,11 @@ async fn init_ui_app(
 
     let cookie_key = Key::from(&[0u8; 64]);
 
-    test::init_service(app(web::Data::new(app_state_init(pool.into())), cookie_key)).await
+    test::init_service(app(
+        web::Data::new(app_state_init(pool.into(), Scrapper::new(None).unwrap())),
+        cookie_key,
+    ))
+    .await
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]

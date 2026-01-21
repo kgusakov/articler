@@ -5,9 +5,10 @@ mod api;
 mod fake_ui;
 mod helpers;
 mod models;
+mod scrapper;
 mod storage;
 
-use crate::api::app_state_init;
+use crate::{api::app_state_init, scrapper::Scrapper};
 use actix_web::cookie::Key;
 use sqlx::sqlite::SqlitePoolOptions;
 
@@ -19,7 +20,10 @@ async fn main() -> anyhow::Result<()> {
 
     let db_path = env::var("DATABASE_URL").expect("Environment variable DATABASE_URL is not set");
     let cookie_key = env::var("COOKIE_KEY").expect("Environment variable COOKIE_KEY is not set");
+    let proxy_scheme = env::var("ALL_PROXY").ok();
+
     let pool = SqlitePoolOptions::new().connect(&db_path).await?;
+    let scrapper = Scrapper::new(proxy_scheme).expect("Scrapper can't be initialized");
 
     let port = env::var("HTTP_PORT")
         .expect("Set HTTP_PORT env variable")
@@ -28,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
 
     http_server(
         port,
-        app_state_init(pool.clone()),
+        app_state_init(pool.clone(), scrapper),
         Key::from(cookie_key.as_bytes()),
     )?
     .await?;
