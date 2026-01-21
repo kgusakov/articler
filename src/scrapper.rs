@@ -54,8 +54,12 @@ impl Scrapper {
             ..Default::default()
         };
 
-        dbg!(String::from_utf8(buf.to_vec())?);
-        let mut readability = Readability::new(String::from_utf8(buf.to_vec())?, None, Some(cfg))?;
+        let mut readability = Readability::new(
+            // TODO potential huge allocation - need to investigate
+            String::from_utf8_lossy(&buf.to_vec()).to_string(),
+            None,
+            Some(cfg),
+        )?;
 
         let article: Article = readability.parse()?;
         Ok((article.content.as_bytes().to_vec(), Some(article.title)))
