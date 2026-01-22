@@ -10,7 +10,7 @@ use actix_web::{
 };
 use serde_json::Value;
 use sqlx::SqlitePool;
-use wallabag_rs::{api::app_state_init, app, scrapper::Scrapper};
+use wallabag_rs::{app, app_state_init, scrapper::Scrapper};
 
 static INIT: Once = Once::new();
 

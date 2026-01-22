@@ -668,19 +668,6 @@ pub struct AppState {
     pub scrapper: Scrapper,
 }
 
-pub fn app_state_init(pool: Pool<Sqlite>, scrapper: Scrapper) -> AppState {
-    let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
-
-    AppState {
-        tag_repository: tag_repo.clone(),
-        entry_repository: Arc::new(SqliteEntryRepository::new(pool.clone(), tag_repo.clone())),
-        user_repository: Arc::new(SqliteUserRepository::new(pool.clone())),
-        client_repository: Arc::new(SqliteClientRepository::new(pool)),
-        token_storage: TokenStorage::default(),
-        scrapper: scrapper,
-    }
-}
-
 #[derive(Serialize)]
 pub struct AddEntryResponse {
     #[serde(flatten)]
