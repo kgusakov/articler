@@ -5,14 +5,14 @@ mod api;
 mod fake_ui;
 mod helpers;
 mod models;
+mod oauth;
 mod scrapper;
 mod storage;
 
-use crate::{api::app_state_init, scrapper::Scrapper};
 use actix_web::cookie::Key;
 use sqlx::sqlite::SqlitePoolOptions;
-
-use crate::api::http_server;
+use wallabag_rs::scrapper::Scrapper;
+use wallabag_rs::{app_state_init, http_server};
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {

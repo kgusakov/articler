@@ -13,8 +13,8 @@ use actix_web::{
 };
 use regex::Regex;
 use sqlx::SqlitePool;
-use wallabag_rs::{api::app, scrapper::Scrapper};
 use wallabag_rs::{api::app_state_init, helpers::hash_password};
+use wallabag_rs::{app, scrapper::Scrapper};
 
 static INIT: Once = Once::new();
 

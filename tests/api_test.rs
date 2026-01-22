@@ -20,11 +20,8 @@ use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
 // TODO is it appropriate way?
 use wallabag_rs::{
-    api::{
-        app, app_state_init, auth_extractor, delete_entry, delete_tag_by_id, delete_tag_by_label,
-        delete_tag_from_entry, delete_tags_by_label, entries, exists, get_tags, get_tags_by_entry,
-        patch_entry, post_entries, post_entry_tags, post_token, version,
-    },
+    api::app_state_init,
+    app,
     helpers::hash_str,
     scrapper::Scrapper,
     storage::repository::{EntryRepository, SqliteEntryRepository, SqliteTagRepository},

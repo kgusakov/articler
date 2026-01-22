@@ -1,20 +1,16 @@
-use std::sync::{Arc, Once};
+use std::sync::Once;
 
 use actix_http::Request;
 use actix_web::{
-    App, Error,
+    Error,
     body::MessageBody,
     cookie::Key,
     dev::{Service, ServiceResponse},
-    middleware::Logger,
     test, web,
 };
 use serde_json::Value;
 use sqlx::SqlitePool;
-use wallabag_rs::{
-    api::{app, app_state_init, post_token},
-    scrapper::Scrapper,
-};
+use wallabag_rs::{api::app_state_init, app, scrapper::Scrapper};
 
 static INIT: Once = Once::new();
 
