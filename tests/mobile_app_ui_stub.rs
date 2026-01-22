@@ -11,7 +11,10 @@ use actix_web::{
 };
 use regex::Regex;
 use sqlx::SqlitePool;
-use wallabag_rs::{app, app_state_init, scrapper::Scrapper};
+use wallabag_rs::{
+    app::{app, app_state_init},
+    scrapper::Scrapper,
+};
 
 static INIT: Once = Once::new();
 

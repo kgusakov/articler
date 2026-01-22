@@ -7,7 +7,7 @@ use actix_web::{
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use serde::{Deserialize, Serialize};
 
-use crate::{api::AppState, helpers::find_user};
+use crate::{app::AppState, helpers::find_user};
 
 type Id = i64;
 

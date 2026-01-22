@@ -1,15 +1,11 @@
-use crate::oauth::{UserInfo, auth_extractor};
-use crate::scrapper::Scrapper;
+use super::oauth::UserInfo;
 use crate::{
+    app::AppState,
     helpers::{generate_uid, hash_str},
     models::{Entry, Tag},
-    storage::{
-        repository::{
-            self, ClientRepository, CreateEntry, CreateTag, EntriesCriteria, EntryRepository,
-            EntryRow, SortColumn, SortOrder, TagRepository, TagRow,
-            UpdateEntry as RepositoryUpdateEntry, UserRepository,
-        },
-        token_storage::TokenStorage,
+    storage::repository::{
+        self, CreateEntry, CreateTag, EntriesCriteria, EntryRow, SortColumn, SortOrder, TagRow,
+        UpdateEntry as RepositoryUpdateEntry,
     },
 };
 use actix_utils::future::{Ready, ready};
@@ -29,7 +25,7 @@ use serde_with::StringWithSeparator;
 use serde_with::formats::CommaSeparator;
 use serde_with::serde_as;
 use slug::slugify;
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
 use url::{ParseError, Url};
 
 type Id = i64;
@@ -37,7 +33,7 @@ type Id = i64;
 const VERSION: &str = "2.6.12";
 
 pub fn routes(cfg: &mut ServiceConfig) {
-    let oauth = HttpAuthentication::with_fn(auth_extractor);
+    let oauth = HttpAuthentication::with_fn(super::oauth::auth_extractor);
 
     cfg.route("/api/version.json", get().to(version))
         .route("/api/version", get().to(version));
@@ -652,15 +648,6 @@ pub async fn patch_entry(
     Ok(Json(entry))
 }
 
-pub struct AppState {
-    pub tag_repository: Arc<dyn TagRepository>,
-    pub entry_repository: Arc<dyn EntryRepository>,
-    pub user_repository: Arc<dyn UserRepository>,
-    pub client_repository: Arc<dyn ClientRepository>,
-    pub token_storage: TokenStorage,
-    pub scrapper: Scrapper,
-}
-
 #[derive(Serialize)]
 pub struct AddEntryResponse {
     #[serde(flatten)]
@@ -930,7 +917,7 @@ impl FromRequest for UserInfo {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::{Detail, EntriesRequest, FindSortEnum, FindSortOrder};
+    use crate::http::api::{Detail, EntriesRequest, FindSortEnum, FindSortOrder};
 
     #[test]
     fn test() {

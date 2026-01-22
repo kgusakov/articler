@@ -1,18 +1,11 @@
 use std::env;
 
-mod api;
-// TODO research why we need it here
-mod fake_ui;
-mod helpers;
-mod models;
-mod oauth;
-mod scrapper;
-mod storage;
-
 use actix_web::cookie::Key;
 use sqlx::sqlite::SqlitePoolOptions;
-use wallabag_rs::scrapper::Scrapper;
-use wallabag_rs::{app_state_init, http_server};
+use wallabag_rs::{
+    app::{app_state_init, http_server},
+    scrapper::Scrapper,
+};
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {

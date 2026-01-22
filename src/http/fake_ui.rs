@@ -7,7 +7,7 @@ use actix_web::{
 };
 use serde::Deserialize;
 
-use crate::{api::AppState, helpers::find_user};
+use crate::{app::AppState, helpers::find_user};
 
 const ANDROID_APP_NAME: &str = "Android app";
 
