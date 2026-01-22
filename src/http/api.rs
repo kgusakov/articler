@@ -9,13 +9,13 @@ use crate::{
     },
 };
 use actix_utils::future::{Ready, ready};
-use actix_web::FromRequest;
 use actix_web::web::{ServiceConfig, delete, get, patch, post};
 use actix_web::{
     Error, HttpMessage,
     error::{ErrorInternalServerError, ErrorNotFound},
     web::{self, Json, Query},
 };
+use actix_web::{FromRequest, guard};
 use actix_web_httpauth::middleware::HttpAuthentication;
 use anyhow::anyhow;
 use chrono::{DateTime, Utc};
@@ -41,7 +41,40 @@ pub fn routes(cfg: &mut ServiceConfig) {
     cfg.service(
         web::scope("/api")
             .wrap(oauth)
-            .route("/entries.json", post().to(post_entries))
+            .route(
+                "/entries.json",
+                web::route()
+                    .guard(guard::Post())
+                    .guard(guard::Header(
+                        "content-type",
+                        "application/x-www-form-urlencoded",
+                    ))
+                    .to(post_entries),
+            )
+            .route(
+                "/entries.json",
+                web::route()
+                    .guard(guard::Post())
+                    .guard(guard::Header("content-type", "application/json"))
+                    .to(post_entries_json),
+            )
+            .route(
+                "/entries",
+                web::route()
+                    .guard(guard::Post())
+                    .guard(guard::Header(
+                        "content-type",
+                        "application/x-www-form-urlencoded",
+                    ))
+                    .to(post_entries),
+            )
+            .route(
+                "/entries",
+                web::route()
+                    .guard(guard::Post())
+                    .guard(guard::Header("content-type", "application/json"))
+                    .to(post_entries_json),
+            )
             .route("/entries.json", get().to(entries))
             .route("/entries", get().to(entries))
             .service(
@@ -101,6 +134,22 @@ async fn post_entries(
     request: web::Form<AddEntry>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<AddEntryResponse>> {
+    do_post_entries(data, request.into_inner(), user_info).await
+}
+
+async fn post_entries_json(
+    data: web::Data<AppState>,
+    request: web::Json<AddEntry>,
+    user_info: UserInfo,
+) -> actix_web::Result<Json<AddEntryResponse>> {
+    do_post_entries(data, request.into_inner(), user_info).await
+}
+
+async fn do_post_entries(
+    data: web::Data<AppState>,
+    request: AddEntry,
+    user_info: UserInfo,
+) -> actix_web::Result<Json<AddEntryResponse>> {
     // TODO
     // Check if url already exist:
     //    - if exist update the current entry
@@ -108,8 +157,6 @@ async fn post_entries(
     //
     // In both case if title and/or content is not set - both will be retrieved from the internet again
     let default_title = "Default Title".to_string();
-
-    let request = request.into_inner();
 
     let (title, content) = {
         if let Some(req_content) = request.content {

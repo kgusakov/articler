@@ -11,7 +11,7 @@ use actix_web::{
 };
 
 use chrono::{DateTime, Utc};
-use serde_json::Value;
+use serde_json::{Value, json};
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
 // TODO is it appropriate way?
@@ -263,7 +263,88 @@ async fn get_entries_public(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
-async fn test_post_entries(pool: SqlitePool) {
+async fn test_post_entries_form_data(pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    let payload = "url=https://example.com/article&archive=1&starred=1&tags=label 1,label 2&title=New title&content=New content&language=ru&published_at=2023-12-01T11:00:00Z&preview_picture=https://example.com/pic.jpg&authors=author1,author2&public=1&origin_url=https://example.com/origin/url";
+
+    let req = test::TestRequest::post()
+        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
+        .uri("/api/entries")
+        .set_payload(payload)
+        .insert_header(("content-type", "application/x-www-form-urlencoded"))
+        .to_request();
+
+    let before_call_time = Utc::now();
+    let resp = test::call_and_read_body(&app, req).await;
+    let after_call_time = Utc::now();
+
+    let expected = serde_json::from_str::<Value>(include_str!("json/create_entry.json")).unwrap();
+
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
+    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
+
+    assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "starred_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "archived_at", &result);
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
+async fn test_post_entries_json_data(pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    let req = test::TestRequest::post()
+        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
+        .uri("/api/entries")
+        .set_json(json!({
+            "url": "https://example.com/article",
+            "archive": 1,
+            "starred": 1,
+            "tags": "label 1,label 2",
+            "title": "New title",
+            "content": "New content",
+            "language": "ru",
+            "published_at": "2023-12-01T11:00:00Z",
+            "preview_picture": "https://example.com/pic.jpg",
+            "authors": "author1,author2",
+            "public": 1,
+            "origin_url": "https://example.com/origin/url"
+        }))
+        .insert_header(("content-type", "application/json"))
+        .to_request();
+
+    let before_call_time = Utc::now();
+    let resp = test::call_and_read_body(&app, req).await;
+    let after_call_time = Utc::now();
+
+    let expected = serde_json::from_str::<Value>(include_str!("json/create_entry.json")).unwrap();
+
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
+    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
+
+    assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "starred_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "archived_at", &result);
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
+async fn test_post_entries_json_format_form_data(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let payload = "url=https://example.com/article&archive=1&starred=1&tags=label 1,label 2&title=New title&content=New content&language=ru&published_at=2023-12-01T11:00:00Z&preview_picture=https://example.com/pic.jpg&authors=author1,author2&public=1&origin_url=https://example.com/origin/url";
@@ -273,6 +354,52 @@ async fn test_post_entries(pool: SqlitePool) {
         .uri("/api/entries.json")
         .set_payload(payload)
         .insert_header(("content-type", "application/x-www-form-urlencoded"))
+        .to_request();
+
+    let before_call_time = Utc::now();
+    let resp = test::call_and_read_body(&app, req).await;
+    let after_call_time = Utc::now();
+
+    let expected = serde_json::from_str::<Value>(include_str!("json/create_entry.json")).unwrap();
+
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
+    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
+
+    assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "starred_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "archived_at", &result);
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
+async fn test_post_entries_json_format_json_data(pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    let req = test::TestRequest::post()
+        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
+        .uri("/api/entries.json")
+        .set_json(json!({
+            "url": "https://example.com/article",
+            "archive": 1,
+            "starred": 1,
+            "tags": "label 1,label 2",
+            "title": "New title",
+            "content": "New content",
+            "language": "ru",
+            "published_at": "2023-12-01T11:00:00Z",
+            "preview_picture": "https://example.com/pic.jpg",
+            "authors": "author1,author2",
+            "public": 1,
+            "origin_url": "https://example.com/origin/url"
+        }))
+        .insert_header(("content-type", "application/json"))
         .to_request();
 
     let before_call_time = Utc::now();
