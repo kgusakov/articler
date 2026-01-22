@@ -45,8 +45,6 @@ impl Scrapper {
             .send()
             .await?;
 
-        dbg!(&response);
-
         let buf = response.bytes().await?;
 
         let cfg = Config {
@@ -77,7 +75,7 @@ mod tests {
     use crate::scrapper::Scrapper;
 
     #[actix_web::test]
-    async fn test2() {
+    async fn test() {
         let mock_server = MockServer::start().await;
 
         let content = r#"

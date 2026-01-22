@@ -70,7 +70,7 @@ async fn test_oauth_post_token_password_grant_success(pool: SqlitePool) {
         "Token type should be bearer"
     );
     assert!(
-        resp.get("expire_in").unwrap().as_i64().unwrap() > 0,
+        resp.get("expires_in").unwrap().as_i64().unwrap() > 0,
         "Expiry should be positive"
     );
 }

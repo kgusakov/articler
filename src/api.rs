@@ -64,7 +64,7 @@ struct GetToken {
 #[derive(Serialize, Debug)]
 struct Token {
     access_token: String,
-    expire_in: i64,
+    expires_in: i64,
     token_type: String,
     scope: Option<String>,
     refresh_token: String,
@@ -141,7 +141,7 @@ pub async fn post_token(
 
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
-                                    expire_in: new_token.expires_in,
+                                    expires_in: new_token.expires_in,
                                     token_type: "bearer".to_string(),
                                     scope: None,
                                     refresh_token: new_token.refresh_token,
@@ -195,7 +195,7 @@ pub async fn post_token(
                             {
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
-                                    expire_in: new_token.expires_in,
+                                    expires_in: new_token.expires_in,
                                     token_type: "bearer".to_string(),
                                     scope: None,
                                     refresh_token: new_token.refresh_token,
