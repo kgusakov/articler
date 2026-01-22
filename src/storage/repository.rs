@@ -118,11 +118,7 @@ impl SqliteTagRepository {
 
 #[async_trait]
 pub trait TagRepository: Send + Sync {
-    async fn create_and_link_tags(
-        &self,
-        entry_id: Id,
-        tags: &Vec<CreateTag>,
-    ) -> Result<Vec<TagRow>>;
+    async fn create_and_link_tags(&self, entry_id: Id, tags: &[CreateTag]) -> Result<Vec<TagRow>>;
 
     async fn update_tags_by_entry_id(
         &self,
@@ -139,7 +135,7 @@ pub trait TagRepository: Send + Sync {
 
     async fn delete_by_id(&self, user_id: Id, id: Id) -> Result<Option<TagRow>>;
 
-    async fn delete_all_by_label(&self, user_id: Id, labels: &Vec<String>) -> Result<Vec<TagRow>>;
+    async fn delete_all_by_label(&self, user_id: Id, labels: &[String]) -> Result<Vec<TagRow>>;
 }
 
 pub struct SqliteUserRepository {
@@ -287,11 +283,7 @@ impl ClientRepository for SqliteClientRepository {
 #[async_trait]
 impl TagRepository for SqliteTagRepository {
     /* Return Vec of tags, which was linked to entry_id. Vec consists of ALL tags, even tags, which was already linked before and included in tags argument. */
-    async fn create_and_link_tags(
-        &self,
-        entry_id: Id,
-        tags: &Vec<CreateTag>,
-    ) -> Result<Vec<TagRow>> {
+    async fn create_and_link_tags(&self, entry_id: Id, tags: &[CreateTag]) -> Result<Vec<TagRow>> {
         if tags.is_empty() {
             return Ok(vec![]);
         }
@@ -417,7 +409,7 @@ impl TagRepository for SqliteTagRepository {
         .await?)
     }
 
-    async fn delete_all_by_label(&self, user_id: Id, labels: &Vec<String>) -> Result<Vec<TagRow>> {
+    async fn delete_all_by_label(&self, user_id: Id, labels: &[String]) -> Result<Vec<TagRow>> {
         let mut builder = QueryBuilder::new(&format!("DELETE FROM {TAGS_TABLE} WHERE user_id ="));
 
         builder.push_bind(user_id);
@@ -619,7 +611,7 @@ pub trait EntryRepository: Send + Sync {
     async fn create(
         &self,
         params: CreateEntry,
-        tags: &Vec<CreateTag>,
+        tags: &[CreateTag],
     ) -> Result<(EntryRow, Vec<TagRow>)>;
 
     async fn find_by_id(&self, user_id: Id, id: Id) -> Result<Option<FullEntry>>;
@@ -838,7 +830,7 @@ impl EntryRepository for SqliteEntryRepository {
     async fn create(
         &self,
         entry: CreateEntry,
-        tags: &Vec<CreateTag>,
+        tags: &[CreateTag],
     ) -> Result<(EntryRow, Vec<TagRow>)> {
         let id: i64 = sqlx::query_scalar(
             r#"

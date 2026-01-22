@@ -46,8 +46,8 @@ pub fn app(
     App::new()
         .app_data(app_data.clone())
         .wrap(Logger::default())
-        .configure(|cfg| crate::http::oauth::routes(cfg))
-        .configure(|cfg| crate::http::api::routes(cfg))
+        .configure(crate::http::oauth::routes)
+        .configure(crate::http::api::routes)
         .configure(|cfg| crate::http::fake_ui::routes(cfg, cookie_key))
 }
 
@@ -71,6 +71,6 @@ pub fn app_state_init(pool: Pool<Sqlite>, scrapper: Scrapper) -> AppState {
         user_repository: Arc::new(SqliteUserRepository::new(pool.clone())),
         client_repository: Arc::new(SqliteClientRepository::new(pool)),
         token_storage: TokenStorage::default(),
-        scrapper: scrapper,
+        scrapper,
     }
 }

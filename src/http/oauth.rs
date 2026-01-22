@@ -15,7 +15,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
     cfg.service(web::scope("/oauth/v2/token").route("", post().to(post_token)));
 }
 
-pub async fn post_token(
+async fn post_token(
     data: web::Data<AppState>,
     request: web::Form<GetToken>,
 ) -> actix_web::Result<Json<Token>> {

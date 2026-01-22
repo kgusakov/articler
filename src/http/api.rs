@@ -87,16 +87,16 @@ struct Exists {
 }
 
 // TODO current implementation needed only for mobile app healthchecks. Needed full implementation
-pub async fn exists() -> actix_web::Result<Json<Exists>> {
+async fn exists() -> actix_web::Result<Json<Exists>> {
     Ok(Json(Exists { exists: false }))
 }
 
-pub async fn version() -> actix_web::Result<Json<String>> {
+async fn version() -> actix_web::Result<Json<String>> {
     Ok(Json(VERSION.to_string()))
 }
 
 // TODO post with the same url is not supported
-pub async fn post_entries(
+async fn post_entries(
     data: web::Data<AppState>,
     request: web::Form<AddEntry>,
     user_info: UserInfo,
@@ -149,8 +149,8 @@ pub async fn post_entries(
         hashed_url: hash_str(request.url.as_str()),
         given_url: request.url.to_string(),
         hashed_given_url: hash_str(request.url.as_str()),
-        title: title,
-        content: content,
+        title,
+        content,
         is_archived: archived,
         archived_at: if archived { Some(now) } else { None },
         is_starred: starred,
@@ -211,7 +211,7 @@ pub async fn post_entries(
     }))
 }
 
-pub async fn entries(
+async fn entries(
     data: web::Data<AppState>,
     request: Query<EntriesRequest>,
     user_info: UserInfo,
@@ -265,7 +265,7 @@ pub async fn entries(
     Ok(web::Json(Entries {
         page: request.page,
         limit: request.per_page,
-        pages: pages,
+        pages,
         total: count_without_paging as i64,
         embedded: Embedded { items: ents },
         _links: Links {
@@ -277,7 +277,7 @@ pub async fn entries(
     }))
 }
 
-pub async fn get_tags_by_entry(
+async fn get_tags_by_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
     user_info: UserInfo,
@@ -304,7 +304,7 @@ pub async fn get_tags_by_entry(
     }
 }
 
-pub async fn get_tags(
+async fn get_tags(
     data: web::Data<AppState>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
@@ -325,7 +325,7 @@ struct TagLabel {
     label: String,
 }
 
-pub async fn delete_tag_by_id(
+async fn delete_tag_by_id(
     data: web::Data<AppState>,
     tag_id: web::Path<Id>,
     user_info: UserInfo,
@@ -343,7 +343,7 @@ pub async fn delete_tag_by_id(
     }
 }
 
-pub async fn delete_tag_by_label(
+async fn delete_tag_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagLabel>,
     user_info: UserInfo,
@@ -369,7 +369,7 @@ struct TagsLabel {
     labels: Vec<String>,
 }
 
-pub async fn delete_tags_by_label(
+async fn delete_tags_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagsLabel>,
     user_info: UserInfo,
@@ -396,14 +396,14 @@ enum Expect {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct DeleteEntryRequest {
+struct DeleteEntryRequest {
     #[serde(default)]
     expect: Expect,
 }
 
 #[derive(Serialize)]
 #[serde(untagged)]
-pub enum DeleteEntryResponse {
+enum DeleteEntryResponse {
     Id {
         id: i64,
     },
@@ -413,7 +413,7 @@ pub enum DeleteEntryResponse {
     },
 }
 
-pub async fn delete_tag_from_entry(
+async fn delete_tag_from_entry(
     data: web::Data<AppState>,
     ids: web::Path<(Id, Id)>,
     user_info: UserInfo,
@@ -451,7 +451,7 @@ pub async fn delete_tag_from_entry(
     }
 }
 
-pub async fn delete_entry(
+async fn delete_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
     request: Query<DeleteEntryRequest>,
@@ -512,7 +512,7 @@ struct EntryTags {
     labels: Vec<String>,
 }
 
-pub async fn post_entry_tags(
+async fn post_entry_tags(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
     request: web::Form<EntryTags>,
@@ -563,7 +563,7 @@ pub async fn post_entry_tags(
     }
 }
 
-pub async fn patch_entry(
+async fn patch_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
     request: web::Form<UpdateEntry>,
@@ -649,7 +649,7 @@ pub async fn patch_entry(
 }
 
 #[derive(Serialize)]
-pub struct AddEntryResponse {
+struct AddEntryResponse {
     #[serde(flatten)]
     entry: Entry,
     _links: Links,
@@ -661,7 +661,7 @@ struct Embedded {
 }
 
 #[derive(Serialize)]
-pub struct Entries {
+struct Entries {
     page: i64,
     limit: i64,
     pages: i64,
@@ -807,56 +807,56 @@ fn default_per_page() -> i64 {
 
 #[serde_as]
 #[derive(Deserialize, PartialEq, Debug)]
-pub struct AddEntry {
+struct AddEntry {
     // If not set - title will be retrieved by scrapping
-    pub title: Option<String>,
+    title: Option<String>,
     // If not set - content will be retrieved by scrapping
-    pub content: Option<String>,
+    content: Option<String>,
     #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
-    pub tags: Option<Vec<String>>,
+    tags: Option<Vec<String>>,
     #[serde_as(as = "Option<BoolFromInt>")]
-    pub archive: Option<bool>,
+    archive: Option<bool>,
     #[serde_as(as = "Option<BoolFromInt>")]
-    pub starred: Option<bool>,
+    starred: Option<bool>,
     // Will be set as given url for the entry
     // If there will be some redirects, result url will be set as entry url
-    pub url: Url,
-    pub language: Option<String>,
-    pub published_at: Option<DateTime<Utc>>,
-    pub preview_picture: Option<Url>,
+    url: Url,
+    language: Option<String>,
+    published_at: Option<DateTime<Utc>>,
+    preview_picture: Option<Url>,
     #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
-    pub authors: Option<Vec<String>>,
+    authors: Option<Vec<String>>,
     // Generate public link for the url or not
     #[serde_as(as = "Option<BoolFromInt>")]
-    pub public: Option<bool>,
+    public: Option<bool>,
     // Origin url for the entry (from where user found it).
-    pub origin_url: Option<String>,
+    origin_url: Option<String>,
 }
 
 #[serde_as]
 #[derive(Deserialize, PartialEq, Debug)]
-pub struct UpdateEntry {
-    pub title: Option<String>,
-    pub content: Option<String>,
+struct UpdateEntry {
+    title: Option<String>,
+    content: Option<String>,
     #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
-    pub tags: Option<Vec<String>>,
+    tags: Option<Vec<String>>,
     #[serde_as(as = "Option<BoolFromInt>")]
-    pub archive: Option<bool>,
+    archive: Option<bool>,
     #[serde_as(as = "Option<BoolFromInt>")]
-    pub starred: Option<bool>,
-    pub language: Option<String>,
-    pub published_at: Option<DateTime<Utc>>,
-    pub preview_picture: Option<Url>,
+    starred: Option<bool>,
+    language: Option<String>,
+    published_at: Option<DateTime<Utc>>,
+    preview_picture: Option<Url>,
     #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
-    pub authors: Option<Vec<String>>,
+    authors: Option<Vec<String>>,
     #[serde_as(as = "Option<BoolFromInt>")]
-    pub public: Option<bool>,
-    pub origin_url: Option<String>,
+    public: Option<bool>,
+    origin_url: Option<String>,
 }
 
 #[serde_as]
 #[derive(Deserialize, Debug, PartialEq)]
-pub struct EntriesRequest {
+struct EntriesRequest {
     #[serde_as(as = "Option<BoolFromInt>")]
     archive: Option<bool>,
     #[serde_as(as = "Option<BoolFromInt>")]

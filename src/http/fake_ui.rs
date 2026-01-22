@@ -174,10 +174,10 @@ async fn login_check(
     form: web::Form<LoginForm>,
     session: Session,
 ) -> impl Responder {
-    if let Ok(Some(user)) = find_user(&data.user_repository, &form.username, &form.password).await {
-        if let Err(err) = session.insert("user_id", user.id) {
-            return HttpResponse::from_error(ErrorInternalServerError(err));
-        }
+    if let Ok(Some(user)) = find_user(&data.user_repository, &form.username, &form.password).await
+        && let Err(err) = session.insert("user_id", user.id)
+    {
+        return HttpResponse::from_error(ErrorInternalServerError(err));
     }
 
     HttpResponse::Found()
