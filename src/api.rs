@@ -6,8 +6,7 @@ use crate::{
     storage::{
         repository::{
             self, ClientRepository, CreateEntry, CreateTag, EntriesCriteria, EntryRepository,
-            EntryRow, SortColumn, SortOrder, SqliteClientRepository, SqliteEntryRepository,
-            SqliteTagRepository, SqliteUserRepository, TagRepository, TagRow,
+            EntryRow, SortColumn, SortOrder, TagRepository, TagRow,
             UpdateEntry as RepositoryUpdateEntry, UserRepository,
         },
         token_storage::TokenStorage,
@@ -15,15 +14,10 @@ use crate::{
 };
 use actix_utils::future::{Ready, ready};
 use actix_web::FromRequest;
-use actix_web::body::MessageBody;
-use actix_web::cookie::Key;
-use actix_web::dev::{ServiceFactory, ServiceResponse};
 use actix_web::web::{ServiceConfig, delete, get, patch, post};
 use actix_web::{
-    App, Error, HttpMessage, HttpServer,
-    dev::{Server, ServiceRequest},
-    error::{self, ErrorInternalServerError, ErrorNotFound},
-    middleware::Logger,
+    Error, HttpMessage,
+    error::{ErrorInternalServerError, ErrorNotFound},
     web::{self, Json, Query},
 };
 use actix_web_httpauth::middleware::HttpAuthentication;
@@ -35,7 +29,6 @@ use serde_with::StringWithSeparator;
 use serde_with::formats::CommaSeparator;
 use serde_with::serde_as;
 use slug::slugify;
-use sqlx::{Pool, Sqlite};
 use std::{str::FromStr, sync::Arc};
 use url::{ParseError, Url};
 
@@ -925,7 +918,7 @@ impl FromRequest for UserInfo {
 
     fn from_request(
         req: &actix_web::HttpRequest,
-        payload: &mut actix_http::Payload,
+        _payload: &mut actix_http::Payload,
     ) -> Self::Future {
         if let Some(user_info) = req.extensions().get::<UserInfo>() {
             ready(Ok(user_info.clone()))

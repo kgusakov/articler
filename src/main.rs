@@ -1,4 +1,4 @@
-use std::{env, sync::Arc};
+use std::env;
 
 mod api;
 // TODO research why we need it here

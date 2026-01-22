@@ -1,13 +1,11 @@
-use std::sync::{Arc, Once};
+use std::sync::Once;
 
 use actix_http::Request;
-use actix_session::{SessionMiddleware, storage::CookieSessionStore};
 use actix_web::{
-    App, Error,
+    Error,
     body::MessageBody,
     cookie::Key,
     dev::{Service, ServiceResponse},
-    middleware::Logger,
     test,
     web::{self},
 };

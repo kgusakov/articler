@@ -28,7 +28,7 @@ pub fn routes(cfg: &mut ServiceConfig, cookie_key: Key) {
     );
 }
 
-async fn login(session: Session) -> impl Responder {
+async fn login(_session: Session) -> impl Responder {
     HttpResponse::Ok().append_header(("Content-type", "text/html")).body(
         r#"
         <html>

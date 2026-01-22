@@ -2,19 +2,15 @@ use std::sync::{Arc, Once};
 
 use actix_http::{Request, header};
 use actix_web::{
-    App, Error,
+    Error,
     body::MessageBody,
-    cookie::{Cookie, Key},
-    dev::{Service, ServiceRequest, ServiceResponse},
-    error,
-    middleware::Logger,
-    test::{self, call_and_read_body},
-    web::{self, service},
+    cookie::Key,
+    dev::{Service, ServiceResponse},
+    test::{self},
+    web::{self},
 };
 
-use actix_web_httpauth::{extractors::bearer::BearerAuth, middleware::HttpAuthentication};
 use chrono::{DateTime, Utc};
-use rand::rngs::mock;
 use serde_json::Value;
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
