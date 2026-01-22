@@ -2,7 +2,8 @@ use actix_web::{
     Error, HttpMessage,
     dev::ServiceRequest,
     error::{self, ErrorBadRequest, ErrorInternalServerError},
-    web::{self, Json, ServiceConfig, post},
+    guard,
+    web::{self, Json, ServiceConfig},
 };
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use serde::{Deserialize, Serialize};
@@ -12,15 +13,43 @@ use crate::{app::AppState, helpers::find_user};
 type Id = i64;
 
 pub fn routes(cfg: &mut ServiceConfig) {
-    cfg.service(web::scope("/oauth/v2/token").route("", post().to(post_token)));
+    cfg.service(
+        web::scope("/oauth/v2/token")
+            .route(
+                "",
+                web::route()
+                    .guard(guard::Post())
+                    .guard(guard::Header(
+                        "content-type",
+                        "application/x-www-form-urlencoded",
+                    ))
+                    .to(post_token),
+            )
+            .route(
+                "",
+                web::route()
+                    .guard(guard::Post())
+                    .guard(guard::Header("content-type", "application/json"))
+                    .to(post_token_json),
+            ),
+    );
+}
+
+async fn post_token_json(
+    data: web::Data<AppState>,
+    request: web::Json<GetToken>,
+) -> actix_web::Result<Json<Token>> {
+    create_token(data, request.into_inner()).await
 }
 
 async fn post_token(
     data: web::Data<AppState>,
     request: web::Form<GetToken>,
 ) -> actix_web::Result<Json<Token>> {
-    let r = request.into_inner();
+    create_token(data, request.into_inner()).await
+}
 
+async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Result<Json<Token>> {
     match r.grant_type {
         Some(gt) if gt == "password" => {
             if let Some(username) = r.username
