@@ -13,11 +13,7 @@ use actix_web::{
 };
 use regex::Regex;
 use sqlx::SqlitePool;
-use wallabag_rs::{
-    api::app,
-    fake_ui::{developer, index, login, login_check},
-    scrapper::Scrapper,
-};
+use wallabag_rs::{api::app, scrapper::Scrapper};
 use wallabag_rs::{api::app_state_init, helpers::hash_password};
 
 static INIT: Once = Once::new();
@@ -88,7 +84,6 @@ async fn android_app_login_flow(pool: SqlitePool) {
     let location = resp.headers().get("location").unwrap().to_str().unwrap();
     assert_eq!(location, "/");
 
-    dbg!(&resp.response().cookies().collect::<Vec<_>>());
     // Extract session cookie
     let cookie = resp.response().cookies().next().unwrap();
 

@@ -1,5 +1,10 @@
-use actix_session::Session;
-use actix_web::{HttpResponse, Responder, error::ErrorInternalServerError, get, post, web};
+use actix_session::{Session, SessionMiddleware, storage::CookieSessionStore};
+use actix_web::{
+    HttpResponse, Responder,
+    cookie::Key,
+    error::ErrorInternalServerError,
+    web::{self, ServiceConfig, get, post},
+};
 use serde::Deserialize;
 
 use crate::{api::AppState, helpers::find_user};
@@ -8,8 +13,22 @@ const ANDROID_APP_NAME: &str = "Android app";
 
 // The whole file is just a fake pages to support the way of authorization, which Android app is using
 
-#[get("/login")]
-pub async fn login(session: Session) -> impl Responder {
+pub fn routes(cfg: &mut ServiceConfig, cookie_key: Key) {
+    cfg.service(
+        web::scope("")
+            .wrap(
+                SessionMiddleware::builder(CookieSessionStore::default(), cookie_key.clone())
+                    .cookie_secure(false) // Set to true in production with HTTPS
+                    .build(),
+            )
+            .route("/login", get().to(login))
+            .route("/", get().to(index))
+            .route("/developer", get().to(developer))
+            .route("/login_check", post().to(login_check)),
+    );
+}
+
+async fn login(session: Session) -> impl Responder {
     HttpResponse::Ok().append_header(("Content-type", "text/html")).body(
         r#"
         <html>
@@ -54,8 +73,7 @@ pub async fn login(session: Session) -> impl Responder {
     "#)
 }
 
-#[get("/")]
-pub async fn index(session: Session) -> impl Responder {
+async fn index(session: Session) -> impl Responder {
     if session.contains_key("user_id") {
         HttpResponse::Ok()
             .append_header(("Content-type", "text/html"))
@@ -76,8 +94,7 @@ pub async fn index(session: Session) -> impl Responder {
     }
 }
 
-#[get("/developer")]
-pub async fn developer(session: Session, data: web::Data<AppState>) -> impl Responder {
+async fn developer(session: Session, data: web::Data<AppState>) -> impl Responder {
     if let Ok(Some(user_id)) = session.get("user_id") {
         if let Ok(Some(client_row)) = data
             .client_repository
@@ -152,8 +169,7 @@ struct LoginForm {
     password: String,
 }
 
-#[post("/login_check")]
-pub async fn login_check(
+async fn login_check(
     data: web::Data<AppState>,
     form: web::Form<LoginForm>,
     session: Session,

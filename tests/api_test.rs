@@ -721,7 +721,7 @@ async fn test_get_all_tags_empty(pool: SqlitePool) {
 
     let req = test::TestRequest::get()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/tags")
+        .uri("/api/tags.json")
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;

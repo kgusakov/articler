@@ -1,4 +1,4 @@
-use crate::fake_ui::{developer, index, login, login_check};
+use crate::fake_ui::routes;
 use crate::helpers::find_user;
 use crate::scrapper::Scrapper;
 use crate::{
@@ -14,23 +14,18 @@ use crate::{
         token_storage::TokenStorage,
     },
 };
-use actix_http::Request;
-use actix_service::IntoServiceFactory;
-use actix_session::SessionMiddleware;
-use actix_session::storage::CookieSessionStore;
 use actix_utils::future::{Ready, ready};
 use actix_web::FromRequest;
 use actix_web::body::MessageBody;
 use actix_web::cookie::Key;
 use actix_web::dev::{AppConfig, Service, ServiceFactory, ServiceResponse};
 use actix_web::rt::task;
+use actix_web::web::{ServiceConfig, delete, get, patch, post};
 use actix_web::{
     App, Error, HttpMessage, HttpServer, Responder,
     dev::{Server, ServiceRequest},
     error::{self, ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
-    get,
     middleware::Logger,
-    post, routes,
     web::{self, Json, Query},
 };
 use actix_web_httpauth::{extractors::bearer::BearerAuth, middleware::HttpAuthentication};
@@ -50,6 +45,55 @@ use url::{ParseError, Url};
 type Id = i64;
 
 const VERSION: &str = "2.6.12";
+
+pub fn _routes(cfg: &mut ServiceConfig) {
+    let oauth = HttpAuthentication::with_fn(auth_extractor);
+
+    cfg.route("/api/version.json", get().to(version))
+        .route("/api/version", get().to(version));
+
+    cfg.service(
+        web::scope("/api")
+            .wrap(oauth)
+            .route("/entries.json", post().to(post_entries))
+            .route("/entries.json", get().to(entries))
+            .route("/entries", get().to(entries))
+            .service(
+                web::scope("/entries")
+                    .route("/exists.json", get().to(exists))
+                    .route("/exists", get().to(exists))
+                    .route("/{entry_id}.json", delete().to(delete_entry))
+                    .route("/{entry_id}", delete().to(delete_entry))
+                    .route("/{entry_id}.json", patch().to(patch_entry))
+                    .route("/{entry_id}", patch().to(patch_entry))
+                    .route("/{entry_id}/tags", get().to(get_tags_by_entry))
+                    .route("/{entry_id}/tags.json", post().to(post_entry_tags))
+                    .route("/{entry_id}/tags", post().to(post_entry_tags))
+                    .route(
+                        "/{entry_id}/tags/{tag_id}.json",
+                        delete().to(delete_tag_from_entry),
+                    )
+                    .route(
+                        "/{entry_id}/tags/{tag_id}",
+                        delete().to(delete_tag_from_entry),
+                    ),
+            )
+            .route("/tags.json", get().to(get_tags))
+            .route("/tags", get().to(get_tags))
+            .service(
+                web::scope("/tags")
+                    .route("/label.json", delete().to(delete_tags_by_label))
+                    .route("/label", delete().to(delete_tags_by_label))
+                    .route("/{tag_id}.json", delete().to(delete_tag_by_id))
+                    .route("/{tag_id}", delete().to(delete_tag_by_id)),
+            )
+            .service(
+                web::scope("/tag")
+                    .route("/label.json", delete().to(delete_tag_by_label))
+                    .route("/label", delete().to(delete_tag_by_label)),
+            ),
+    );
+}
 
 #[derive(Deserialize, Debug)]
 struct GetToken {
@@ -96,9 +140,6 @@ struct Exists {
 }
 
 // TODO current implementation needed only for mobile app healthchecks. Needed full implementation
-#[routes]
-#[get("/entries/exists")]
-#[get("/entries/exists.json")]
 pub async fn exists() -> actix_web::Result<Json<Exists>> {
     Ok(Json(Exists { exists: false }))
 }
@@ -107,7 +148,6 @@ pub async fn version() -> actix_web::Result<Json<String>> {
     Ok(Json(VERSION.to_string()))
 }
 
-#[post("/oauth/v2/token")]
 pub async fn post_token(
     data: web::Data<AppState>,
     request: web::Form<GetToken>,
@@ -239,7 +279,6 @@ pub async fn post_token(
 }
 
 // TODO post with the same url is not supported
-#[post("/entries.json")]
 pub async fn post_entries(
     data: web::Data<AppState>,
     request: web::Form<AddEntry>,
@@ -355,10 +394,6 @@ pub async fn post_entries(
     }))
 }
 
-// TODO /api pref should be moved as a base prefix
-#[routes]
-#[get("/entries")]
-#[get("/entries.json")]
 pub async fn entries(
     data: web::Data<AppState>,
     request: Query<EntriesRequest>,
@@ -425,7 +460,6 @@ pub async fn entries(
     }))
 }
 
-#[get("/entries/{entry_id}/tags")]
 pub async fn get_tags_by_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
@@ -453,9 +487,6 @@ pub async fn get_tags_by_entry(
     }
 }
 
-#[routes]
-#[get("/tags.json")]
-#[get("/tags")]
 pub async fn get_tags(
     data: web::Data<AppState>,
     user_info: UserInfo,
@@ -477,9 +508,6 @@ struct TagLabel {
     label: String,
 }
 
-#[routes]
-#[delete("/tags/{tag_id}.json")]
-#[delete("/tags/{tag_id}")]
 pub async fn delete_tag_by_id(
     data: web::Data<AppState>,
     tag_id: web::Path<Id>,
@@ -498,9 +526,6 @@ pub async fn delete_tag_by_id(
     }
 }
 
-#[routes]
-#[delete("/tag/label.json")]
-#[delete("/tag/label")]
 pub async fn delete_tag_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagLabel>,
@@ -527,9 +552,6 @@ struct TagsLabel {
     labels: Vec<String>,
 }
 
-#[routes]
-#[delete("/tags/label.json")]
-#[delete("/tags/label")]
 pub async fn delete_tags_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagsLabel>,
@@ -574,9 +596,6 @@ pub enum DeleteEntryResponse {
     },
 }
 
-#[routes]
-#[delete("/entries/{entry_id}/tags/{tag_id}.json")]
-#[delete("/entries/{entry_id}/tags/{tag_id}")]
 pub async fn delete_tag_from_entry(
     data: web::Data<AppState>,
     ids: web::Path<(Id, Id)>,
@@ -615,9 +634,6 @@ pub async fn delete_tag_from_entry(
     }
 }
 
-#[routes]
-#[delete("/entries/{entry_id}.json")]
-#[delete("/entries/{entry_id}")]
 pub async fn delete_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
@@ -679,9 +695,6 @@ struct EntryTags {
     labels: Vec<String>,
 }
 
-#[routes]
-#[post("/entries/{entry_id}/tags.json")]
-#[post("/entries/{entry_id}/tags")]
 pub async fn post_entry_tags(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
@@ -733,9 +746,6 @@ pub async fn post_entry_tags(
     }
 }
 
-#[routes]
-#[patch("/entries/{entry_id}.json")]
-#[patch("/entries/{entry_id}")]
 pub async fn patch_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
@@ -871,40 +881,9 @@ pub fn app(
     App::new()
         .app_data(app_data.clone())
         .wrap(Logger::default())
-        .service(post_token)
-        // Don't use scope here - it will "eat" all other apis
-        // At the same time version must be not under oauth
-        .route("/api/version", web::get().to(version))
-        .route("/api/version.json", web::get().to(version))
-        .service(
-            web::scope("/api")
-                .wrap(oauth)
-                .service(entries)
-                .service(post_entries)
-                .service(patch_entry)
-                .service(delete_entry)
-                .service(get_tags_by_entry)
-                .service(get_tags)
-                .service(delete_tag_from_entry)
-                .service(delete_tags_by_label)
-                .service(delete_tag_by_id)
-                .service(delete_tag_by_label)
-                .service(post_entry_tags)
-                .service(post_token)
-                .service(exists),
-        )
-        .service(
-            web::scope("")
-                .wrap(
-                    SessionMiddleware::builder(CookieSessionStore::default(), cookie_key.clone())
-                        .cookie_secure(false) // Set to true in production with HTTPS
-                        .build(),
-                )
-                .service(index)
-                .service(login_check)
-                .service(developer)
-                .service(login),
-        )
+        .service(web::scope("/oauth/v2/token").route("", post().to(post_token)))
+        .configure(|cfg| _routes(cfg))
+        .configure(|cfg| routes(cfg, cookie_key))
 }
 
 #[derive(Serialize)]
