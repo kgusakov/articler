@@ -5,9 +5,8 @@ use url::Url;
 
 type Id = i64;
 
-// TODO investigate the good default traits to derive
 #[serde_as]
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct Entry {
     pub id: Id,
     pub url: Url,
@@ -39,7 +38,7 @@ pub struct Entry {
     pub uid: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct Tag {
     pub id: Id,
     pub label: String,

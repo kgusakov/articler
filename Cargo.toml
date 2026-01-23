@@ -29,6 +29,7 @@ actix-service = "2.0.3"
 actix-utils = "3.0.1"
 dom_smoothie = "0.15.0"
 reqwest = { version = "0.13.1", features = ["socks"]}
+dateparser = "0.2.1"
 
 [dev-dependencies]
 proptest = "1.4"

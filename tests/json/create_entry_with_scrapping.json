@@ -1,6 +1,6 @@
 {
-    "title": "Test Article Title",
-    "content": "<div id=\"readability-page-1\" class=\"page\"><p>Test Article Content</p>\n        </div>",
+    "title": "Test Title",
+    "content": "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>",
     "is_archived": 1,
     "is_starred": 1,
     "tags": [
@@ -15,12 +15,12 @@
     ],
     "annotations": [],
     "mimetype": "text/html",
-    "language": "ru",
+    "language": "en",
     "reading_time": 0,
-    "domain_name": "",
-    "preview_picture": "https://example.com/pic.jpg",
+    "domain_name": "127.0.0.1",
+    "preview_picture": "http://example.com/main.jpg",
     "origin_url": "https://example.com/origin/url",
-    "published_at": "2023-12-01T11:00:00Z",
+    "published_at": "2020-11-24T02:43:22Z",
     "published_by": [
         "author1",
         "author2"

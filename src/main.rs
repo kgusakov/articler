@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
     let proxy_scheme = env::var("ALL_PROXY").ok();
 
     let pool = SqlitePoolOptions::new().connect(&db_path).await?;
-    let scrapper = Scrapper::new(proxy_scheme).expect("Scrapper can't be initialized");
+    let scrapper = Scrapper::new(proxy_scheme.as_deref()).expect("Scrapper can't be initialized");
 
     let port = env::var("HTTP_PORT")
         .expect("Set HTTP_PORT env variable")

@@ -432,7 +432,7 @@ async fn test_post_entries_with_scrapping_needed(pool: SqlitePool) {
     let base_server_uri = mock_server.uri();
 
     let content = r#"
-            <!DOCTYPE html><html><title>Test Article Title</title><body><p>Test Article Content</p></body></html>
+            <!DOCTYPE html><html lang="en"><head><title>Test Title</title><meta property="article:published_time" content="2020-11-24T02:43:22+00:00"><meta property="og:image" content="http://example.com/main.jpg"></head><body><p>Test Content</p></body></html>
         "#;
 
     Mock::given(method("GET"))
@@ -444,7 +444,7 @@ async fn test_post_entries_with_scrapping_needed(pool: SqlitePool) {
     let url = format!("{base_server_uri}/test-article");
 
     let payload = format!(
-        "url={url}&archive=1&starred=1&tags=label 1,label 2&language=ru&published_at=2023-12-01T11:00:00Z&preview_picture=https://example.com/pic.jpg&authors=author1,author2&public=1&origin_url=https://example.com/origin/url"
+        "url={url}&archive=1&starred=1&tags=label 1,label 2&public=1&authors=author1,author2&origin_url=https://example.com/origin/url"
     );
 
     let req = test::TestRequest::post()

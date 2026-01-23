@@ -128,7 +128,6 @@ async fn version() -> actix_web::Result<Json<String>> {
     Ok(Json(VERSION.to_string()))
 }
 
-// TODO post with the same url is not supported
 async fn post_entries(
     data: web::Data<AppState>,
     request: web::Form<AddEntry>,
@@ -156,32 +155,37 @@ async fn do_post_entries(
     //    - if not - create new one
     //
     // In both case if title and/or content is not set - both will be retrieved from the internet again
-    let default_title = "Default Title".to_string();
-
-    let (title, content) = {
-        if let Some(req_content) = request.content {
-            (request.title.unwrap_or(default_title), req_content)
+    let (title, content, mime_type, published_at, language, preview_picture) =
+        if let (Some(t), Some(c)) = (request.title, request.content) {
+            (
+                t,
+                c,
+                "".to_string(),
+                request.published_at,
+                request.language,
+                request.preview_picture,
+            )
         } else {
-            let (byte_content, extracted_title) = data
+            let document = data
                 .scrapper
                 .extract(&request.url)
                 .await
                 .map_err(ErrorInternalServerError)?;
 
             (
-                extracted_title.unwrap_or(default_title),
-                String::from_utf8_lossy(&byte_content).into_owned(),
+                document.title,
+                String::from_utf8_lossy(&document.content_html).to_string(),
+                document.mime_type.unwrap_or("".to_string()),
+                document.published_at,
+                document.language,
+                document.image_url,
             )
-        }
-    };
+        };
 
-    // TODO must be received by scrapper
-    let mimetype = "text/html";
     // TODO must be calculated
     let reading_time = 0;
 
-    // TODO domain name is empty if ip-based
-    let domain_name = request.url.domain().unwrap_or("");
+    let domain_name = request.url.domain().or(request.url.host_str());
 
     let now = Utc::now().timestamp();
 
@@ -204,13 +208,13 @@ async fn do_post_entries(
         starred_at: if starred { Some(now) } else { None },
         created_at: now,
         updated_at: now,
-        mimetype: Some(mimetype.to_string()),
-        language: request.language,
+        mimetype: Some(mime_type),
+        language,
         reading_time,
-        domain_name: domain_name.to_string(),
-        preview_picture: request.preview_picture.map(|u| u.to_string()),
+        domain_name: domain_name.unwrap_or("").to_string(),
+        preview_picture: preview_picture.map(|u| u.to_string()),
         origin_url: request.origin_url.map(|u| u.to_string()),
-        published_at: request.published_at.map(|v| v.timestamp()),
+        published_at: published_at.map(|v| v.timestamp()),
         published_by: request.authors.map(|a| a.join(",")),
         is_public: request.public,
         uid: request.public.filter(|p| *p).map(|_b| generate_uid()),

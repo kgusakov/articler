@@ -1,6 +1,10 @@
+use chrono::DateTime;
+use chrono::Utc;
+use dateparser::parse;
 use dom_smoothie::{Article, CandidateSelectMode, Config, Readability};
 use reqwest::Client;
 use reqwest::Proxy;
+use reqwest::header;
 use reqwest::header::USER_AGENT;
 use std::string::FromUtf8Error;
 use thiserror::Error;
@@ -18,14 +22,26 @@ pub enum ScrapperError {
     IoError(#[from] std::io::Error),
     #[error(transparent)]
     Utf8Error(#[from] FromUtf8Error),
+    #[error(transparent)]
+    UrlParseError(#[from] url::ParseError),
 }
 
 pub struct Scrapper {
     client: Client,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct Document {
+    pub title: String,
+    pub content_html: Vec<u8>,
+    pub image_url: Option<Url>,
+    pub mime_type: Option<String>,
+    pub language: Option<String>,
+    pub published_at: Option<DateTime<Utc>>,
+}
+
 impl Scrapper {
-    pub fn new(proxy_scheme: Option<String>) -> Result<Self, ScrapperError> {
+    pub fn new(proxy_scheme: Option<&str>) -> Result<Self, ScrapperError> {
         let mut builder = Client::builder();
 
         if let Some(p) = proxy_scheme {
@@ -37,13 +53,18 @@ impl Scrapper {
         })
     }
 
-    pub async fn extract(&self, url: &Url) -> Result<(Vec<u8>, Option<String>), ScrapperError> {
+    pub async fn extract(&self, url: &Url) -> Result<Document, ScrapperError> {
         let response = self
             .client
             .get(url.clone())
             .header(USER_AGENT, USER_AGENT_VALUE)
             .send()
             .await?;
+
+        let mime_type = response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string());
 
         let buf = response.bytes().await?;
 
@@ -60,26 +81,45 @@ impl Scrapper {
         )?;
 
         let article: Article = readability.parse()?;
-        Ok((article.content.as_bytes().to_vec(), Some(article.title)))
+
+        let image_url = match article.image {
+            Some(u) => Some(Url::parse(&u)?),
+            _ => None,
+        };
+
+        let published_at = match article.published_time {
+            Some(t) => parse(&t).ok(),
+            None => None,
+        };
+
+        Ok(Document {
+            title: article.title,
+            content_html: article.content.as_bytes().to_vec(),
+            image_url,
+            mime_type,
+            language: article.lang,
+            published_at,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use chrono::NaiveDateTime;
     use url::Url;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
         matchers::{method, path},
     };
 
-    use crate::scrapper::Scrapper;
+    use crate::scrapper::{Document, Scrapper};
 
     #[actix_web::test]
     async fn test() {
         let mock_server = MockServer::start().await;
 
         let content = r#"
-            <!DOCTYPE html><html><title>Test Title</title><body><p>Test Content</p></body></html>
+            <!DOCTYPE html><html lang="en"><head><title>Test Title</title><meta property="article:published_time" content="2020-11-24T02:43:22+00:00"><meta property="og:image" content="http://example.com/main.jpg"></head><body><p>Test Content</p></body></html>
         "#;
 
         Mock::given(method("GET"))
@@ -92,13 +132,22 @@ mod tests {
 
         let scrapper = Scrapper::new(None).unwrap();
 
-        let (content, title) = scrapper.extract(&url).await.unwrap();
+        let document = scrapper.extract(&url).await.unwrap();
 
-        let expected =
-            "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>";
-
-        assert_eq!(expected, String::from_utf8_lossy(&content));
-        assert_eq!("Test Title", title.unwrap());
+        assert_eq!(Document {
+            title: "Test Title".to_string(),
+            content_html:
+                "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>"
+                    .into(),
+            image_url: Some(Url::parse("http://example.com/main.jpg").unwrap()),
+            mime_type: Some("text/html".to_string()),
+            language: Some("en".to_string()),
+            published_at: Some(
+                NaiveDateTime::parse_from_str("2020-11-24T02:43:22+00:00", "%Y-%m-%dT%H:%M:%S%:z")
+                    .unwrap()
+                    .and_utc()
+            )
+        }, document);
         mock_server.verify().await
     }
 }
