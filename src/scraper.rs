@@ -6,6 +6,7 @@ use reqwest::Client;
 use reqwest::Proxy;
 use reqwest::header;
 use reqwest::header::USER_AGENT;
+use std::ops::Deref;
 use std::string::FromUtf8Error;
 use thiserror::Error;
 use url::Url;
@@ -33,7 +34,7 @@ pub struct Scraper {
 #[derive(Debug, PartialEq)]
 pub struct Document {
     pub title: String,
-    pub content_html: Vec<u8>,
+    pub content_html: String,
     pub image_url: Option<Url>,
     pub mime_type: Option<String>,
     pub language: Option<String>,
@@ -56,7 +57,7 @@ impl Scraper {
     pub async fn extract(&self, url: &Url) -> Result<Document, ScraperError> {
         let response = self
             .client
-            .get(url.clone())
+            .get(url.as_str())
             .header(USER_AGENT, USER_AGENT_VALUE)
             .send()
             .await?;
@@ -73,12 +74,8 @@ impl Scraper {
             ..Default::default()
         };
 
-        let mut readability = Readability::new(
-            // TODO potential huge allocation - need to investigate
-            String::from_utf8_lossy(&buf).to_string(),
-            None,
-            Some(cfg),
-        )?;
+        let mut readability =
+            Readability::new(String::from_utf8_lossy(&buf).into_owned(), None, Some(cfg))?;
 
         let article: Article = readability.parse()?;
 
@@ -94,7 +91,7 @@ impl Scraper {
 
         Ok(Document {
             title: article.title,
-            content_html: article.content.as_bytes().to_vec(),
+            content_html: article.content.deref().to_owned(),
             image_url,
             mime_type,
             language: article.lang,

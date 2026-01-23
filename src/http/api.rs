@@ -174,7 +174,7 @@ async fn do_post_entries(
 
             (
                 document.title,
-                String::from_utf8_lossy(&document.content_html).to_string(),
+                document.content_html,
                 document.mime_type.unwrap_or("".to_string()),
                 document.published_at,
                 document.language,
@@ -578,21 +578,19 @@ async fn post_entry_tags(
         .map_err(ErrorInternalServerError)?
         .is_some()
     {
-        let full_tags = request
+        let full_tags: Vec<CreateTag> = request
             .into_inner()
             .labels
             .into_iter()
             .map(|l| CreateTag {
-                // TODO replace hardcoded value
-                user_id: 1,
-                // TODO remove clone
-                label: l.clone(),
-                slug: slugify(l),
+                user_id: user_info.user_id,
+                slug: slugify(&l),
+                label: l,
             })
             .collect();
 
         data.tag_repository
-            .update_tags_by_entry_id(user_info.user_id, entry_id, full_tags)
+            .update_tags_by_entry_id(user_info.user_id, entry_id, &full_tags)
             .await
             .map_err(ErrorInternalServerError)?;
 
@@ -603,8 +601,7 @@ async fn post_entry_tags(
             .map_err(ErrorInternalServerError)?
             .ok_or(ErrorNotFound("Entry not found"))?;
 
-        // TODO this repetitative pattern must be moved to the generic place
-        let entry_tags = tag_rows.into_iter().map(|t| t.into()).collect();
+        let entry_tags = tag_rows.into_iter().map(Tag::from).collect();
 
         Ok(Json(
             Entry::try_from((entry_row, entry_tags)).map_err(ErrorInternalServerError)?,
@@ -668,19 +665,17 @@ async fn patch_entry(
     }
 
     if let Some(tags) = request.tags {
-        let full_tags = tags
+        let full_tags: Vec<CreateTag> = tags
             .into_iter()
             .map(|l| CreateTag {
-                // TODO replace hardcoded value
-                user_id: 1,
-                // TODO remove clone
-                label: l.clone(),
-                slug: slugify(l),
+                user_id: user_info.user_id,
+                slug: slugify(&l),
+                label: l,
             })
             .collect();
 
         data.tag_repository
-            .update_tags_by_entry_id(user_info.user_id, entry_id, full_tags)
+            .update_tags_by_entry_id(user_info.user_id, entry_id, &full_tags)
             .await
             .map_err(ErrorInternalServerError)?;
     };

@@ -19,7 +19,7 @@ type Result<T> = std::result::Result<T, DbError>;
 type FullEntry = (EntryRow, Vec<TagRow>);
 type Id = i64;
 type Timestamp = i64;
-type ReadingTIme = i32;
+type ReadingTime = i32;
 
 #[derive(Error, Debug)]
 pub enum DbError {
@@ -124,7 +124,7 @@ pub trait TagRepository: Send + Sync {
         &self,
         user_id: Id,
         entry_id: Id,
-        tags: Vec<CreateTag>,
+        tags: &[CreateTag],
     ) -> Result<Vec<TagRow>>;
 
     async fn find_by_entry_id(&self, user_id: Id, entry_id: Id) -> Result<Vec<TagRow>>;
@@ -166,7 +166,6 @@ impl UserRepository for SqliteUserRepository {
         username: &str,
         password_hash: &str,
     ) -> Result<Option<UserRow>> {
-        dbg!(username, password_hash);
         let result = sqlx::query_as::<_, UserRow>(&format!(
             "SELECT * FROM {} WHERE username = ? AND password_hash = ?",
             USERS_TABLE
@@ -298,10 +297,9 @@ impl TagRepository for SqliteTagRepository {
 
         let mut tag_builder = QueryBuilder::new("INSERT INTO tags (user_id, label, slug) ");
         tag_builder.push_values(tags.iter(), |mut b, tag| {
-            // TODO can we remove cloning?
             b.push_bind(tag.user_id)
-                .push_bind(tag.label.clone())
-                .push_bind(tag.slug.clone());
+                .push_bind(&tag.label)
+                .push_bind(&tag.slug);
         });
         tag_builder.push(" ON CONFLICT DO NOTHING");
         tag_builder.build().execute(&self.pool).await?;
@@ -315,8 +313,7 @@ impl TagRepository for SqliteTagRepository {
         ));
         let mut separated = insert_query.separated(", ");
         for tag in tags {
-            // TODO remove clone()?
-            separated.push_bind(tag.label.clone());
+            separated.push_bind(&tag.label);
         }
         separated.push_unseparated(") ON CONFLICT DO NOTHING");
 
@@ -327,8 +324,7 @@ impl TagRepository for SqliteTagRepository {
 
         let mut tags_separated = get_tags.separated(", ");
         for tag in tags {
-            // TODO remove clone()?
-            tags_separated.push_bind(tag.label.clone());
+            tags_separated.push_bind(&tag.label);
         }
         tags_separated.push_unseparated(")");
 
@@ -342,7 +338,7 @@ impl TagRepository for SqliteTagRepository {
         &self,
         user_id: Id,
         entry_id: Id,
-        tags: Vec<CreateTag>,
+        tags: &[CreateTag],
     ) -> Result<Vec<TagRow>> {
         let result_tags = self.create_and_link_tags(entry_id, &tags).await?;
 
@@ -365,7 +361,7 @@ impl TagRepository for SqliteTagRepository {
 
         let mut separated = builder.separated(", ");
         for t in tags.into_iter() {
-            separated.push_bind(t.label);
+            separated.push_bind(&t.label);
         }
 
         separated.push_unseparated("))");
@@ -392,10 +388,12 @@ impl TagRepository for SqliteTagRepository {
 
     async fn get_all(&self, user_id: Id) -> Result<Vec<TagRow>> {
         Ok(
-            sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {TAGS_TABLE} t",))
-                .bind(user_id)
-                .fetch_all(&self.pool)
-                .await?,
+            sqlx::query_as::<_, TagRow>(
+                &format!("SELECT * FROM {TAGS_TABLE} t WHERE user_id = ?",),
+            )
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?,
         )
     }
 
@@ -418,8 +416,7 @@ impl TagRepository for SqliteTagRepository {
 
         let mut labels_separated = builder.separated(", ");
         for label in labels {
-            // TODO remove clone()?
-            labels_separated.push_bind(label.clone());
+            labels_separated.push_bind(label);
         }
         labels_separated.push_unseparated(") RETURNING *");
 
@@ -513,7 +510,7 @@ pub struct UpdateEntry {
     pub starred_at: UpdateField<Timestamp>,
     pub updated_at: Timestamp,
     pub language: UpdateField<String>,
-    pub reading_time: UpdateField<ReadingTIme>,
+    pub reading_time: UpdateField<ReadingTime>,
     pub preview_picture: UpdateField<String>,
     pub origin_url: UpdateField<String>,
     pub published_at: UpdateField<Timestamp>,
@@ -540,7 +537,7 @@ pub struct EntryRow {
     pub updated_at: Timestamp,
     pub mimetype: Option<String>,
     pub language: Option<String>,
-    pub reading_time: ReadingTIme,
+    pub reading_time: ReadingTime,
     pub domain_name: String,
     pub preview_picture: Option<String>,
     pub origin_url: Option<String>,
