@@ -668,7 +668,7 @@ impl EntryRepository for SqliteEntryRepository {
 
         if let Some(column) = &params.sort {
             q_builder.push(" ORDER BY ");
-            q_builder.push_bind(column.to_string());
+            q_builder.push(column.to_string());
 
             if let Some(order) = &params.order {
                 q_builder.push(" ");

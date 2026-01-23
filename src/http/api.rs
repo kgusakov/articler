@@ -223,8 +223,8 @@ async fn do_post_entries(
     let tag_to_create_tag = |label: String| -> CreateTag {
         CreateTag {
             user_id: user_info.user_id,
-            label: label.clone(),
-            slug: slugify(label),
+            slug: slugify(&label),
+            label: label,
         }
     };
 
@@ -239,7 +239,6 @@ async fn do_post_entries(
         // TODO if it is not new entry - we will force empty tags. It should be fixed when this method will support not only entry creations
         .unwrap_or(vec![]);
 
-    // TODO for create
     let (entry_row, tag_rows) = data
         .entry_repository
         .create(create_entry, &create_tags)

@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{app::AppState, helpers::find_user};
 
+static BEARER: &str = "bearer";
+
 type Id = i64;
 
 pub fn routes(cfg: &mut ServiceConfig) {
@@ -78,7 +80,7 @@ async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Resu
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
                                     expires_in: new_token.expires_in,
-                                    token_type: "bearer".to_string(),
+                                    token_type: BEARER.to_string(),
                                     scope: None,
                                     refresh_token: new_token.refresh_token,
                                 }))

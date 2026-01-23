@@ -21,7 +21,7 @@ pub fn hash_password(password: &str) -> Result<String, password_hash::errors::Er
         .hash_password(password.as_bytes(), &salt)?
         .into();
 
-    Ok(hash.as_str().to_string())
+    Ok(hash.to_string())
 }
 
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, password_hash::errors::Error> {
