@@ -1203,7 +1203,7 @@ mod tests {
         );
 
         // Test deleting with empty vector
-        let empty_result = tag_repo.delete_all_by_label(1, &vec![]).await.unwrap();
+        let empty_result = tag_repo.delete_all_by_label(1, &[]).await.unwrap();
         assert_eq!(
             empty_result.len(),
             0,

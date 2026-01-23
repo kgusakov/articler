@@ -32,7 +32,7 @@ async fn init_app(
     let cookie_key = Key::from(&[0u8; 64]);
 
     test::init_service(app(
-        web::Data::new(app_state_init(pool.into(), Scraper::new(None).unwrap())),
+        web::Data::new(app_state_init(pool, Scraper::new(None).unwrap())),
         cookie_key,
     ))
     .await
@@ -45,7 +45,7 @@ async fn test_oauth_post_token_password_grant_success(pool: SqlitePool) {
     let password = "test_password_123";
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "password"),
             ("username", "oauth_test_user"),
             ("password", password),
@@ -119,7 +119,7 @@ async fn test_oauth_missing_grant_type(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[("username", "oauth_test_user"), ("password", "password123")])
+        .set_form([("username", "oauth_test_user"), ("password", "password123")])
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -150,7 +150,7 @@ async fn test_oauth_invalid_grant_type(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "invalid_type"),
             ("username", "testuser"),
             ("password", "password123"),
@@ -186,7 +186,7 @@ async fn test_oauth_invalid_credentials(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "password"),
             ("username", "test_user_invalid"),
             ("password", "wrong_password"),
@@ -226,7 +226,7 @@ async fn test_oauth_invalid_client(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "password"),
             ("username", "test_user_client"),
             ("password", password),
@@ -260,7 +260,7 @@ async fn test_oauth_missing_username(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "password"),
             ("password", "test"),
             ("client_id", "client"),
@@ -293,7 +293,7 @@ async fn test_oauth_missing_password(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "password"),
             ("username", "user"),
             ("client_id", "client"),
@@ -326,7 +326,7 @@ async fn test_oauth_missing_client_id(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "password"),
             ("username", "user"),
             ("password", "test"),
@@ -363,7 +363,7 @@ async fn test_oauth_missing_client_secret(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "password"),
             ("username", "user"),
             ("password", "test"),
@@ -403,7 +403,7 @@ async fn test_oauth_refresh_token_grant_success(pool: SqlitePool) {
     // First, get an initial token using password grant
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "password"),
             ("username", "refresh_test_user"),
             ("password", password),
@@ -419,7 +419,7 @@ async fn test_oauth_refresh_token_grant_success(pool: SqlitePool) {
     // Now use the refresh token to get a new token
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "refresh_token"),
             ("client_id", "refresh_client"),
             ("client_secret", "refresh_secret"),
@@ -514,7 +514,7 @@ async fn test_oauth_refresh_with_invalid_token(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "refresh_token"),
             ("client_id", "invalid_refresh_client"),
             ("client_secret", "invalid_refresh_secret"),
@@ -551,7 +551,7 @@ async fn test_oauth_refresh_missing_refresh_token(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "refresh_token"),
             ("client_id", "invalid_refresh_client"),
             ("client_secret", "invalid_refresh_secret"),

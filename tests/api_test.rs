@@ -42,7 +42,7 @@ async fn init_app(
     let cookie_key = Key::from(&[0u8; 64]);
 
     test::init_service(app(
-        web::Data::new(app_state_init(pool.into(), Scraper::new(None).unwrap())),
+        web::Data::new(app_state_init(pool, Scraper::new(None).unwrap())),
         cookie_key,
     ))
     .await
@@ -53,7 +53,7 @@ async fn auhorization_header(
 ) -> String {
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
-        .set_form(&[
+        .set_form([
             ("grant_type", "password"),
             ("username", "wallabag"),
             ("password", "wallabag"),
@@ -589,7 +589,7 @@ async fn patch_entry_basic_fields(pool: SqlitePool) {
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/1.json")
-        .set_form(&[
+        .set_form([
             ("title", "Updated Title"),
             ("content", "Updated Content"),
             ("language", "fr"),
@@ -620,7 +620,7 @@ async fn patch_entry_archive_and_star(pool: SqlitePool) {
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/1.json")
-        .set_form(&[("archive", "1"), ("starred", "1")])
+        .set_form([("archive", "1"), ("starred", "1")])
         .to_request();
 
     let before_call_time = Utc::now();
@@ -647,7 +647,7 @@ async fn patch_entry_unarchive_and_unstar(pool: SqlitePool) {
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/4.json")
-        .set_form(&[("archive", "0"), ("starred", "0")])
+        .set_form([("archive", "0"), ("starred", "0")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -668,7 +668,7 @@ async fn patch_entry_add_tags(pool: SqlitePool) {
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/1.json")
-        .set_form(&[("tags", "newtag1,newtag2")])
+        .set_form([("tags", "newtag1,newtag2")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -689,7 +689,7 @@ async fn patch_entry_replace_tags(pool: SqlitePool) {
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/2.json")
-        .set_form(&[("tags", "label3,newtag")])
+        .set_form([("tags", "label3,newtag")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -710,7 +710,7 @@ async fn patch_entry_remove_all_tags(pool: SqlitePool) {
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/2.json")
-        .set_form(&[("tags", "")])
+        .set_form([("tags", "")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -726,7 +726,7 @@ async fn patch_entry_not_found(pool: SqlitePool) {
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/999.json")
-        .set_form(&[("title", "Updated")])
+        .set_form([("title", "Updated")])
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -746,13 +746,13 @@ async fn patch_entry_make_public(pool: SqlitePool) {
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/1.json")
-        .set_form(&[("public", "1")])
+        .set_form([("public", "1")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
-    assert_eq!(result.get("is_public").unwrap().as_bool().unwrap(), true);
+    assert!(result.get("is_public").unwrap().as_bool().unwrap());
     assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
 }
 
@@ -1090,7 +1090,7 @@ async fn post_entry_tags_add(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/1/tags.json")
-        .set_form(&[("tags", "label3,label4")])
+        .set_form([("tags", "label3,label4")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -1112,7 +1112,7 @@ async fn post_entry_tags_replace(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/2/tags.json")
-        .set_form(&[("tags", "label5,label6")])
+        .set_form([("tags", "label5,label6")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -1134,7 +1134,7 @@ async fn post_entry_tags_remove_all(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/2/tags.json")
-        .set_form(&[("tags", "")])
+        .set_form([("tags", "")])
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -1157,7 +1157,7 @@ async fn post_entry_tags_not_found(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/999/tags.json")
-        .set_form(&[("tags", "label1,label2")])
+        .set_form([("tags", "label1,label2")])
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -1230,7 +1230,7 @@ async fn test_auth_success(pool: SqlitePool) {
         let password = "wallabag";
         let req = test::TestRequest::post()
             .uri("/oauth/v2/token")
-            .set_form(&[
+            .set_form([
                 ("grant_type", "password"),
                 ("username", "wallabag"),
                 ("password", password),

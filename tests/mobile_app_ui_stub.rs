@@ -32,7 +32,7 @@ async fn init_ui_app(
     let cookie_key = Key::from(&[0u8; 64]);
 
     test::init_service(app(
-        web::Data::new(app_state_init(pool.into(), Scraper::new(None).unwrap())),
+        web::Data::new(app_state_init(pool, Scraper::new(None).unwrap())),
         cookie_key,
     ))
     .await
@@ -75,7 +75,7 @@ async fn android_app_login_flow(pool: SqlitePool) {
     // Step 3: Login with credentials from fixtures
     let req = test::TestRequest::post()
         .uri("/login_check")
-        .set_form(&[("_username", "wallabag"), ("_password", "wallabag")])
+        .set_form([("_username", "wallabag"), ("_password", "wallabag")])
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -124,7 +124,7 @@ async fn android_app_login_flow(pool: SqlitePool) {
 
     let captures = client_pattern
         .captures(developer_html)
-        .expect(&format!("Client pattern not found in: {}", developer_html));
+        .unwrap_or_else(|| panic!("Client pattern not found in: {}", developer_html));
 
     // Verify captured groups
     assert_eq!(captures.get(1).unwrap().as_str(), "Android app - #1");
