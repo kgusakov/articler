@@ -12,7 +12,7 @@ use actix_web::{
 use sqlx::{Pool, Sqlite};
 
 use crate::{
-    scrapper::Scrapper,
+    scraper::Scraper,
     storage::{
         repository::{
             ClientRepository, EntryRepository, SqliteClientRepository, SqliteEntryRepository,
@@ -28,7 +28,7 @@ pub struct AppState {
     pub user_repository: Arc<dyn UserRepository>,
     pub client_repository: Arc<dyn ClientRepository>,
     pub token_storage: TokenStorage,
-    pub scrapper: Scrapper,
+    pub scraper: Scraper,
 }
 
 pub fn app(
@@ -62,7 +62,7 @@ pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::
     )
 }
 
-pub fn app_state_init(pool: Pool<Sqlite>, scrapper: Scrapper) -> AppState {
+pub fn app_state_init(pool: Pool<Sqlite>, scraper: Scraper) -> AppState {
     let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
 
     AppState {
@@ -71,6 +71,6 @@ pub fn app_state_init(pool: Pool<Sqlite>, scrapper: Scrapper) -> AppState {
         user_repository: Arc::new(SqliteUserRepository::new(pool.clone())),
         client_repository: Arc::new(SqliteClientRepository::new(pool)),
         token_storage: TokenStorage::default(),
-        scrapper,
+        scraper,
     }
 }

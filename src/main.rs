@@ -4,7 +4,7 @@ use actix_web::cookie::Key;
 use sqlx::sqlite::SqlitePoolOptions;
 use wallabag_rs::{
     app::{app_state_init, http_server},
-    scrapper::Scrapper,
+    scraper::Scraper,
 };
 
 #[actix_web::main]
@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
     let proxy_scheme = env::var("ALL_PROXY").ok();
 
     let pool = SqlitePoolOptions::new().connect(&db_path).await?;
-    let scrapper = Scrapper::new(proxy_scheme.as_deref()).expect("Scrapper can't be initialized");
+    let scraper = Scraper::new(proxy_scheme.as_deref()).expect("Scraper can't be initialized");
 
     let port = env::var("HTTP_PORT")
         .expect("Set HTTP_PORT env variable")
@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
 
     http_server(
         port,
-        app_state_init(pool.clone(), scrapper),
+        app_state_init(pool.clone(), scraper),
         Key::from(cookie_key.as_bytes()),
     )?
     .await?;

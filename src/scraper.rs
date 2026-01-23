@@ -13,7 +13,7 @@ use url::Url;
 const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
 
 #[derive(Error, Debug)]
-pub enum ScrapperError {
+pub enum ScraperError {
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
     #[error(transparent)]
@@ -26,7 +26,7 @@ pub enum ScrapperError {
     UrlParseError(#[from] url::ParseError),
 }
 
-pub struct Scrapper {
+pub struct Scraper {
     client: Client,
 }
 
@@ -40,8 +40,8 @@ pub struct Document {
     pub published_at: Option<DateTime<Utc>>,
 }
 
-impl Scrapper {
-    pub fn new(proxy_scheme: Option<&str>) -> Result<Self, ScrapperError> {
+impl Scraper {
+    pub fn new(proxy_scheme: Option<&str>) -> Result<Self, ScraperError> {
         let mut builder = Client::builder();
 
         if let Some(p) = proxy_scheme {
@@ -53,7 +53,7 @@ impl Scrapper {
         })
     }
 
-    pub async fn extract(&self, url: &Url) -> Result<Document, ScrapperError> {
+    pub async fn extract(&self, url: &Url) -> Result<Document, ScraperError> {
         let response = self
             .client
             .get(url.clone())
@@ -112,7 +112,7 @@ mod tests {
         matchers::{method, path},
     };
 
-    use crate::scrapper::{Document, Scrapper};
+    use crate::scraper::{Document, Scraper};
 
     #[actix_web::test]
     async fn test() {
@@ -130,9 +130,9 @@ mod tests {
 
         let url = Url::parse(format!("{}/test-article", mock_server.uri()).as_str()).unwrap();
 
-        let scrapper = Scrapper::new(None).unwrap();
+        let scraper = Scraper::new(None).unwrap();
 
-        let document = scrapper.extract(&url).await.unwrap();
+        let document = scraper.extract(&url).await.unwrap();
 
         assert_eq!(Document {
             title: "Test Title".to_string(),

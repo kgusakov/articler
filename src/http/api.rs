@@ -167,7 +167,7 @@ async fn do_post_entries(
             )
         } else {
             let document = data
-                .scrapper
+                .scraper
                 .extract(&request.url)
                 .await
                 .map_err(ErrorInternalServerError)?;
@@ -859,9 +859,9 @@ fn default_per_page() -> i64 {
 #[serde_as]
 #[derive(Deserialize, PartialEq, Debug)]
 struct AddEntry {
-    // If not set - title will be retrieved by scrapping
+    // If not set - title will be retrieved by scraping
     title: Option<String>,
-    // If not set - content will be retrieved by scrapping
+    // If not set - content will be retrieved by scraping
     content: Option<String>,
     #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
     tags: Option<Vec<String>>,

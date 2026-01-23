@@ -13,7 +13,7 @@ use serde_json::Value;
 use sqlx::SqlitePool;
 use wallabag_rs::{
     app::{app, app_state_init},
-    scrapper::Scrapper,
+    scraper::Scraper,
 };
 
 static INIT: Once = Once::new();
@@ -32,7 +32,7 @@ async fn init_app(
     let cookie_key = Key::from(&[0u8; 64]);
 
     test::init_service(app(
-        web::Data::new(app_state_init(pool.into(), Scrapper::new(None).unwrap())),
+        web::Data::new(app_state_init(pool.into(), Scraper::new(None).unwrap())),
         cookie_key,
     ))
     .await

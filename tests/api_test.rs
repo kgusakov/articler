@@ -18,7 +18,7 @@ use sqlx::SqlitePool;
 use wallabag_rs::{
     app::{app, app_state_init},
     helpers::hash_str,
-    scrapper::Scrapper,
+    scraper::Scraper,
     storage::repository::{EntryRepository, SqliteEntryRepository, SqliteTagRepository},
 };
 use wiremock::{
@@ -42,7 +42,7 @@ async fn init_app(
     let cookie_key = Key::from(&[0u8; 64]);
 
     test::init_service(app(
-        web::Data::new(app_state_init(pool.into(), Scrapper::new(None).unwrap())),
+        web::Data::new(app_state_init(pool.into(), Scraper::new(None).unwrap())),
         cookie_key,
     ))
     .await
@@ -425,7 +425,7 @@ async fn test_post_entries_json_format_json_data(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
-async fn test_post_entries_with_scrapping_needed(pool: SqlitePool) {
+async fn test_post_entries_with_scraping_needed(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let mock_server = MockServer::start().await;
@@ -459,7 +459,7 @@ async fn test_post_entries_with_scrapping_needed(pool: SqlitePool) {
     let after_call_time = Utc::now();
 
     let expected =
-        serde_json::from_str::<Value>(include_str!("json/create_entry_with_scrapping.json"))
+        serde_json::from_str::<Value>(include_str!("json/create_entry_with_scraping.json"))
             .unwrap();
 
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
