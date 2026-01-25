@@ -1,16 +1,22 @@
-use std::sync::{Arc, Once};
+use core::time;
+use std::{
+    rc::Rc,
+    sync::{Arc, Once},
+    thread,
+};
 
 use actix_http::{Request, header};
 use actix_web::{
     Error,
     body::MessageBody,
-    cookie::Key,
+    cookie::{Key, time::Duration},
     dev::{Service, ServiceResponse},
     test::{self},
     web::{self},
 };
 
 use chrono::{DateTime, Utc};
+use mimalloc::MiMalloc;
 use serde_json::{Value, json};
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
@@ -27,10 +33,14 @@ use wiremock::{
 };
 
 static INIT: Once = Once::new();
+// #[global_allocator]
+// static ALLOC: dhat::Alloc = dhat::Alloc;
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn init() {
     INIT.call_once(|| {
-        env_logger::init_from_env(env_logger::Env::new().default_filter_or("trace"));
+        env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     });
 }
 
@@ -1266,4 +1276,66 @@ async fn test_auth_success(pool: SqlitePool) {
     let body: Value = test::read_body_json(resp).await;
 
     assert_json_eq!(expected, body);
+}
+
+#[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
+async fn test_create_and_delete_entry_with_scraping(pool: SqlitePool) {
+    dbg!(&pool.connect_options());
+    // #[cfg(feature = "dhat-heap")]
+    // let _profiler = dhat::Profiler::new_heap();
+    let app = init_app(pool).await;
+
+    // Setup mock server for scraping
+    let mock_server = MockServer::start().await;
+    let content = include_str!("/tmp/new.html");
+
+    Mock::given(method("GET"))
+        .and(path("/article"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(content, "text/html"))
+        .mount(&mock_server)
+        .await;
+
+    let url = format!("{}/article", mock_server.uri());
+
+    // Step 1: Get OAuth token (using existing helper)
+    let auth_header = Rc::new(auhorization_header(&app).await);
+
+    for _i in 0..10 {
+        // Step 2: Create entry with scraping
+        let payload = format!("url={}", url);
+        let req = test::TestRequest::post()
+            .append_header((header::AUTHORIZATION, auth_header.clone().to_string()))
+            .uri("/api/entries.json")
+            .set_payload(payload)
+            .insert_header(("content-type", "application/x-www-form-urlencoded"))
+            .to_request();
+
+        let resp = test::call_and_read_body(&app, req).await;
+        let result: Value = serde_json::from_str(str::from_utf8(&resp).unwrap()).unwrap();
+
+        // Step 3: Extract entry ID
+        let entry_id = result.get("id").unwrap().as_i64().unwrap();
+        assert!(entry_id > 0, "Entry ID should be positive");
+        assert_eq!(
+            result.get("title").unwrap().as_str().unwrap(),
+            "A Social Filesystem — overreacted"
+        );
+
+        // Step 4: Delete entry by ID
+        let req = test::TestRequest::delete()
+            .append_header((header::AUTHORIZATION, auth_header.clone().to_string()))
+            .uri(&format!("/api/entries/{}.json?expect=id", entry_id))
+            .to_request();
+
+        let resp = test::call_and_read_body(&app, req).await;
+        let delete_result: Value = serde_json::from_str(str::from_utf8(&resp).unwrap()).unwrap();
+
+        // Step 5: Verify deletion
+        assert_eq!(delete_result.get("id").unwrap().as_i64().unwrap(), entry_id);
+    }
+
+    println!("Data is loaded");
+    thread::sleep(time::Duration::from_secs(120));
+
+    // mock_server.verify().await;
 }

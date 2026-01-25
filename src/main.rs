@@ -7,9 +7,16 @@ use wallabag_rs::{
     scraper::Scraper,
 };
 
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
+
+    #[cfg(feature = "dhat-heap")]
+    let _profiler = dhat::Profiler::new_heap();
 
     let db_path = env::var("DATABASE_URL").expect("Environment variable DATABASE_URL is not set");
     let cookie_key = env::var("COOKIE_KEY").expect("Environment variable COOKIE_KEY is not set");
