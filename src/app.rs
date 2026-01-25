@@ -23,6 +23,7 @@ use crate::{
 };
 
 pub struct AppState {
+    // TODO web::Data is an Arc itself. Looks like these arcs must be deleted
     pub tag_repository: Arc<dyn TagRepository>,
     pub entry_repository: Arc<dyn EntryRepository>,
     pub user_repository: Arc<dyn UserRepository>,
