@@ -340,7 +340,7 @@ impl TagRepository for SqliteTagRepository {
         entry_id: Id,
         tags: &[CreateTag],
     ) -> Result<Vec<TagRow>> {
-        let result_tags = self.create_and_link_tags(entry_id, &tags).await?;
+        let result_tags = self.create_and_link_tags(entry_id, tags).await?;
 
         let mut builder = QueryBuilder::new(format!(
             "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE entry_id =",
@@ -360,7 +360,7 @@ impl TagRepository for SqliteTagRepository {
         ));
 
         let mut separated = builder.separated(", ");
-        for t in tags.into_iter() {
+        for t in tags.iter() {
             separated.push_bind(&t.label);
         }
 

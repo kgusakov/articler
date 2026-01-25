@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  check:
+    name: Check
+    runs-on: alpine-3.23
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run cargo check
+        run: cargo check --all-targets
+      - name: Run cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Run cargo test
+        run: cargo test

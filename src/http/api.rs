@@ -224,7 +224,7 @@ async fn do_post_entries(
         CreateTag {
             user_id: user_info.user_id,
             slug: slugify(&label),
-            label: label,
+            label,
         }
     };
 
