@@ -10,7 +10,7 @@ use actix_web::{
 use serde::Deserialize;
 use sqlx::Transaction;
 
-use crate::{app::AppState, helpers::find_user, storage::repository::SqliteUserRepository};
+use crate::{app::AppState, helpers::find_user, repository::clients, storage::repository::SqliteUserRepository};
 
 const ANDROID_APP_NAME: &str = "Android app";
 
@@ -99,9 +99,7 @@ async fn index(session: Session) -> impl Responder {
 
 async fn developer(session: Session, data: web::Data<AppState>) -> impl Responder {
     if let Ok(Some(user_id)) = session.get("user_id") {
-        if let Ok(Some(client_row)) = data
-            .client_repository
-            .find_by_client_name_and_user_id(user_id, ANDROID_APP_NAME)
+        if let Ok(Some(client_row)) = clients::find_by_client_name_and_user_id(&data.pool, user_id, ANDROID_APP_NAME)
             .await
         {
             let (client_id, client_secret) = (client_row.client_id, client_row.client_secret);

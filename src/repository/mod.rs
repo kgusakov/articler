@@ -1,4 +1,5 @@
 pub mod users;
+pub mod clients;
 
 use sqlx::Error as SqlxError;
 use sqlx::{Error, Sqlite};

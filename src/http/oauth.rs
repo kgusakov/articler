@@ -8,7 +8,7 @@ use actix_web::{
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use serde::{Deserialize, Serialize};
 
-use crate::{app::AppState, helpers::find_user};
+use crate::{app::AppState, helpers::find_user, repository::clients};
 
 static BEARER: &str = "bearer";
 
@@ -60,9 +60,8 @@ async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Resu
                 if let Some(client_id) = r.client_id {
                     if let Some(client_secret) = r.client_secret {
                         if let Some(user_row) = find_user(&data.pool, &username, &password).await? {
-                            if let Some(client_row) = data
-                                .client_repository
-                                .find_by_user_id_client_id_and_secret(
+                            if let Some(client_row) = clients::find_by_user_id_client_id_and_secret(
+                                    &data.pool,
                                     user_row.id,
                                     &client_id,
                                     &client_secret,
@@ -116,9 +115,7 @@ async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Resu
         Some(gt) if gt == "refresh_token" => {
             if let Some(client_id) = r.client_id {
                 if let Some(client_secret) = r.client_secret {
-                    if data
-                        .client_repository
-                        .find_by_client_id_and_secret(&client_id, &client_secret)
+                    if clients::find_by_client_id_and_secret(&data.pool, &client_id, &client_secret)
                         .await
                         .map_err(ErrorInternalServerError)?
                         .is_some()
