@@ -1,4 +1,4 @@
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 
 use actix_web::error::ErrorInternalServerError;
 use argon2::{
@@ -7,7 +7,7 @@ use argon2::{
 };
 use sha1::{Digest, Sha1};
 
-use crate::storage::repository::{UserRepository, UserRow};
+use crate::repository::{self, users::UserRow};
 
 static PASSWORD_HASHER: LazyLock<Argon2> = LazyLock::new(Argon2::default);
 
@@ -35,12 +35,11 @@ pub fn generate_uid() -> String {
 }
 
 pub async fn find_user(
-    user_repository: &Arc<dyn UserRepository>,
+    executor: impl sqlx::Executor<'_, Database = repository::Db>,
     username: &str,
     password: &str,
 ) -> actix_web::Result<Option<UserRow>> {
-    if let Some(user_row) = user_repository
-        .find_by_username(username)
+    if let Some(user_row) = repository::users::find_by_username(executor, username)
         .await
         .map_err(ErrorInternalServerError)?
     {

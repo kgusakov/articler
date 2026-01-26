@@ -59,9 +59,7 @@ async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Resu
             {
                 if let Some(client_id) = r.client_id {
                     if let Some(client_secret) = r.client_secret {
-                        if let Some(user_row) =
-                            find_user(&data.user_repository, &username, &password).await?
-                        {
+                        if let Some(user_row) = find_user(&data.pool, &username, &password).await? {
                             if let Some(client_row) = data
                                 .client_repository
                                 .find_by_user_id_client_id_and_secret(

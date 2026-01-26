@@ -12,11 +12,12 @@ use actix_web::{
 use sqlx::{Pool, Sqlite};
 
 use crate::{
+    repository,
     scraper::Scraper,
     storage::{
         repository::{
             ClientRepository, EntryRepository, SqliteClientRepository, SqliteEntryRepository,
-            SqliteTagRepository, SqliteUserRepository, TagRepository, UserRepository,
+            SqliteTagRepository, TagRepository,
         },
         token_storage::TokenStorage,
     },
@@ -24,9 +25,10 @@ use crate::{
 
 pub struct AppState {
     // TODO web::Data is an Arc itself. Looks like these arcs must be deleted
+    // TODO use more generic database type here
+    pub pool: Pool<repository::Db>,
     pub tag_repository: Arc<dyn TagRepository>,
     pub entry_repository: Arc<dyn EntryRepository>,
-    pub user_repository: Arc<dyn UserRepository>,
     pub client_repository: Arc<dyn ClientRepository>,
     pub token_storage: TokenStorage,
     pub scraper: Scraper,
@@ -67,9 +69,9 @@ pub fn app_state_init(pool: Pool<Sqlite>, scraper: Scraper) -> AppState {
     let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
 
     AppState {
+        pool: pool.clone(),
         tag_repository: tag_repo.clone(),
         entry_repository: Arc::new(SqliteEntryRepository::new(pool.clone(), tag_repo.clone())),
-        user_repository: Arc::new(SqliteUserRepository::new(pool.clone())),
         client_repository: Arc::new(SqliteClientRepository::new(pool)),
         token_storage: TokenStorage::default(),
         scraper,

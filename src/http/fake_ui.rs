@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use actix_session::{Session, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::{
     HttpResponse, Responder,
@@ -6,8 +8,9 @@ use actix_web::{
     web::{self, ServiceConfig, get, post},
 };
 use serde::Deserialize;
+use sqlx::Transaction;
 
-use crate::{app::AppState, helpers::find_user};
+use crate::{app::AppState, helpers::find_user, storage::repository::SqliteUserRepository};
 
 const ANDROID_APP_NAME: &str = "Android app";
 
@@ -174,7 +177,7 @@ async fn login_check(
     form: web::Form<LoginForm>,
     session: Session,
 ) -> impl Responder {
-    if let Ok(Some(user)) = find_user(&data.user_repository, &form.username, &form.password).await
+    if let Ok(Some(user)) = find_user(&data.pool, &form.username, &form.password).await
         && let Err(err) = session.insert("user_id", user.id)
     {
         return HttpResponse::from_error(ErrorInternalServerError(err));
