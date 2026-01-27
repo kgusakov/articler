@@ -1,9 +1,11 @@
+use std::ops::DerefMut;
+
 use sqlx::{Row, prelude::FromRow, sqlite::SqliteRow};
 
 use super::*;
 
 pub async fn find_by_user_id_client_id_and_secret(
-    executor: impl sqlx::Executor<'_, Database = Db>,
+    executor: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     client_id: &str,
     client_secret: &str,
@@ -15,14 +17,14 @@ pub async fn find_by_user_id_client_id_and_secret(
     .bind(user_id)
     .bind(client_id)
     .bind(client_secret)
-    .fetch_optional(executor)
+    .fetch_optional(executor.deref_mut())
     .await?;
 
     Ok(result)
 }
 
 pub async fn find_by_client_id_and_secret(
-    executor: impl sqlx::Executor<'_, Database = Db>,
+    executor: &mut sqlx::Transaction<'_, Db>,
     client_id: &str,
     client_secret: &str,
 ) -> Result<Option<ClientRow>> {
@@ -32,14 +34,14 @@ pub async fn find_by_client_id_and_secret(
     ))
     .bind(client_id)
     .bind(client_secret)
-    .fetch_optional(executor)
+    .fetch_optional(executor.deref_mut())
     .await?;
 
     Ok(result)
 }
 
 pub async fn find_by_client_name_and_user_id(
-    executor: impl sqlx::Executor<'_, Database = Db>,
+    tx: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     client_name: &str,
 ) -> Result<Option<ClientRow>> {
@@ -49,7 +51,7 @@ pub async fn find_by_client_name_and_user_id(
     ))
     .bind(user_id)
     .bind(client_name)
-    .fetch_optional(executor)
+    .fetch_optional(tx.deref_mut())
     .await?;
 
     Ok(result)
@@ -89,7 +91,8 @@ mod tests {
     )]
     async fn test_find_by_user_id_client_id_and_secret(pool: SqlitePool) {
         // Test successful lookup with correct credentials
-        let client = find_by_user_id_client_id_and_secret(&pool, 1, "client_1", "secret_1")
+        let mut tx = pool.begin().await.unwrap();
+        let client = find_by_user_id_client_id_and_secret(&mut tx, 1, "client_1", "secret_1")
             .await
             .unwrap();
 
@@ -111,7 +114,7 @@ mod tests {
         );
 
         // Test successful lookup for second client
-        let client = find_by_user_id_client_id_and_secret(&pool, 1, "client_2", "secret_2")
+        let client = find_by_user_id_client_id_and_secret(&mut tx, 1, "client_2", "secret_2")
             .await
             .unwrap();
 
@@ -124,9 +127,10 @@ mod tests {
         assert_eq!(client.client_id, "client_2", "Client ID should match");
 
         // Test failure with wrong client_secret
-        let no_client = find_by_user_id_client_id_and_secret(&pool, 1, "client_1", "wrong_secret")
-            .await
-            .unwrap();
+        let no_client =
+            find_by_user_id_client_id_and_secret(&mut tx, 1, "client_1", "wrong_secret")
+                .await
+                .unwrap();
 
         assert!(
             no_client.is_none(),
@@ -134,9 +138,10 @@ mod tests {
         );
 
         // Test failure with wrong client_id
-        let no_client = find_by_user_id_client_id_and_secret(&pool, 1, "wrong_client", "secret_1")
-            .await
-            .unwrap();
+        let no_client =
+            find_by_user_id_client_id_and_secret(&mut tx, 1, "wrong_client", "secret_1")
+                .await
+                .unwrap();
 
         assert!(
             no_client.is_none(),
@@ -144,7 +149,7 @@ mod tests {
         );
 
         // Test failure with wrong user_id
-        let no_client = find_by_user_id_client_id_and_secret(&pool, 999, "client_1", "secret_1")
+        let no_client = find_by_user_id_client_id_and_secret(&mut tx, 999, "client_1", "secret_1")
             .await
             .unwrap();
 
@@ -154,8 +159,9 @@ mod tests {
         );
 
         // Test failure with all wrong parameters
+        let mut tx = pool.begin().await.unwrap();
         let no_client =
-            find_by_user_id_client_id_and_secret(&pool, 999, "wrong_client", "wrong_secret")
+            find_by_user_id_client_id_and_secret(&mut tx, 999, "wrong_client", "wrong_secret")
                 .await
                 .unwrap();
 
@@ -171,7 +177,8 @@ mod tests {
     )]
     async fn test_find_by_client_name_and_user_id(pool: SqlitePool) {
         // Test successful lookup with valid user_id and client name
-        let client = find_by_client_name_and_user_id(&pool, 1, "Android app")
+        let mut tx = pool.begin().await.unwrap();
+        let client = find_by_client_name_and_user_id(&mut tx, 1, "Android app")
             .await
             .unwrap();
 
@@ -193,7 +200,7 @@ mod tests {
         );
 
         // Test failure with wrong user_id
-        let no_client = find_by_client_name_and_user_id(&pool, 999, "Android app")
+        let no_client = find_by_client_name_and_user_id(&mut tx, 999, "Android app")
             .await
             .unwrap();
 
@@ -203,7 +210,7 @@ mod tests {
         );
 
         // Test failure with wrong client name
-        let no_client = find_by_client_name_and_user_id(&pool, 1, "Nonexistent App")
+        let no_client = find_by_client_name_and_user_id(&mut tx, 1, "Nonexistent App")
             .await
             .unwrap();
 
@@ -213,7 +220,7 @@ mod tests {
         );
 
         // Test failure with both wrong parameters
-        let no_client = find_by_client_name_and_user_id(&pool, 999, "Nonexistent App")
+        let no_client = find_by_client_name_and_user_id(&mut tx, 999, "Nonexistent App")
             .await
             .unwrap();
 

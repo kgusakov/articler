@@ -52,6 +52,7 @@ async fn post_token(
 }
 
 async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Result<Json<Token>> {
+    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
     match r.grant_type {
         Some(gt) if gt == "password" => {
             if let Some(username) = r.username
@@ -59,20 +60,22 @@ async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Resu
             {
                 if let Some(client_id) = r.client_id {
                     if let Some(client_secret) = r.client_secret {
-                        if let Some(user_row) = find_user(&data.pool, &username, &password).await? {
+                        if let Some(user_row) = find_user(&mut tx, &username, &password).await? {
                             if let Some(client_row) = clients::find_by_user_id_client_id_and_secret(
-                                    &data.pool,
-                                    user_row.id,
-                                    &client_id,
-                                    &client_secret,
-                                )
-                                .await
-                                .map_err(ErrorInternalServerError)?
+                                &mut tx,
+                                user_row.id,
+                                &client_id,
+                                &client_secret,
+                            )
+                            .await
+                            .map_err(ErrorInternalServerError)?
                             {
                                 let new_token = data
                                     .token_storage
                                     .new_token(user_row.id, client_row.id)
                                     .map_err(ErrorInternalServerError)?;
+
+                                tx.commit().await.map_err(ErrorInternalServerError)?;
 
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
@@ -115,7 +118,7 @@ async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Resu
         Some(gt) if gt == "refresh_token" => {
             if let Some(client_id) = r.client_id {
                 if let Some(client_secret) = r.client_secret {
-                    if clients::find_by_client_id_and_secret(&data.pool, &client_id, &client_secret)
+                    if clients::find_by_client_id_and_secret(&mut tx, &client_id, &client_secret)
                         .await
                         .map_err(ErrorInternalServerError)?
                         .is_some()
@@ -126,6 +129,8 @@ async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Resu
                                 .refresh(&refresh_token)
                                 .map_err(ErrorInternalServerError)?
                             {
+                                tx.commit().await.map_err(ErrorInternalServerError)?;
+
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
                                     expires_in: new_token.expires_in,

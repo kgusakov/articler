@@ -1,9 +1,11 @@
+use std::ops::DerefMut;
+
 use sqlx::{Row, prelude::FromRow, sqlite::SqliteRow};
 
 use super::*;
 
 pub async fn find_by_username_and_password(
-    executor: impl sqlx::Executor<'_, Database = Db>,
+    tx: &mut sqlx::Transaction<'_, Db>,
     username: &str,
     password_hash: &str,
 ) -> super::Result<Option<UserRow>> {
@@ -13,20 +15,20 @@ pub async fn find_by_username_and_password(
     ))
     .bind(username)
     .bind(password_hash)
-    .fetch_optional(executor)
+    .fetch_optional(tx.deref_mut())
     .await?;
 
     Ok(result)
 }
 
 pub async fn find_by_username(
-    executor: impl sqlx::Executor<'_, Database = Db>,
+    tx: &mut sqlx::Transaction<'_, Db>,
     username: &str,
 ) -> Result<Option<UserRow>> {
     let result =
         sqlx::query_as::<_, UserRow>(&format!("SELECT * FROM {} WHERE username = ?", USERS_TABLE))
             .bind(username)
-            .fetch_optional(executor)
+            .fetch_optional(tx.deref_mut())
             .await?;
 
     Ok(result)
@@ -68,9 +70,10 @@ mod tests {
     )]
     async fn test_find_by_username_and_password(pool: SqlitePool) {
         // Test successful lookup with correct credentials
-        let user = 
+        let mut tx = pool.begin().await.unwrap();
+        let user =
             find_by_username_and_password(
-                &pool,
+                &mut tx,
                 "wallabag",
                 "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
             )
@@ -90,8 +93,7 @@ mod tests {
         );
 
         // Test failure with wrong password hash
-        let no_user =
-            find_by_username_and_password(&pool, "wallabag", "wrong_hash")
+        let no_user = find_by_username_and_password(&mut tx, "wallabag", "wrong_hash")
             .await
             .unwrap();
 
@@ -103,7 +105,7 @@ mod tests {
         // Test failure with non-existent username
         let no_user =
             find_by_username_and_password(
-                &pool,
+                &mut tx,
                 "nonexistent",
                 "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
             )
@@ -116,8 +118,7 @@ mod tests {
         );
 
         // Test failure with both wrong username and password
-        let no_user =
-            find_by_username_and_password(&pool, "wrong_user", "wrong_hash")
+        let no_user = find_by_username_and_password(&mut tx, "wrong_user", "wrong_hash")
             .await
             .unwrap();
 

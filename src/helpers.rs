@@ -35,11 +35,11 @@ pub fn generate_uid() -> String {
 }
 
 pub async fn find_user(
-    executor: impl sqlx::Executor<'_, Database = repository::Db>,
+    tx: &mut sqlx::Transaction<'_, repository::Db>,
     username: &str,
     password: &str,
 ) -> actix_web::Result<Option<UserRow>> {
-    if let Some(user_row) = repository::users::find_by_username(executor, username)
+    if let Some(user_row) = repository::users::find_by_username(tx, username)
         .await
         .map_err(ErrorInternalServerError)?
     {

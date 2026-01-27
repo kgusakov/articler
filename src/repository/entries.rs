@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, ops::DerefMut};
 
 use indexmap::IndexMap;
 use sqlx::{
@@ -12,7 +12,7 @@ use super::{
 pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
 
 pub async fn find_all(
-    executor: impl sqlx::Executor<'_, Database = Db>,
+    tx: &mut sqlx::Transaction<'_, Db>,
     params: &EntriesCriteria,
 ) -> Result<Vec<(EntryRow, Vec<crate::repository::tags::TagRow>)>> {
     let mut q_builder = QueryBuilder::new(format!(
@@ -96,7 +96,7 @@ pub async fn find_all(
         ));
     }
 
-    let raw_rows = q_builder.build().fetch_all(executor).await?;
+    let raw_rows = q_builder.build().fetch_all(tx.deref_mut()).await?;
 
     let mut entrs = IndexMap::<i32, Vec<&SqliteRow>>::new();
 
@@ -125,24 +125,20 @@ pub async fn find_all(
     Ok(entrs_with_relations)
 }
 
-pub async fn exists_by_id(
-    executor: impl sqlx::Executor<'_, Database = Db>,
-    user_id: Id,
-    id: Id,
-) -> Result<bool> {
+pub async fn exists_by_id(tx: &mut sqlx::Transaction<'_, Db>, user_id: Id, id: Id) -> Result<bool> {
     let result: i32 = sqlx::query_scalar(&format!(
         "SELECT EXISTS(SELECT 1 FROM {ENTRIES_TABLE} WHERE user_id = ? AND id = ?)",
     ))
     .bind(user_id)
     .bind(id)
-    .fetch_one(executor)
+    .fetch_one(tx.deref_mut())
     .await?;
 
     Ok(result == 1)
 }
 
 pub async fn delete_tag_by_tag_id(
-    executor: impl sqlx::Executor<'_, Database = Db>,
+    tx: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     id: Id,
     tag_id: Id,
@@ -153,16 +149,13 @@ pub async fn delete_tag_by_tag_id(
     .bind(tag_id)
     .bind(id)
     .bind(user_id)
-    .execute(executor)
+    .execute(tx.deref_mut())
     .await?;
 
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn count(
-    executor: impl sqlx::Executor<'_, Database = Db>,
-    params: &EntriesCriteria,
-) -> Result<i64> {
+pub async fn count(tx: &mut sqlx::Transaction<'_, Db>, params: &EntriesCriteria) -> Result<i64> {
     // TODO rewrite this funny stupid count
     let mut q_builder = QueryBuilder::new(format!(
         r#"SELECT COUNT(DISTINCT e.id) FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"#,
@@ -211,11 +204,11 @@ pub async fn count(
         ));
     }
 
-    Ok(q_builder.build().fetch_one(executor).await?.get(0))
+    Ok(q_builder.build().fetch_one(tx.deref_mut()).await?.get(0))
 }
 
 pub async fn create(
-    executor: impl sqlx::Executor<'_, Database = Db> + Copy,
+    tx: &mut sqlx::Transaction<'_, Db>,
     entry: CreateEntry,
     tags: &[crate::repository::tags::CreateTag],
 ) -> Result<(EntryRow, Vec<crate::repository::tags::TagRow>)> {
@@ -253,16 +246,16 @@ pub async fn create(
     .bind(entry.published_by)
     .bind(entry.is_public)
     .bind(entry.uid)
-    .fetch_one(executor)
+    .fetch_one(tx.deref_mut())
     .await?;
 
     if !tags.is_empty() {
-        crate::repository::tags::create_and_link_tags(executor, id, tags).await?;
+        crate::repository::tags::create_and_link_tags(tx, id, tags).await?;
     }
 
     let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
         .bind(id)
-        .fetch_one(executor)
+        .fetch_one(tx.deref_mut())
         .await?;
 
     let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(&format!(
@@ -274,14 +267,14 @@ pub async fn create(
         ENTRIES_TAG_TABLE, TAGS_TABLE
     ))
     .bind(entry.id)
-    .fetch_all(executor)
+    .fetch_all(tx.deref_mut())
     .await?;
 
     Ok((entry, tags))
 }
 
 pub async fn find_by_id(
-    executor: impl sqlx::Executor<'_, Database = Db> + Copy,
+    tx: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     id: Id,
 ) -> Result<Option<FullEntry>> {
@@ -290,7 +283,7 @@ pub async fn find_by_id(
     ))
     .bind(user_id)
     .bind(id)
-    .fetch_optional(executor)
+    .fetch_optional(tx.deref_mut())
     .await?;
 
     let entry = match entry {
@@ -307,14 +300,14 @@ pub async fn find_by_id(
         ENTRIES_TAG_TABLE, TAGS_TABLE
     ))
     .bind(id)
-    .fetch_all(executor)
+    .fetch_all(tx.deref_mut())
     .await?;
 
     Ok(Some((entry, tags)))
 }
 
 pub async fn update_by_id(
-    executor: impl sqlx::Executor<'_, Database = Db>,
+    tx: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     id: Id,
     update: UpdateEntry,
@@ -402,20 +395,16 @@ pub async fn update_by_id(
     query_builder.push(" AND user_id = ");
     query_builder.push_bind(user_id);
 
-    let result = query_builder.build().execute(executor).await?;
+    let result = query_builder.build().execute(tx.deref_mut()).await?;
 
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn delete_by_id(
-    executor: impl sqlx::Executor<'_, Database = Db>,
-    user_id: Id,
-    id: Id,
-) -> Result<bool> {
+pub async fn delete_by_id(tx: &mut sqlx::Transaction<'_, Db>, user_id: Id, id: Id) -> Result<bool> {
     let result = sqlx::query("DELETE FROM entries WHERE user_id = ? AND id = ?")
         .bind(user_id)
         .bind(id)
-        .execute(executor)
+        .execute(tx.deref_mut())
         .await?;
 
     Ok(result.rows_affected() > 0)
@@ -607,10 +596,11 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_exists_by_id(pool: SqlitePool) {
-        let exists = exists_by_id(&pool, 1, 1).await.unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        let exists = exists_by_id(&mut tx, 1, 1).await.unwrap();
         assert!(exists, "Entry 1 should exist");
 
-        let not_exists = exists_by_id(&pool, 1, 999).await.unwrap();
+        let not_exists = exists_by_id(&mut tx, 1, 999).await.unwrap();
         assert!(!not_exists, "Entry 999 should not exist");
     }
 
@@ -620,20 +610,21 @@ mod tests {
     )]
     async fn test_delete_tag_by_tag_id(pool: SqlitePool) {
         // Entry 2 initially has 2 tags (label1/id=1, label2/id=2)
-        let tags_before = crate::repository::tags::find_by_entry_id(&pool, 1, 2)
+        let mut tx = pool.begin().await.unwrap();
+        let tags_before = crate::repository::tags::find_by_entry_id(&mut tx, 1, 2)
             .await
             .unwrap();
         assert_eq!(tags_before.len(), 2, "Entry 2 should have 2 tags initially");
 
         // Delete tag_id=1 from entry 2
-        let deleted = delete_tag_by_tag_id(&pool, 1, 2, 1).await.unwrap();
+        let deleted = delete_tag_by_tag_id(&mut tx, 1, 2, 1).await.unwrap();
         assert!(
             deleted,
             "Should successfully delete existing tag association"
         );
 
         // Verify only 1 tag remains
-        let tags_after = crate::repository::tags::find_by_entry_id(&pool, 1, 2)
+        let tags_after = crate::repository::tags::find_by_entry_id(&mut tx, 1, 2)
             .await
             .unwrap();
         assert_eq!(
@@ -644,14 +635,14 @@ mod tests {
         assert_eq!(tags_after[0].id, 2, "Only label2 should remain");
 
         // Try to delete same tag again - should return false
-        let not_deleted = delete_tag_by_tag_id(&pool, 1, 2, 1).await.unwrap();
+        let not_deleted = delete_tag_by_tag_id(&mut tx, 1, 2, 1).await.unwrap();
         assert!(
             !not_deleted,
             "Should return false for non-existent association"
         );
 
         // Try to delete tag from non-existent entry
-        let not_deleted = delete_tag_by_tag_id(&pool, 1, 999, 1).await.unwrap();
+        let not_deleted = delete_tag_by_tag_id(&mut tx, 1, 999, 1).await.unwrap();
         assert!(!not_deleted, "Should return false for non-existent entry");
     }
 
@@ -661,30 +652,31 @@ mod tests {
     )]
     async fn test_entry_delete_by_id(pool: SqlitePool) {
         // Verify entry 1 exists
-        let entry_before = find_by_id(&pool, 1, 1).await.unwrap();
+        let mut tx = pool.begin().await.unwrap();
+        let entry_before = find_by_id(&mut tx, 1, 1).await.unwrap();
         assert!(entry_before.is_some(), "Entry 1 should exist");
 
         // Delete entry 1
-        let deleted = delete_by_id(&pool, 1, 1).await.unwrap();
+        let deleted = delete_by_id(&mut tx, 1, 1).await.unwrap();
         assert!(deleted, "Should return true when entry is deleted");
 
         // Verify entry 1 no longer exists
-        let entry_after = find_by_id(&pool, 1, 1).await.unwrap();
+        let entry_after = find_by_id(&mut tx, 1, 1).await.unwrap();
         assert!(
             entry_after.is_none(),
             "Entry 1 should not exist after deletion"
         );
 
         // Try deleting the same entry again
-        let not_deleted = delete_by_id(&pool, 1, 1).await.unwrap();
+        let not_deleted = delete_by_id(&mut tx, 1, 1).await.unwrap();
         assert!(!not_deleted, "Should return false when entry doesn't exist");
 
         // Try deleting non-existent entry
-        let not_deleted = delete_by_id(&pool, 1, 999).await.unwrap();
+        let not_deleted = delete_by_id(&mut tx, 1, 999).await.unwrap();
         assert!(!not_deleted, "Should return false for non-existent entry");
 
         // Verify entry 2 still exists (wasn't affected)
-        let entry_2 = find_by_id(&pool, 1, 2).await.unwrap();
+        let entry_2 = find_by_id(&mut tx, 1, 2).await.unwrap();
         assert!(entry_2.is_some(), "Entry 2 should still exist");
     }
 }

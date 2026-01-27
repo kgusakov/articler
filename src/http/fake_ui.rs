@@ -1,4 +1,3 @@
-
 use actix_session::{Session, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::{
     HttpResponse, Responder,
@@ -97,9 +96,19 @@ async fn index(session: Session) -> impl Responder {
 
 async fn developer(session: Session, data: web::Data<AppState>) -> impl Responder {
     if let Ok(Some(user_id)) = session.get("user_id") {
-        if let Ok(Some(client_row)) = clients::find_by_client_name_and_user_id(&data.pool, user_id, ANDROID_APP_NAME)
-            .await
+        let mut tx = match data.pool.begin().await {
+            Ok(tx) => tx,
+            Err(err) => {
+                return HttpResponse::InternalServerError().body(err.to_string());
+            }
+        };
+
+        if let Ok(Some(client_row)) =
+            clients::find_by_client_name_and_user_id(&mut tx, user_id, ANDROID_APP_NAME).await
         {
+            if let Some(err) = tx.commit().await.err() {
+                return HttpResponse::InternalServerError().body(err.to_string());
+            }
             let (client_id, client_secret) = (client_row.client_id, client_row.client_secret);
             HttpResponse::Ok().append_header(("Content-type", "text/html")).body(format!(
             r#"
@@ -173,10 +182,18 @@ async fn login_check(
     form: web::Form<LoginForm>,
     session: Session,
 ) -> impl Responder {
-    if let Ok(Some(user)) = find_user(&data.pool, &form.username, &form.password).await
-        && let Err(err) = session.insert("user_id", user.id)
-    {
-        return HttpResponse::from_error(ErrorInternalServerError(err));
+    let mut tx = match data.pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return HttpResponse::from_error(ErrorInternalServerError(e)),
+    };
+
+    if let Ok(Some(user)) = find_user(&mut tx, &form.username, &form.password).await {
+        if let Some(err) = tx.commit().await.err() {
+            return HttpResponse::InternalServerError().body(err.to_string());
+        }
+        if let Err(err) = session.insert("user_id", user.id) {
+            return HttpResponse::from_error(ErrorInternalServerError(err));
+        }
     }
 
     HttpResponse::Found()
