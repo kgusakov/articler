@@ -15,7 +15,7 @@ use crate::{
     repository,
     scraper::Scraper,
     storage::{
-        repository::{EntryRepository, SqliteEntryRepository, SqliteTagRepository, TagRepository},
+        repository::{SqliteTagRepository, TagRepository},
         token_storage::TokenStorage,
     },
 };
@@ -25,7 +25,6 @@ pub struct AppState {
     // TODO use more generic database type here
     pub pool: Pool<repository::Db>,
     pub tag_repository: Arc<dyn TagRepository>,
-    pub entry_repository: Arc<dyn EntryRepository>,
     pub token_storage: TokenStorage,
     pub scraper: Scraper,
 }
@@ -65,9 +64,8 @@ pub fn app_state_init(pool: Pool<Sqlite>, scraper: Scraper) -> AppState {
     let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
 
     AppState {
-        pool: pool.clone(),
-        tag_repository: tag_repo.clone(),
-        entry_repository: Arc::new(SqliteEntryRepository::new(pool.clone(), tag_repo.clone())),
+        pool,
+        tag_repository: tag_repo,
         token_storage: TokenStorage::default(),
         scraper,
     }

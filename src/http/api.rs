@@ -3,10 +3,8 @@ use crate::{
     app::AppState,
     helpers::{generate_uid, hash_str},
     models::{Entry, Tag},
-    storage::repository::{
-        self, CreateEntry, CreateTag, EntriesCriteria, EntryRow, SortColumn, SortOrder, TagRow,
-        UpdateEntry as RepositoryUpdateEntry,
-    },
+    repository::entries,
+    storage::repository::{self, CreateTag, TagRow},
 };
 use actix_utils::future::{Ready, ready};
 use actix_web::web::{ServiceConfig, delete, get, patch, post};
@@ -193,7 +191,7 @@ async fn do_post_entries(
     let starred = request.starred.unwrap_or(false);
 
     // TODO can we remove all these ugly to_string?
-    let create_entry = CreateEntry {
+    let create_entry = entries::CreateEntry {
         user_id: user_info.user_id,
         // TODO actually here we must have url without redirects already
         url: request.url.to_string(),
@@ -239,9 +237,7 @@ async fn do_post_entries(
         // TODO if it is not new entry - we will force empty tags. It should be fixed when this method will support not only entry creations
         .unwrap_or(vec![]);
 
-    let (entry_row, tag_rows) = data
-        .entry_repository
-        .create(create_entry, &create_tags)
+    let (entry_row, tag_rows) = entries::create(&data.pool, create_entry, &create_tags, &*data.tag_repository)
         .await
         .map_err(ErrorInternalServerError)?;
 
@@ -268,7 +264,7 @@ async fn entries(
 ) -> actix_web::Result<Json<Entries>> {
     let request = request.into_inner();
 
-    let params = EntriesCriteria {
+    let params = entries::EntriesCriteria {
         user_id: user_info.user_id,
         archive: request.archive,
         starred: request.starred,
@@ -283,9 +279,7 @@ async fn entries(
         domain_name: request.domain_name,
     };
 
-    let count_without_paging = data
-        .entry_repository
-        .count(&params)
+    let count_without_paging = entries::count(&data.pool, &params)
         .await
         .map_err(ErrorInternalServerError)?;
 
@@ -296,9 +290,7 @@ async fn entries(
     }
 
     // TODO implement all needed request filters and etc
-    let entries = data
-        .entry_repository
-        .find_all(&params)
+    let entries = entries::find_all(&data.pool, &params)
         .await
         .map_err(ErrorInternalServerError)?;
 
@@ -334,9 +326,7 @@ async fn get_tags_by_entry(
 ) -> actix_web::Result<Json<Vec<Tag>>> {
     let entry_id = entry_id.into_inner();
 
-    if data
-        .entry_repository
-        .exists_by_id(user_info.user_id, entry_id)
+    if entries::exists_by_id(&data.pool, user_info.user_id, entry_id)
         .await
         .map_err(ErrorInternalServerError)?
     {
@@ -470,20 +460,15 @@ async fn delete_tag_from_entry(
 ) -> actix_web::Result<Json<Entry>> {
     let (entry_id, tag_id) = ids.into_inner();
 
-    if data
-        .entry_repository
-        .exists_by_id(user_info.user_id, entry_id)
+    if entries::exists_by_id(&data.pool, user_info.user_id, entry_id)
         .await
         .map_err(ErrorInternalServerError)?
     {
-        data.entry_repository
-            .delete_tag_by_tag_id(user_info.user_id, entry_id, tag_id)
+        entries::delete_tag_by_tag_id(&data.pool, user_info.user_id, entry_id, tag_id)
             .await
             .map_err(ErrorInternalServerError)?;
 
-        if let Some((entry_row, tag_rows)) = data
-            .entry_repository
-            .find_by_id(user_info.user_id, entry_id)
+        if let Some((entry_row, tag_rows)) = entries::find_by_id(&data.pool, user_info.user_id, entry_id)
             .await
             .map_err(ErrorInternalServerError)?
         {
@@ -512,9 +497,7 @@ async fn delete_entry(
 
     match request.expect {
         Expect::Id => {
-            let deleted = data
-                .entry_repository
-                .delete_by_id(user_info.user_id, entry_id)
+            let deleted = entries::delete_by_id(&data.pool, user_info.user_id, entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?;
 
@@ -525,18 +508,14 @@ async fn delete_entry(
             Ok(Json(DeleteEntryResponse::Id { id: entry_id }))
         }
         Expect::Full => {
-            let full_entry = data
-                .entry_repository
-                .find_by_id(user_info.user_id, entry_id)
+            let full_entry = entries::find_by_id(&data.pool, user_info.user_id, entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?;
 
             let (entry_row, tag_rows) =
                 full_entry.ok_or_else(|| ErrorNotFound("Entry not found"))?;
 
-            let deleted = data
-                .entry_repository
-                .delete_by_id(user_info.user_id, entry_id)
+            let deleted = entries::delete_by_id(&data.pool, user_info.user_id, entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?;
 
@@ -570,9 +549,7 @@ async fn post_entry_tags(
 ) -> actix_web::Result<Json<Entry>> {
     let entry_id = entry_id.into_inner();
     // TODO dirty design - looks like we need entry repository method for it
-    if data
-        .entry_repository
-        .find_by_id(user_info.user_id, entry_id)
+    if entries::find_by_id(&data.pool, user_info.user_id, entry_id)
         .await
         .map_err(ErrorInternalServerError)?
         .is_some()
@@ -593,9 +570,7 @@ async fn post_entry_tags(
             .await
             .map_err(ErrorInternalServerError)?;
 
-        let (entry_row, tag_rows) = data
-            .entry_repository
-            .find_by_id(user_info.user_id, entry_id)
+        let (entry_row, tag_rows) = entries::find_by_id(&data.pool, user_info.user_id, entry_id)
             .await
             .map_err(ErrorInternalServerError)?
             .ok_or(ErrorNotFound("Entry not found"))?;
@@ -621,7 +596,7 @@ async fn patch_entry(
 
     let now = Utc::now().timestamp();
 
-    let repo_update = RepositoryUpdateEntry {
+    let repo_update = entries::UpdateEntry {
         title: request.title.map(Some),
         content: request.content.map(Some),
         is_archived: request.archive.map(Some),
@@ -653,9 +628,7 @@ async fn patch_entry(
         },
     };
 
-    let updated = data
-        .entry_repository
-        .update_by_id(user_info.user_id, entry_id, repo_update)
+    let updated = entries::update_by_id(&data.pool, user_info.user_id, entry_id, repo_update)
         .await
         .map_err(ErrorInternalServerError)?;
 
@@ -679,9 +652,7 @@ async fn patch_entry(
             .map_err(ErrorInternalServerError)?;
     };
 
-    let (entry_row, tag_rows) = data
-        .entry_repository
-        .find_by_id(user_info.user_id, entry_id)
+    let (entry_row, tag_rows) = entries::find_by_id(&data.pool, user_info.user_id, entry_id)
         .await
         .map_err(ErrorInternalServerError)?
         .ok_or_else(|| ErrorNotFound("Entry not found"))?;
@@ -747,10 +718,10 @@ impl From<TagRow> for Tag {
     }
 }
 
-impl TryFrom<(EntryRow, Vec<Tag>)> for Entry {
+impl TryFrom<(entries::EntryRow, Vec<Tag>)> for Entry {
     type Error = anyhow::Error;
 
-    fn try_from((e, tags): (EntryRow, Vec<Tag>)) -> Result<Self, Self::Error> {
+    fn try_from((e, tags): (entries::EntryRow, Vec<Tag>)) -> Result<Self, Self::Error> {
         Ok(Entry {
             id: e.id,
             url: Url::parse(&e.url)?,
@@ -796,12 +767,12 @@ enum FindSortEnum {
     Archived,
 }
 
-impl From<FindSortEnum> for SortColumn {
+impl From<FindSortEnum> for entries::SortColumn {
     fn from(val: FindSortEnum) -> Self {
         match val {
-            FindSortEnum::Created => SortColumn::Created,
-            FindSortEnum::Updated => SortColumn::Updated,
-            FindSortEnum::Archived => SortColumn::Archived,
+            FindSortEnum::Created => entries::SortColumn::Created,
+            FindSortEnum::Updated => entries::SortColumn::Updated,
+            FindSortEnum::Archived => entries::SortColumn::Archived,
         }
     }
 }
@@ -815,11 +786,11 @@ enum FindSortOrder {
     Desc,
 }
 
-impl From<FindSortOrder> for SortOrder {
+impl From<FindSortOrder> for entries::SortOrder {
     fn from(val: FindSortOrder) -> Self {
         match val {
-            FindSortOrder::Asc => SortOrder::Asc,
-            FindSortOrder::Desc => SortOrder::Desc,
+            FindSortOrder::Asc => entries::SortOrder::Asc,
+            FindSortOrder::Desc => entries::SortOrder::Desc,
         }
     }
 }

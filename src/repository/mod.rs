@@ -1,14 +1,16 @@
 pub mod users;
 pub mod clients;
+pub mod entries;
 
 use sqlx::Error as SqlxError;
-use sqlx::{Error, Sqlite};
+use sqlx::Sqlite;
 use thiserror::Error;
 
 pub type Db = Sqlite;
 type Result<T> = std::result::Result<T, DbError>;
 type Id = i64;
 type Timestamp = i64;
+type ReadingTime = i32;
 
 const ENTRIES_TABLE: &str = "entries";
 const TAGS_TABLE: &str = "tags";

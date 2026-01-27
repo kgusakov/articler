@@ -18,8 +18,9 @@ use sqlx::SqlitePool;
 use wallabag_rs::{
     app::{app, app_state_init},
     helpers::hash_str,
+    repository::entries,
     scraper::Scraper,
-    storage::repository::{EntryRepository, SqliteEntryRepository, SqliteTagRepository},
+    storage::repository::SqliteTagRepository,
 };
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
@@ -511,10 +512,7 @@ fn assert_json_date_between(
 
 #[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
 async fn delete_entry_expect_id(pool: SqlitePool) {
-    let tag_rep = Arc::new(SqliteTagRepository::new(pool.clone()));
-    let entry_rep = SqliteEntryRepository::new(pool.clone(), tag_rep);
-
-    let app = init_app(pool).await;
+    let app = init_app(pool.clone()).await;
 
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
@@ -531,17 +529,14 @@ async fn delete_entry_expect_id(pool: SqlitePool) {
     );
 
     assert!(
-        entry_rep.find_by_id(1, 1).await.unwrap().is_none(),
+        entries::find_by_id(&pool, 1, 1).await.unwrap().is_none(),
         "Entry should be deleted from database"
     );
 }
 
 #[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
 async fn delete_entry_expect_full(pool: SqlitePool) {
-    let tag_rep = Arc::new(SqliteTagRepository::new(pool.clone()));
-    let entry_rep = SqliteEntryRepository::new(pool.clone(), tag_rep);
-
-    let app = init_app(pool).await;
+    let app = init_app(pool.clone()).await;
 
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
@@ -559,7 +554,7 @@ async fn delete_entry_expect_full(pool: SqlitePool) {
     );
 
     assert!(
-        entry_rep.find_by_id(1, 2).await.unwrap().is_none(),
+        entries::find_by_id(&pool, 1, 2).await.unwrap().is_none(),
         "Entry should be deleted from database"
     );
 }

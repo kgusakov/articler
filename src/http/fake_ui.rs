@@ -1,4 +1,3 @@
-use std::ops::{Deref, DerefMut};
 
 use actix_session::{Session, SessionMiddleware, storage::CookieSessionStore};
 use actix_web::{
@@ -8,9 +7,8 @@ use actix_web::{
     web::{self, ServiceConfig, get, post},
 };
 use serde::Deserialize;
-use sqlx::Transaction;
 
-use crate::{app::AppState, helpers::find_user, repository::clients, storage::repository::SqliteUserRepository};
+use crate::{app::AppState, helpers::find_user, repository::clients};
 
 const ANDROID_APP_NAME: &str = "Android app";
 
