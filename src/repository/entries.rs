@@ -215,7 +215,7 @@ pub async fn count(
 }
 
 pub async fn create(
-    pool: &sqlx::SqlitePool,
+    executor: impl sqlx::Executor<'_, Database = Db> + Copy,
     entry: CreateEntry,
     tags: &[crate::repository::tags::CreateTag],
 ) -> Result<(EntryRow, Vec<crate::repository::tags::TagRow>)> {
@@ -253,16 +253,16 @@ pub async fn create(
     .bind(entry.published_by)
     .bind(entry.is_public)
     .bind(entry.uid)
-    .fetch_one(pool)
+    .fetch_one(executor)
     .await?;
 
     if !tags.is_empty() {
-        crate::repository::tags::create_and_link_tags(pool, id, tags).await?;
+        crate::repository::tags::create_and_link_tags(executor, id, tags).await?;
     }
 
     let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
         .bind(id)
-        .fetch_one(pool)
+        .fetch_one(executor)
         .await?;
 
     let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(&format!(
@@ -274,19 +274,23 @@ pub async fn create(
         ENTRIES_TAG_TABLE, TAGS_TABLE
     ))
     .bind(entry.id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
 
     Ok((entry, tags))
 }
 
-pub async fn find_by_id(pool: &sqlx::SqlitePool, user_id: Id, id: Id) -> Result<Option<FullEntry>> {
+pub async fn find_by_id(
+    executor: impl sqlx::Executor<'_, Database = Db> + Copy,
+    user_id: Id,
+    id: Id,
+) -> Result<Option<FullEntry>> {
     let entry = sqlx::query_as::<_, EntryRow>(&format!(
         "SELECT * FROM {ENTRIES_TABLE} WHERE user_id = ? AND id = ?"
     ))
     .bind(user_id)
     .bind(id)
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await?;
 
     let entry = match entry {
@@ -303,7 +307,7 @@ pub async fn find_by_id(pool: &sqlx::SqlitePool, user_id: Id, id: Id) -> Result<
         ENTRIES_TAG_TABLE, TAGS_TABLE
     ))
     .bind(id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
 
     Ok(Some((entry, tags)))

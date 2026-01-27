@@ -1,12 +1,13 @@
 use sqlx::{FromRow, QueryBuilder, Row, sqlite::SqliteRow};
 
 use super::{
-    DbError, ENTRIES_TABLE, ENTRIES_TAG_TABLE, Id, Result, SQLITE_LIMIT_VARIABLE_NUMBER, TAGS_TABLE,
+    Db, DbError, ENTRIES_TABLE, ENTRIES_TAG_TABLE, Id, Result, SQLITE_LIMIT_VARIABLE_NUMBER,
+    TAGS_TABLE,
 };
 
 /* Return Vec of tags, which was linked to entry_id. Vec consists of ALL tags, even tags, which was already linked before and included in tags argument. */
 pub async fn create_and_link_tags(
-    pool: &sqlx::SqlitePool,
+    executor: impl sqlx::Executor<'_, Database = Db> + Copy,
     entry_id: Id,
     tags: &[CreateTag],
 ) -> Result<Vec<TagRow>> {
@@ -29,7 +30,7 @@ pub async fn create_and_link_tags(
             .push_bind(&tag.slug);
     });
     tag_builder.push(" ON CONFLICT DO NOTHING");
-    tag_builder.build().execute(pool).await?;
+    tag_builder.build().execute(executor).await?;
 
     let mut insert_query =
         QueryBuilder::new(format!(r#"INSERT INTO {} SELECT "#, ENTRIES_TAG_TABLE));
@@ -44,7 +45,7 @@ pub async fn create_and_link_tags(
     }
     separated.push_unseparated(") ON CONFLICT DO NOTHING");
 
-    insert_query.build().execute(pool).await?;
+    insert_query.build().execute(executor).await?;
 
     let mut get_tags = QueryBuilder::new(format!("SELECT * from {} WHERE label IN (", TAGS_TABLE));
 
@@ -54,16 +55,19 @@ pub async fn create_and_link_tags(
     }
     tags_separated.push_unseparated(")");
 
-    Ok(get_tags.build_query_as::<TagRow>().fetch_all(pool).await?)
+    Ok(get_tags
+        .build_query_as::<TagRow>()
+        .fetch_all(executor)
+        .await?)
 }
 
 pub async fn update_tags_by_entry_id(
-    pool: &sqlx::SqlitePool,
+    executor: impl sqlx::Executor<'_, Database = Db> + Copy,
     user_id: Id,
     entry_id: Id,
     tags: &[CreateTag],
 ) -> Result<Vec<TagRow>> {
-    let result_tags = create_and_link_tags(pool, entry_id, tags).await?;
+    let result_tags = create_and_link_tags(executor, entry_id, tags).await?;
 
     let mut builder = QueryBuilder::new(format!(
         "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE entry_id =",
@@ -89,13 +93,13 @@ pub async fn update_tags_by_entry_id(
 
     separated.push_unseparated("))");
 
-    builder.build().execute(pool).await?;
+    builder.build().execute(executor).await?;
 
     Ok(result_tags)
 }
 
 pub async fn find_by_entry_id(
-    pool: &sqlx::SqlitePool,
+    executor: impl sqlx::Executor<'_, Database = Db>,
     user_id: Id,
     entry_id: Id,
 ) -> Result<Vec<TagRow>> {
@@ -108,21 +112,24 @@ pub async fn find_by_entry_id(
     ))
     .bind(entry_id)
     .bind(user_id)
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?)
 }
 
-pub async fn get_all(pool: &sqlx::SqlitePool, user_id: Id) -> Result<Vec<TagRow>> {
+pub async fn get_all(
+    executor: impl sqlx::Executor<'_, Database = Db>,
+    user_id: Id,
+) -> Result<Vec<TagRow>> {
     Ok(
         sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {TAGS_TABLE} t WHERE user_id = ?",))
             .bind(user_id)
-            .fetch_all(pool)
+            .fetch_all(executor)
             .await?,
     )
 }
 
 pub async fn delete_by_label(
-    pool: &sqlx::SqlitePool,
+    executor: impl sqlx::Executor<'_, Database = Db>,
     user_id: Id,
     label: &str,
 ) -> Result<Option<TagRow>> {
@@ -131,12 +138,12 @@ pub async fn delete_by_label(
     ))
     .bind(user_id)
     .bind(label)
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await?)
 }
 
 pub async fn delete_all_by_label(
-    pool: &sqlx::SqlitePool,
+    executor: impl sqlx::Executor<'_, Database = Db>,
     user_id: Id,
     labels: &[String],
 ) -> Result<Vec<TagRow>> {
@@ -152,16 +159,23 @@ pub async fn delete_all_by_label(
     }
     labels_separated.push_unseparated(") RETURNING *");
 
-    Ok(builder.build_query_as::<TagRow>().fetch_all(pool).await?)
+    Ok(builder
+        .build_query_as::<TagRow>()
+        .fetch_all(executor)
+        .await?)
 }
 
-pub async fn delete_by_id(pool: &sqlx::SqlitePool, user_id: Id, id: Id) -> Result<Option<TagRow>> {
+pub async fn delete_by_id(
+    executor: impl sqlx::Executor<'_, Database = Db>,
+    user_id: Id,
+    id: Id,
+) -> Result<Option<TagRow>> {
     Ok(sqlx::query_as::<_, TagRow>(&format!(
         "DELETE FROM {TAGS_TABLE} WHERE user_id = ? AND id = ? RETURNING *",
     ))
     .bind(user_id)
     .bind(id)
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await?)
 }
 
