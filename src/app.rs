@@ -13,7 +13,7 @@ use sqlx::{Pool, Sqlite};
 use crate::{
     repository,
     scraper::Scraper,
-    storage::token_storage::TokenStorage,
+    token_storage::TokenStorage,
 };
 
 pub struct AppState {

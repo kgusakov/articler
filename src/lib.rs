@@ -5,4 +5,4 @@ pub mod http;
 pub mod models;
 pub mod repository;
 pub mod scraper;
-pub mod storage;
+pub mod token_storage;
