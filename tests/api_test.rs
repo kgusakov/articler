@@ -1,4 +1,4 @@
-use std::sync::{Arc, Once};
+use std::sync::Once;
 
 use actix_http::{Request, header};
 use actix_web::{
@@ -20,7 +20,6 @@ use wallabag_rs::{
     helpers::hash_str,
     repository::entries,
     scraper::Scraper,
-    storage::repository::SqliteTagRepository,
 };
 use wiremock::{
     Mock, MockServer, ResponseTemplate,

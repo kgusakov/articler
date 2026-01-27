@@ -3,8 +3,7 @@ use crate::{
     app::AppState,
     helpers::{generate_uid, hash_str},
     models::{Entry, Tag},
-    repository::entries,
-    storage::repository::{self, CreateTag, TagRow},
+    repository::{entries, tags},
 };
 use actix_utils::future::{Ready, ready};
 use actix_web::web::{ServiceConfig, delete, get, patch, post};
@@ -218,8 +217,8 @@ async fn do_post_entries(
         uid: request.public.filter(|p| *p).map(|_b| generate_uid()),
     };
 
-    let tag_to_create_tag = |label: String| -> CreateTag {
-        CreateTag {
+    let tag_to_create_tag = |label: String| -> tags::CreateTag {
+        tags::CreateTag {
             user_id: user_info.user_id,
             slug: slugify(&label),
             label,
@@ -232,12 +231,12 @@ async fn do_post_entries(
             _tags
                 .into_iter()
                 .map(tag_to_create_tag)
-                .collect::<Vec<CreateTag>>()
+                .collect::<Vec<tags::CreateTag>>()
         })
         // TODO if it is not new entry - we will force empty tags. It should be fixed when this method will support not only entry creations
         .unwrap_or(vec![]);
 
-    let (entry_row, tag_rows) = entries::create(&data.pool, create_entry, &create_tags, &*data.tag_repository)
+    let (entry_row, tag_rows) = entries::create(&data.pool, create_entry, &create_tags)
         .await
         .map_err(ErrorInternalServerError)?;
 
@@ -331,8 +330,7 @@ async fn get_tags_by_entry(
         .map_err(ErrorInternalServerError)?
     {
         Ok(Json(
-            data.tag_repository
-                .find_by_entry_id(user_info.user_id, entry_id)
+            tags::find_by_entry_id(&data.pool, user_info.user_id, entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?
                 .into_iter()
@@ -349,8 +347,7 @@ async fn get_tags(
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
     Ok(Json(
-        data.tag_repository
-            .get_all(user_info.user_id)
+        tags::get_all(&data.pool, user_info.user_id)
             .await
             .map_err(ErrorInternalServerError)?
             .into_iter()
@@ -370,9 +367,7 @@ async fn delete_tag_by_id(
     tag_id: web::Path<Id>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Tag>> {
-    let result = data
-        .tag_repository
-        .delete_by_id(user_info.user_id, tag_id.into_inner())
+    let result = tags::delete_by_id(&data.pool, user_info.user_id, tag_id.into_inner())
         .await
         .map_err(ErrorInternalServerError)?
         .map(|tr| tr.into());
@@ -388,9 +383,7 @@ async fn delete_tag_by_label(
     label: web::Query<TagLabel>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Tag>> {
-    let result = data
-        .tag_repository
-        .delete_by_label(user_info.user_id, &label.label)
+    let result = tags::delete_by_label(&data.pool, user_info.user_id, &label.label)
         .await
         .map_err(ErrorInternalServerError)?
         .map(|tr| tr.into());
@@ -414,9 +407,7 @@ async fn delete_tags_by_label(
     label: web::Query<TagsLabel>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
-    let result = data
-        .tag_repository
-        .delete_all_by_label(user_info.user_id, &label.labels)
+    let result = tags::delete_all_by_label(&data.pool, user_info.user_id, &label.labels)
         .await
         .map_err(ErrorInternalServerError)?
         .into_iter()
@@ -468,9 +459,10 @@ async fn delete_tag_from_entry(
             .await
             .map_err(ErrorInternalServerError)?;
 
-        if let Some((entry_row, tag_rows)) = entries::find_by_id(&data.pool, user_info.user_id, entry_id)
-            .await
-            .map_err(ErrorInternalServerError)?
+        if let Some((entry_row, tag_rows)) =
+            entries::find_by_id(&data.pool, user_info.user_id, entry_id)
+                .await
+                .map_err(ErrorInternalServerError)?
         {
             let tags = tag_rows.into_iter().map(|tr| tr.into()).collect();
 
@@ -554,19 +546,18 @@ async fn post_entry_tags(
         .map_err(ErrorInternalServerError)?
         .is_some()
     {
-        let full_tags: Vec<CreateTag> = request
+        let full_tags: Vec<tags::CreateTag> = request
             .into_inner()
             .labels
             .into_iter()
-            .map(|l| CreateTag {
+            .map(|l| tags::CreateTag {
                 user_id: user_info.user_id,
                 slug: slugify(&l),
                 label: l,
             })
             .collect();
 
-        data.tag_repository
-            .update_tags_by_entry_id(user_info.user_id, entry_id, &full_tags)
+        tags::update_tags_by_entry_id(&data.pool, user_info.user_id, entry_id, &full_tags)
             .await
             .map_err(ErrorInternalServerError)?;
 
@@ -636,18 +627,17 @@ async fn patch_entry(
         return Err(ErrorNotFound("Entry not found"));
     }
 
-    if let Some(tags) = request.tags {
-        let full_tags: Vec<CreateTag> = tags
+    if let Some(tags_labels) = request.tags {
+        let full_tags: Vec<tags::CreateTag> = tags_labels
             .into_iter()
-            .map(|l| CreateTag {
+            .map(|l| tags::CreateTag {
                 user_id: user_info.user_id,
                 slug: slugify(&l),
                 label: l,
             })
             .collect();
 
-        data.tag_repository
-            .update_tags_by_entry_id(user_info.user_id, entry_id, &full_tags)
+        tags::update_tags_by_entry_id(&data.pool, user_info.user_id, entry_id, &full_tags)
             .await
             .map_err(ErrorInternalServerError)?;
     };
@@ -708,8 +698,8 @@ fn try_parse_timestamp(s: i64) -> anyhow::Result<DateTime<Utc>> {
     }
 }
 
-impl From<TagRow> for Tag {
-    fn from(value: TagRow) -> Self {
+impl From<tags::TagRow> for Tag {
+    fn from(value: tags::TagRow) -> Self {
         Self {
             id: value.id,
             label: value.label,
@@ -804,11 +794,11 @@ enum Detail {
     Full,
 }
 
-impl From<Detail> for repository::Detail {
+impl From<Detail> for entries::Detail {
     fn from(val: Detail) -> Self {
         match val {
-            Detail::Full => repository::Detail::Full,
-            Detail::Metadata => repository::Detail::Metadata,
+            Detail::Full => entries::Detail::Full,
+            Detail::Metadata => entries::Detail::Metadata,
         }
     }
 }

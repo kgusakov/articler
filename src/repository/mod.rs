@@ -1,6 +1,7 @@
 pub mod users;
 pub mod clients;
 pub mod entries;
+pub mod tags;
 
 use sqlx::Error as SqlxError;
 use sqlx::Sqlite;

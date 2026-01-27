@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use actix_service::ServiceFactory;
 use actix_web::{
@@ -14,17 +13,13 @@ use sqlx::{Pool, Sqlite};
 use crate::{
     repository,
     scraper::Scraper,
-    storage::{
-        repository::{SqliteTagRepository, TagRepository},
-        token_storage::TokenStorage,
-    },
+    storage::token_storage::TokenStorage,
 };
 
 pub struct AppState {
     // TODO web::Data is an Arc itself. Looks like these arcs must be deleted
     // TODO use more generic database type here
     pub pool: Pool<repository::Db>,
-    pub tag_repository: Arc<dyn TagRepository>,
     pub token_storage: TokenStorage,
     pub scraper: Scraper,
 }
@@ -61,11 +56,8 @@ pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::
 }
 
 pub fn app_state_init(pool: Pool<Sqlite>, scraper: Scraper) -> AppState {
-    let tag_repo = Arc::new(SqliteTagRepository::new(pool.clone()));
-
     AppState {
         pool,
-        tag_repository: tag_repo,
         token_storage: TokenStorage::default(),
         scraper,
     }

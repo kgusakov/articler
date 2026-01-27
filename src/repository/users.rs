@@ -60,7 +60,7 @@ impl<'r> FromRow<'r, SqliteRow> for UserRow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::{SqlitePool, pool};
+    use sqlx::SqlitePool;
 
     #[sqlx::test(
         migrations = "./migrations",
