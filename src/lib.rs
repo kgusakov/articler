@@ -1,4 +1,3 @@
-// Needed for integration test crate only
 pub mod app;
 pub mod helpers;
 pub mod http;
