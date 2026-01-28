@@ -67,9 +67,7 @@ impl TokenStorage {
         }
     }
 
-    pub fn new_with_custom_timestamp_provider(
-        provider: Box<dyn Fn() -> i64 + Send + Sync>,
-    ) -> Self {
+    fn new_with_custom_timestamp_provider(provider: Box<dyn Fn() -> i64 + Send + Sync>) -> Self {
         TokenStorage {
             inner: Mutex::new(TokenStorageInner {
                 access_tokens: HashMap::new(),
