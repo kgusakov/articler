@@ -8,7 +8,7 @@ use actix_web::{
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use serde::{Deserialize, Serialize};
 
-use crate::{app::AppState, helpers::find_user, repository::clients};
+use crate::{app::AppState, helpers::find_user, middleware::TransactionContext, repository::clients};
 
 static BEARER: &str = "bearer";
 
@@ -38,21 +38,27 @@ pub fn routes(cfg: &mut ServiceConfig) {
 }
 
 async fn post_token_json(
+    tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
     request: web::Json<GetToken>,
 ) -> actix_web::Result<Json<Token>> {
-    create_token(data, request.into_inner()).await
+    create_token(tctx, data, request.into_inner()).await
 }
 
 async fn post_token(
+    tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
     request: web::Form<GetToken>,
 ) -> actix_web::Result<Json<Token>> {
-    create_token(data, request.into_inner()).await
+    create_token(tctx, data, request.into_inner()).await
 }
 
-async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Result<Json<Token>> {
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+async fn create_token(
+    tctx: web::ReqData<TransactionContext<'_>>,
+    data: web::Data<AppState>,
+    r: GetToken,
+) -> actix_web::Result<Json<Token>> {
+    let mut tx = tctx.tx()?;
     match r.grant_type {
         Some(gt) if gt == "password" => {
             if let Some(username) = r.username
@@ -74,8 +80,6 @@ async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Resu
                                     .token_storage
                                     .new_token(user_row.id, client_row.id)
                                     .map_err(ErrorInternalServerError)?;
-
-                                tx.commit().await.map_err(ErrorInternalServerError)?;
 
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
@@ -129,8 +133,6 @@ async fn create_token(data: web::Data<AppState>, r: GetToken) -> actix_web::Resu
                                 .refresh(&refresh_token)
                                 .map_err(ErrorInternalServerError)?
                             {
-                                tx.commit().await.map_err(ErrorInternalServerError)?;
-
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
                                     expires_in: new_token.expires_in,

@@ -2,6 +2,7 @@ use super::oauth::UserInfo;
 use crate::{
     app::AppState,
     helpers::{generate_uid, hash_str},
+    middleware::TransactionContext,
     models::{Entry, Tag},
     repository::{entries, tags},
 };
@@ -126,22 +127,25 @@ async fn version() -> actix_web::Result<Json<String>> {
 }
 
 async fn post_entries(
+    tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
     request: web::Form<AddEntry>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<AddEntryResponse>> {
-    do_post_entries(data, request.into_inner(), user_info).await
+    do_post_entries(tctx, data, request.into_inner(), user_info).await
 }
 
 async fn post_entries_json(
+    tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
     request: web::Json<AddEntry>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<AddEntryResponse>> {
-    do_post_entries(data, request.into_inner(), user_info).await
+    do_post_entries(tctx, data, request.into_inner(), user_info).await
 }
 
 async fn do_post_entries(
+    tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
     request: AddEntry,
     user_info: UserInfo,
@@ -236,11 +240,10 @@ async fn do_post_entries(
         // TODO if it is not new entry - we will force empty tags. It should be fixed when this method will support not only entry creations
         .unwrap_or(vec![]);
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = tctx.tx()?;
     let (entry_row, tag_rows) = entries::create(&mut tx, create_entry, &create_tags)
         .await
         .map_err(ErrorInternalServerError)?;
-    tx.commit().await.map_err(ErrorInternalServerError)?;
 
     let tags = tag_rows.into_iter().map(Tag::from).collect();
 
@@ -259,7 +262,7 @@ async fn do_post_entries(
 }
 
 async fn entries(
-    data: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
     request: Query<EntriesRequest>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Entries>> {
@@ -280,7 +283,7 @@ async fn entries(
         domain_name: request.domain_name,
     };
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = tctx.tx()?;
 
     let count_without_paging = entries::count(&mut tx, &params)
         .await
@@ -296,8 +299,6 @@ async fn entries(
     let entries = entries::find_all(&mut tx, &params)
         .await
         .map_err(ErrorInternalServerError)?;
-
-    tx.commit().await.map_err(ErrorInternalServerError)?;
 
     let mut ents = vec![];
 
@@ -325,13 +326,13 @@ async fn entries(
 }
 
 async fn get_tags_by_entry(
-    data: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
     entry_id: web::Path<Id>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
     let entry_id = entry_id.into_inner();
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = tctx.tx()?;
 
     if entries::exists_by_id(&mut tx, user_info.user_id, entry_id)
         .await
@@ -344,8 +345,6 @@ async fn get_tags_by_entry(
             .map(|tr| tr.into())
             .collect();
 
-        tx.commit().await.map_err(ErrorInternalServerError)?;
-
         Ok(Json(result))
     } else {
         Err(ErrorNotFound("Entry not found"))
@@ -353,10 +352,10 @@ async fn get_tags_by_entry(
 }
 
 async fn get_tags(
-    data: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = tctx.tx()?;
 
     let result = tags::get_all(&mut tx, user_info.user_id)
         .await
@@ -364,8 +363,6 @@ async fn get_tags(
         .into_iter()
         .map(|tr| tr.into())
         .collect();
-
-    tx.commit().await.map_err(ErrorInternalServerError)?;
 
     Ok(Json(result))
 }
@@ -377,18 +374,16 @@ struct TagLabel {
 }
 
 async fn delete_tag_by_id(
-    data: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
     tag_id: web::Path<Id>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Tag>> {
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = tctx.tx()?;
 
     let result = tags::delete_by_id(&mut tx, user_info.user_id, tag_id.into_inner())
         .await
         .map_err(ErrorInternalServerError)?
         .map(|tr| tr.into());
-
-    tx.commit().await.map_err(ErrorInternalServerError)?;
 
     if let Some(delete_tag) = result {
         Ok(Json(delete_tag))
@@ -398,18 +393,16 @@ async fn delete_tag_by_id(
 }
 
 async fn delete_tag_by_label(
-    data: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
     label: web::Query<TagLabel>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Tag>> {
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = tctx.tx()?;
 
     let result = tags::delete_by_label(&mut tx, user_info.user_id, &label.label)
         .await
         .map_err(ErrorInternalServerError)?
         .map(|tr| tr.into());
-
-    tx.commit().await.map_err(ErrorInternalServerError)?;
 
     if let Some(delete_tag) = result {
         Ok(Json(delete_tag))
@@ -427,11 +420,11 @@ struct TagsLabel {
 }
 
 async fn delete_tags_by_label(
-    data: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
     label: web::Query<TagsLabel>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = tctx.tx()?;
 
     let result = tags::delete_all_by_label(&mut tx, user_info.user_id, &label.labels)
         .await
@@ -439,8 +432,6 @@ async fn delete_tags_by_label(
         .into_iter()
         .map(|tr| tr.into())
         .collect();
-
-    tx.commit().await.map_err(ErrorInternalServerError)?;
 
     Ok(Json(result))
 }
@@ -473,13 +464,13 @@ enum DeleteEntryResponse {
 }
 
 async fn delete_tag_from_entry(
-    data: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
     ids: web::Path<(Id, Id)>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Entry>> {
     let (entry_id, tag_id) = ids.into_inner();
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = tctx.tx()?;
 
     if entries::exists_by_id(&mut tx, user_info.user_id, entry_id)
         .await
@@ -494,16 +485,14 @@ async fn delete_tag_from_entry(
                 .await
                 .map_err(ErrorInternalServerError)?
         {
-            tx.commit().await.map_err(ErrorInternalServerError)?;
-
             let tags = tag_rows.into_iter().map(|tr| tr.into()).collect();
 
             Ok(Json(
                 Entry::try_from((entry_row, tags)).map_err(ErrorInternalServerError)?,
             ))
         } else {
-            // TODO needed while transactions is not implemented
-            Err(ErrorNotFound("Entry not found"))
+            // Due to transactions - entry couldn't be deleted here
+            Err(ErrorInternalServerError("Unknown error"))
         }
     } else {
         Err(ErrorNotFound("Entry not found"))
@@ -511,7 +500,7 @@ async fn delete_tag_from_entry(
 }
 
 async fn delete_entry(
-    data: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
     entry_id: web::Path<i64>,
     request: Query<DeleteEntryRequest>,
     user_info: UserInfo,
@@ -519,10 +508,10 @@ async fn delete_entry(
     let request = request.into_inner();
     let entry_id = entry_id.into_inner();
 
+    let mut tx = tctx.tx()?;
+
     match request.expect {
         Expect::Id => {
-            let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
-
             let deleted = entries::delete_by_id(&mut tx, user_info.user_id, entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?;
@@ -531,13 +520,9 @@ async fn delete_entry(
                 return Err(ErrorNotFound("Entry not found"));
             }
 
-            tx.commit().await.map_err(ErrorInternalServerError)?;
-
             Ok(Json(DeleteEntryResponse::Id { id: entry_id }))
         }
         Expect::Full => {
-            let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
-
             let full_entry = entries::find_by_id(&mut tx, user_info.user_id, entry_id)
                 .await
                 .map_err(ErrorInternalServerError)?;
@@ -552,8 +537,6 @@ async fn delete_entry(
             if !deleted {
                 return Err(ErrorNotFound("Entry not found"));
             }
-
-            tx.commit().await.map_err(ErrorInternalServerError)?;
 
             let tags: Vec<Tag> = tag_rows.into_iter().map(|tr| tr.into()).collect();
             let entry = Entry::try_from((entry_row, tags)).map_err(ErrorInternalServerError)?;
@@ -574,14 +557,14 @@ struct EntryTags {
 }
 
 async fn post_entry_tags(
-    data: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
     entry_id: web::Path<Id>,
     request: web::Form<EntryTags>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Entry>> {
     let entry_id = entry_id.into_inner();
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = tctx.tx()?;
 
     // TODO dirty design - looks like we need entry repository method for it
     if entries::find_by_id(&mut tx, user_info.user_id, entry_id)
@@ -609,8 +592,6 @@ async fn post_entry_tags(
             .map_err(ErrorInternalServerError)?
             .ok_or(ErrorNotFound("Entry not found"))?;
 
-        tx.commit().await.map_err(ErrorInternalServerError)?;
-
         let entry_tags = tag_rows.into_iter().map(Tag::from).collect();
 
         Ok(Json(
@@ -622,7 +603,7 @@ async fn post_entry_tags(
 }
 
 async fn patch_entry(
-    data: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
     entry_id: web::Path<i64>,
     request: web::Form<UpdateEntry>,
     user_info: UserInfo,
@@ -664,7 +645,7 @@ async fn patch_entry(
         },
     };
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = tctx.tx()?;
 
     let updated = entries::update_by_id(&mut tx, user_info.user_id, entry_id, repo_update)
         .await
@@ -693,8 +674,6 @@ async fn patch_entry(
         .await
         .map_err(ErrorInternalServerError)?
         .ok_or_else(|| ErrorNotFound("Entry not found"))?;
-
-    tx.commit().await.map_err(ErrorInternalServerError)?;
 
     let entry_tags = tag_rows.into_iter().map(|t| t.into()).collect();
 

@@ -7,7 +7,7 @@ use actix_web::{
 };
 use serde::Deserialize;
 
-use crate::{app::AppState, helpers::find_user, repository::clients};
+use crate::{helpers::find_user, middleware::TransactionContext, repository::clients};
 
 const ANDROID_APP_NAME: &str = "Android app";
 
@@ -94,9 +94,9 @@ async fn index(session: Session) -> impl Responder {
     }
 }
 
-async fn developer(session: Session, data: web::Data<AppState>) -> impl Responder {
+async fn developer(session: Session, tctx: web::ReqData<TransactionContext<'_>>) -> impl Responder {
     if let Ok(Some(user_id)) = session.get("user_id") {
-        let mut tx = match data.pool.begin().await {
+        let mut tx = match tctx.tx() {
             Ok(tx) => tx,
             Err(err) => {
                 return HttpResponse::InternalServerError().body(err.to_string());
@@ -106,9 +106,6 @@ async fn developer(session: Session, data: web::Data<AppState>) -> impl Responde
         if let Ok(Some(client_row)) =
             clients::find_by_client_name_and_user_id(&mut tx, user_id, ANDROID_APP_NAME).await
         {
-            if let Some(err) = tx.commit().await.err() {
-                return HttpResponse::InternalServerError().body(err.to_string());
-            }
             let (client_id, client_secret) = (client_row.client_id, client_row.client_secret);
             HttpResponse::Ok().append_header(("Content-type", "text/html")).body(format!(
             r#"
@@ -178,19 +175,16 @@ struct LoginForm {
 }
 
 async fn login_check(
-    data: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
     form: web::Form<LoginForm>,
     session: Session,
 ) -> impl Responder {
-    let mut tx = match data.pool.begin().await {
+    let mut tx = match tctx.tx() {
         Ok(tx) => tx,
         Err(e) => return HttpResponse::from_error(ErrorInternalServerError(e)),
     };
 
     if let Ok(Some(user)) = find_user(&mut tx, &form.username, &form.password).await {
-        if let Some(err) = tx.commit().await.err() {
-            return HttpResponse::InternalServerError().body(err.to_string());
-        }
         if let Err(err) = session.insert("user_id", user.id) {
             return HttpResponse::from_error(ErrorInternalServerError(err));
         }
