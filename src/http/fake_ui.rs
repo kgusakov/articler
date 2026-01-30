@@ -184,10 +184,10 @@ async fn login_check(
         Err(e) => return HttpResponse::from_error(ErrorInternalServerError(e)),
     };
 
-    if let Ok(Some(user)) = find_user(&mut tx, &form.username, &form.password).await {
-        if let Err(err) = session.insert("user_id", user.id) {
-            return HttpResponse::from_error(ErrorInternalServerError(err));
-        }
+    if let Ok(Some(user)) = find_user(&mut tx, &form.username, &form.password).await
+        && let Err(err) = session.insert("user_id", user.id)
+    {
+        return HttpResponse::from_error(ErrorInternalServerError(err));
     }
 
     HttpResponse::Found()
