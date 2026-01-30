@@ -1,20 +1,15 @@
-
 use actix_service::ServiceFactory;
 use actix_web::{
     App, HttpServer,
     body::MessageBody,
     cookie::Key,
     dev::{Server, ServiceRequest, ServiceResponse},
-    middleware::Logger,
+    middleware::{Logger, from_fn},
     web,
 };
 use sqlx::{Pool, Sqlite};
 
-use crate::{
-    repository,
-    scraper::Scraper,
-    token_storage::TokenStorage,
-};
+use crate::{middleware::wrap_with_tx, repository, scraper::Scraper, token_storage::TokenStorage};
 
 pub struct AppState {
     // TODO web::Data is an Arc itself. Looks like these arcs must be deleted
@@ -39,6 +34,7 @@ pub fn app(
     App::new()
         .app_data(app_data.clone())
         .wrap(Logger::default())
+        .wrap(from_fn(wrap_with_tx))
         .configure(crate::http::oauth::routes)
         .configure(crate::http::api::routes)
         .configure(|cfg| crate::http::fake_ui::routes(cfg, cookie_key))
