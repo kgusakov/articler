@@ -88,31 +88,31 @@ async fn create_token(
                                     refresh_token: new_token.refresh_token,
                                 }))
                             } else {
-                                Err(ErrorBadRequest(o_error(
+                                Err(ErrorBadRequest(oauth_error(
                                     "invalid_client",
                                     "The client credentials are invalid",
                                 )))
                             }
                         } else {
-                            Err(ErrorBadRequest(o_error(
+                            Err(ErrorBadRequest(oauth_error(
                                 "invalid_grant",
                                 "Invalid username and password combination",
                             )))
                         }
                     } else {
-                        Err(ErrorBadRequest(o_error(
+                        Err(ErrorBadRequest(oauth_error(
                             "invalid_client",
                             "The client credentials are invalid",
                         )))
                     }
                 } else {
-                    Err(ErrorBadRequest(o_error(
+                    Err(ErrorBadRequest(oauth_error(
                         "invalid_client",
                         "Client id was not found in the headers or body",
                     )))
                 }
             } else {
-                Err(ErrorBadRequest(o_error(
+                Err(ErrorBadRequest(oauth_error(
                     "invalid_request",
                     "Missing parameters. \"username\" and \"password\" required",
                 )))
@@ -135,37 +135,37 @@ async fn create_token(
                                     refresh_token: new_token.refresh_token,
                                 }))
                             } else {
-                                Err(ErrorBadRequest(o_error(
+                                Err(ErrorBadRequest(oauth_error(
                                     "invalid_grant",
                                     "Invalid refresh token",
                                 )))
                             }
                         } else {
-                            Err(ErrorBadRequest(o_error(
+                            Err(ErrorBadRequest(oauth_error(
                                 "invalid_request",
                                 "No \"refresh_token\" parameter found",
                             )))
                         }
                     } else {
-                        Err(ErrorBadRequest(o_error(
+                        Err(ErrorBadRequest(oauth_error(
                             "invalid_client",
                             "The client credentials are invalid",
                         )))
                     }
                 } else {
-                    Err(ErrorBadRequest(o_error(
+                    Err(ErrorBadRequest(oauth_error(
                         "invalid_client",
                         "The client credentials are invalid",
                     )))
                 }
             } else {
-                Err(ErrorBadRequest(o_error(
+                Err(ErrorBadRequest(oauth_error(
                     "invalid_client",
                     "Client id was not found in the headers or body",
                 )))
             }
         }
-        _ => Err(ErrorBadRequest(o_error(
+        _ => Err(ErrorBadRequest(oauth_error(
             "invalid_request",
             "Invalid grant_type parameter or parameter missing",
         ))),
@@ -178,7 +178,10 @@ pub async fn auth_extractor(
 ) -> Result<ServiceRequest, (Error, ServiceRequest)> {
     let Some(credentials) = credentials else {
         return Err((
-            error::ErrorUnauthorized(o_error("access_denied", "OAuth2 authentication required")),
+            error::ErrorUnauthorized(oauth_error(
+                "access_denied",
+                "OAuth2 authentication required",
+            )),
             req,
         ));
     };
@@ -194,7 +197,7 @@ pub async fn auth_extractor(
             Ok(req)
         }
         Ok(None) => Err((
-            error::ErrorUnauthorized(o_error(
+            error::ErrorUnauthorized(oauth_error(
                 "invalid_grant",
                 "The access token provided is invalid.",
             )),
@@ -236,7 +239,7 @@ impl std::fmt::Display for OauthError {
     }
 }
 
-fn o_error(error: &str, description: &str) -> OauthError {
+fn oauth_error(error: &str, description: &str) -> OauthError {
     OauthError {
         error: error.to_string(),
         error_description: description.to_string(),
