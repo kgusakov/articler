@@ -12,8 +12,6 @@ use sqlx::{Pool, Sqlite};
 use crate::{middleware::wrap_with_tx, repository, scraper::Scraper, token_storage::TokenStorage};
 
 pub struct AppState {
-    // TODO web::Data is an Arc itself. Looks like these arcs must be deleted
-    // TODO use more generic database type here
     pub pool: Pool<repository::Db>,
     pub token_storage: TokenStorage,
     pub scraper: Scraper,

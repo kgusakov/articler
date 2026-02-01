@@ -101,7 +101,6 @@ impl TokenStorage {
         })
     }
 
-    // TODO mut in validate looks like a bad pattern
     pub fn validate(&self, access_token: &str) -> ArticlerResult<Option<Claim>> {
         // It's ok to unwrap - poison should be propagated
         let mut inner = self.inner.lock().unwrap();
