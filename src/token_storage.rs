@@ -1,25 +1,16 @@
-use std::{collections::HashMap, fmt, sync::Mutex};
+use std::{collections::HashMap, sync::Mutex};
 
 use chrono::Utc;
 use rand::{distr::Alphanumeric, prelude::*};
 
+use crate::result::ArticlerResult;
+
 type Id = i64;
-type Result<T> = std::result::Result<T, Error>;
 
 const EXPIRATION_TIME: i64 = 60 * 60; // one hour in seconds
 const REFRESH_TOKEN_EXPIRATION_TIME: i64 = 30 * 24 * 60 * 60; // one month in seconds
 
 // TODO fix global mutex and gc on every call (without calls it will produce memory leaks moreover)
-
-#[derive(Debug, Clone)]
-pub struct Error {}
-
-// TODO implement normal display when error will in use
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Todo: write description")
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Claim {
@@ -79,7 +70,7 @@ impl TokenStorage {
         }
     }
 
-    pub fn new_token(&self, user_id: Id, client_id: Id) -> Result<NewToken> {
+    pub fn new_token(&self, user_id: Id, client_id: Id) -> ArticlerResult<NewToken> {
         // It's ok to unwrap - poison should be propagated
         let mut inner = self.inner.lock().unwrap();
         let access_token = generate_token();
@@ -111,7 +102,7 @@ impl TokenStorage {
     }
 
     // TODO mut in validate looks like a bad pattern
-    pub fn validate(&self, access_token: &str) -> Result<Option<Claim>> {
+    pub fn validate(&self, access_token: &str) -> ArticlerResult<Option<Claim>> {
         // It's ok to unwrap - poison should be propagated
         let mut inner = self.inner.lock().unwrap();
         // TODO gc on every validate is a bad pattern
@@ -132,7 +123,7 @@ impl TokenStorage {
         }
     }
 
-    pub fn refresh(&self, refresh_token: &str) -> Result<Option<NewToken>> {
+    pub fn refresh(&self, refresh_token: &str) -> ArticlerResult<Option<NewToken>> {
         // It's ok to unwrap - poison should be propagated
         let mut inner = self.inner.lock().unwrap();
 

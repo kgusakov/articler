@@ -1,13 +1,15 @@
 use std::sync::LazyLock;
 
-use actix_web::error::ErrorInternalServerError;
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{self, PasswordHashString, SaltString, rand_core::OsRng},
+    password_hash::{PasswordHashString, SaltString, rand_core::OsRng},
 };
 use sha1::{Digest, Sha1};
 
-use crate::repository::{self, users::UserRow};
+use crate::{
+    repository::{self, users::UserRow},
+    result::ArticlerResult,
+};
 
 static PASSWORD_HASHER: LazyLock<Argon2> = LazyLock::new(Argon2::default);
 
@@ -15,7 +17,7 @@ pub fn hash_str(st: &str) -> String {
     format!("{:x}", Sha1::digest(st))
 }
 
-pub fn hash_password(password: &str) -> Result<String, password_hash::errors::Error> {
+pub fn hash_password(password: &str) -> ArticlerResult<String> {
     let salt = SaltString::generate(OsRng);
     let hash: PasswordHashString = PASSWORD_HASHER
         .hash_password(password.as_bytes(), &salt)?
@@ -24,7 +26,7 @@ pub fn hash_password(password: &str) -> Result<String, password_hash::errors::Er
     Ok(hash.to_string())
 }
 
-pub fn verify_password(password: &str, hash: &str) -> Result<bool, password_hash::errors::Error> {
+pub fn verify_password(password: &str, hash: &str) -> ArticlerResult<bool> {
     Ok(PASSWORD_HASHER
         .verify_password(password.as_bytes(), &PasswordHash::new(hash)?)
         .is_ok())
@@ -38,12 +40,9 @@ pub async fn find_user(
     tx: &mut sqlx::Transaction<'_, repository::Db>,
     username: &str,
     password: &str,
-) -> actix_web::Result<Option<UserRow>> {
-    if let Some(user_row) = repository::users::find_by_username(tx, username)
-        .await
-        .map_err(ErrorInternalServerError)?
-    {
-        if verify_password(password, &user_row.password_hash).map_err(ErrorInternalServerError)? {
+) -> ArticlerResult<Option<UserRow>> {
+    if let Some(user_row) = repository::users::find_by_username(tx, username).await? {
+        if verify_password(password, &user_row.password_hash)? {
             Ok(Some(user_row))
         } else {
             Ok(None)

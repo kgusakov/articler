@@ -5,8 +5,10 @@ use sqlx::{
     Database, Encode, FromRow, QueryBuilder, Row, Type, query_builder::Separated, sqlite::SqliteRow,
 };
 
+use crate::result::ArticlerResult;
+
 use super::{
-    Db, DbError, ENTRIES_TABLE, ENTRIES_TAG_TABLE, Id, ReadingTime, Result, TAGS_TABLE, Timestamp,
+    Db, DbErrorType, ENTRIES_TABLE, ENTRIES_TAG_TABLE, Id, ReadingTime, TAGS_TABLE, Timestamp,
 };
 
 pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
@@ -14,7 +16,7 @@ pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
 pub async fn find_all(
     tx: &mut sqlx::Transaction<'_, Db>,
     params: &EntriesCriteria,
-) -> Result<Vec<(EntryRow, Vec<crate::repository::tags::TagRow>)>> {
+) -> ArticlerResult<Vec<(EntryRow, Vec<crate::repository::tags::TagRow>)>> {
     let mut q_builder = QueryBuilder::new(format!(
         r#"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
         WHERE e.id in (
@@ -77,23 +79,24 @@ pub async fn find_all(
 
     // TODO implement detail filtering
     if params.detail == Some(Detail::Metadata) {
-        return Err(DbError::RepositoryError(
+        return Err(DbErrorType::RepositoryError(
             "Detail metadata mode is not supported yet".into(),
-        ));
+        )
+        .into());
     }
 
     // TODO implement domain_name filtering
     if params.domain_name.is_some() {
-        return Err(DbError::RepositoryError(
-            "Domain filtering is not supported yet".into(),
-        ));
+        return Err(
+            DbErrorType::RepositoryError("Domain filtering is not supported yet".into()).into(),
+        );
     }
 
     // TODO implement tags filtering
     if params.tags.is_some() {
-        return Err(DbError::RepositoryError(
-            "Tags filtering is not supported yet".into(),
-        ));
+        return Err(
+            DbErrorType::RepositoryError("Tags filtering is not supported yet".into()).into(),
+        );
     }
 
     let raw_rows = q_builder.build().fetch_all(tx.deref_mut()).await?;
@@ -125,7 +128,11 @@ pub async fn find_all(
     Ok(entrs_with_relations)
 }
 
-pub async fn exists_by_id(tx: &mut sqlx::Transaction<'_, Db>, user_id: Id, id: Id) -> Result<bool> {
+pub async fn exists_by_id(
+    tx: &mut sqlx::Transaction<'_, Db>,
+    user_id: Id,
+    id: Id,
+) -> ArticlerResult<bool> {
     let result: i32 = sqlx::query_scalar(&format!(
         "SELECT EXISTS(SELECT 1 FROM {ENTRIES_TABLE} WHERE user_id = ? AND id = ?)",
     ))
@@ -142,7 +149,7 @@ pub async fn delete_tag_by_tag_id(
     user_id: Id,
     id: Id,
     tag_id: Id,
-) -> Result<bool> {
+) -> ArticlerResult<bool> {
     let result = sqlx::query(&format!(
         r#"DELETE FROM {ENTRIES_TAG_TABLE} WHERE tag_id = ? AND entry_id in (SELECT id FROM {ENTRIES_TABLE} WHERE id = ? AND user_id = ?)"#
     ))
@@ -155,7 +162,10 @@ pub async fn delete_tag_by_tag_id(
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn count(tx: &mut sqlx::Transaction<'_, Db>, params: &EntriesCriteria) -> Result<i64> {
+pub async fn count(
+    tx: &mut sqlx::Transaction<'_, Db>,
+    params: &EntriesCriteria,
+) -> ArticlerResult<i64> {
     // TODO rewrite this funny stupid count
     let mut q_builder = QueryBuilder::new(format!(
         r#"SELECT COUNT(DISTINCT e.id) FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"#,
@@ -185,23 +195,24 @@ pub async fn count(tx: &mut sqlx::Transaction<'_, Db>, params: &EntriesCriteria)
 
     // TODO implement detail filtering
     if params.detail != Some(Detail::Full) {
-        return Err(DbError::RepositoryError(
+        return Err(DbErrorType::RepositoryError(
             "Detail metadata mode is not supported yet".into(),
-        ));
+        )
+        .into());
     }
 
     // TODO implement domain_name filtering
     if params.domain_name.is_some() {
-        return Err(DbError::RepositoryError(
-            "Domain filtering is not supported yet".into(),
-        ));
+        return Err(
+            DbErrorType::RepositoryError("Domain filtering is not supported yet".into()).into(),
+        );
     }
 
     // TODO implement tags filtering
     if params.tags.is_some() {
-        return Err(DbError::RepositoryError(
-            "Tags filtering is not supported yet".into(),
-        ));
+        return Err(
+            DbErrorType::RepositoryError("Tags filtering is not supported yet".into()).into(),
+        );
     }
 
     Ok(q_builder.build().fetch_one(tx.deref_mut()).await?.get(0))
@@ -211,7 +222,7 @@ pub async fn create(
     tx: &mut sqlx::Transaction<'_, Db>,
     entry: CreateEntry,
     tags: &[crate::repository::tags::CreateTag],
-) -> Result<(EntryRow, Vec<crate::repository::tags::TagRow>)> {
+) -> ArticlerResult<(EntryRow, Vec<crate::repository::tags::TagRow>)> {
     let id: i64 = sqlx::query_scalar(
         r#"
         INSERT INTO entries (
@@ -277,7 +288,7 @@ pub async fn find_by_id(
     tx: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     id: Id,
-) -> Result<Option<FullEntry>> {
+) -> ArticlerResult<Option<FullEntry>> {
     let entry = sqlx::query_as::<_, EntryRow>(&format!(
         "SELECT * FROM {ENTRIES_TABLE} WHERE user_id = ? AND id = ?"
     ))
@@ -311,7 +322,7 @@ pub async fn update_by_id(
     user_id: Id,
     id: Id,
     update: UpdateEntry,
-) -> Result<bool> {
+) -> ArticlerResult<bool> {
     let mut query_builder = QueryBuilder::new(format!("UPDATE {} SET ", ENTRIES_TABLE));
 
     let mut separated = query_builder.separated(", ");
@@ -400,7 +411,11 @@ pub async fn update_by_id(
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn delete_by_id(tx: &mut sqlx::Transaction<'_, Db>, user_id: Id, id: Id) -> Result<bool> {
+pub async fn delete_by_id(
+    tx: &mut sqlx::Transaction<'_, Db>,
+    user_id: Id,
+    id: Id,
+) -> ArticlerResult<bool> {
     let result = sqlx::query("DELETE FROM entries WHERE user_id = ? AND id = ?")
         .bind(user_id)
         .bind(id)

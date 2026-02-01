@@ -7,25 +7,11 @@ use reqwest::Proxy;
 use reqwest::header;
 use reqwest::header::USER_AGENT;
 use std::ops::Deref;
-use std::string::FromUtf8Error;
-use thiserror::Error;
 use url::Url;
 
-const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
+use crate::result::ArticlerResult;
 
-#[derive(Error, Debug)]
-pub enum ScraperError {
-    #[error(transparent)]
-    ReqwestError(#[from] reqwest::Error),
-    #[error(transparent)]
-    ReadabilityError(#[from] dom_smoothie::ReadabilityError),
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
-    #[error(transparent)]
-    Utf8Error(#[from] FromUtf8Error),
-    #[error(transparent)]
-    UrlParseError(#[from] url::ParseError),
-}
+const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
 
 pub struct Scraper {
     client: Client,
@@ -42,7 +28,7 @@ pub struct Document {
 }
 
 impl Scraper {
-    pub fn new(proxy_scheme: Option<&str>) -> Result<Self, ScraperError> {
+    pub fn new(proxy_scheme: Option<&str>) -> ArticlerResult<Self> {
         let mut builder = Client::builder();
 
         if let Some(p) = proxy_scheme {
@@ -54,7 +40,7 @@ impl Scraper {
         })
     }
 
-    pub async fn extract(&self, url: &Url) -> Result<Document, ScraperError> {
+    pub async fn extract(&self, url: &Url) -> ArticlerResult<Document> {
         let response = self
             .client
             .get(url.as_str())

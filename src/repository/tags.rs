@@ -2,9 +2,10 @@ use std::ops::DerefMut;
 
 use sqlx::{FromRow, QueryBuilder, Row, sqlite::SqliteRow};
 
+use crate::result::ArticlerResult;
+
 use super::{
-    Db, DbError, ENTRIES_TABLE, ENTRIES_TAG_TABLE, Id, Result, SQLITE_LIMIT_VARIABLE_NUMBER,
-    TAGS_TABLE,
+    Db, DbErrorType, ENTRIES_TABLE, ENTRIES_TAG_TABLE, Id, SQLITE_LIMIT_VARIABLE_NUMBER, TAGS_TABLE,
 };
 
 /* Return Vec of tags, which was linked to entry_id. Vec consists of ALL tags, even tags, which was already linked before and included in tags argument. */
@@ -12,17 +13,18 @@ pub async fn create_and_link_tags(
     tx: &mut sqlx::Transaction<'_, Db>,
     entry_id: Id,
     tags: &[CreateTag],
-) -> Result<Vec<TagRow>> {
+) -> ArticlerResult<Vec<TagRow>> {
     if tags.is_empty() {
         return Ok(vec![]);
     }
 
     if tags.len() > SQLITE_LIMIT_VARIABLE_NUMBER / 2 {
-        return Err(DbError::RepositoryError(format!(
+        return Err(DbErrorType::RepositoryError(format!(
             "Too many tags: {} exceeds limit of {}",
             tags.len(),
             SQLITE_LIMIT_VARIABLE_NUMBER / 2
-        )));
+        ))
+        .into());
     }
 
     let mut tag_builder = QueryBuilder::new("INSERT INTO tags (user_id, label, slug) ");
@@ -68,7 +70,7 @@ pub async fn update_tags_by_entry_id(
     user_id: Id,
     entry_id: Id,
     tags: &[CreateTag],
-) -> Result<Vec<TagRow>> {
+) -> ArticlerResult<Vec<TagRow>> {
     let result_tags = create_and_link_tags(tx, entry_id, tags).await?;
 
     let mut builder = QueryBuilder::new(format!(
@@ -104,7 +106,7 @@ pub async fn find_by_entry_id(
     tx: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     entry_id: Id,
-) -> Result<Vec<TagRow>> {
+) -> ArticlerResult<Vec<TagRow>> {
     Ok(sqlx::query_as::<_, TagRow>(&format!(
         r#"
         SELECT t.* FROM {TAGS_TABLE} t
@@ -118,7 +120,10 @@ pub async fn find_by_entry_id(
     .await?)
 }
 
-pub async fn get_all(tx: &mut sqlx::Transaction<'_, Db>, user_id: Id) -> Result<Vec<TagRow>> {
+pub async fn get_all(
+    tx: &mut sqlx::Transaction<'_, Db>,
+    user_id: Id,
+) -> ArticlerResult<Vec<TagRow>> {
     Ok(
         sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {TAGS_TABLE} t WHERE user_id = ?",))
             .bind(user_id)
@@ -131,7 +136,7 @@ pub async fn delete_by_label(
     tx: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     label: &str,
-) -> Result<Option<TagRow>> {
+) -> ArticlerResult<Option<TagRow>> {
     Ok(sqlx::query_as::<_, TagRow>(&format!(
         "DELETE FROM {TAGS_TABLE} WHERE user_id = ? AND label = ? RETURNING *",
     ))
@@ -145,7 +150,7 @@ pub async fn delete_all_by_label(
     tx: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     labels: &[String],
-) -> Result<Vec<TagRow>> {
+) -> ArticlerResult<Vec<TagRow>> {
     let mut builder = QueryBuilder::new(&format!("DELETE FROM {TAGS_TABLE} WHERE user_id ="));
 
     builder.push_bind(user_id);
@@ -168,7 +173,7 @@ pub async fn delete_by_id(
     tx: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     id: Id,
-) -> Result<Option<TagRow>> {
+) -> ArticlerResult<Option<TagRow>> {
     Ok(sqlx::query_as::<_, TagRow>(&format!(
         "DELETE FROM {TAGS_TABLE} WHERE user_id = ? AND id = ? RETURNING *",
     ))

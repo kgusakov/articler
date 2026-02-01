@@ -8,7 +8,9 @@ use actix_web::{
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use serde::{Deserialize, Serialize};
 
-use crate::{app::AppState, helpers::find_user, middleware::TransactionContext, repository::clients};
+use crate::{
+    app::AppState, helpers::find_user, middleware::TransactionContext, repository::clients,
+};
 
 static BEARER: &str = "bearer";
 
@@ -73,13 +75,10 @@ async fn create_token(
                                 &client_id,
                                 &client_secret,
                             )
-                            .await
-                            .map_err(ErrorInternalServerError)?
+                            .await?
                             {
-                                let new_token = data
-                                    .token_storage
-                                    .new_token(user_row.id, client_row.id)
-                                    .map_err(ErrorInternalServerError)?;
+                                let new_token =
+                                    data.token_storage.new_token(user_row.id, client_row.id)?;
 
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
@@ -123,16 +122,11 @@ async fn create_token(
             if let Some(client_id) = r.client_id {
                 if let Some(client_secret) = r.client_secret {
                     if clients::find_by_client_id_and_secret(&mut tx, &client_id, &client_secret)
-                        .await
-                        .map_err(ErrorInternalServerError)?
+                        .await?
                         .is_some()
                     {
                         if let Some(refresh_token) = r.refresh_token {
-                            if let Some(new_token) = data
-                                .token_storage
-                                .refresh(&refresh_token)
-                                .map_err(ErrorInternalServerError)?
-                            {
+                            if let Some(new_token) = data.token_storage.refresh(&refresh_token)? {
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
                                     expires_in: new_token.expires_in,

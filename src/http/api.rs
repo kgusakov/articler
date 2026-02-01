@@ -167,11 +167,7 @@ async fn do_post_entries(
                 request.preview_picture,
             )
         } else {
-            let document = data
-                .scraper
-                .extract(&request.url)
-                .await
-                .map_err(ErrorInternalServerError)?;
+            let document = data.scraper.extract(&request.url).await?;
 
             (
                 document.title,
@@ -241,9 +237,7 @@ async fn do_post_entries(
         .unwrap_or(vec![]);
 
     let mut tx = tctx.tx()?;
-    let (entry_row, tag_rows) = entries::create(&mut tx, create_entry, &create_tags)
-        .await
-        .map_err(ErrorInternalServerError)?;
+    let (entry_row, tag_rows) = entries::create(&mut tx, create_entry, &create_tags).await?;
 
     let tags = tag_rows.into_iter().map(Tag::from).collect();
 
@@ -285,9 +279,7 @@ async fn entries(
 
     let mut tx = tctx.tx()?;
 
-    let count_without_paging = entries::count(&mut tx, &params)
-        .await
-        .map_err(ErrorInternalServerError)?;
+    let count_without_paging = entries::count(&mut tx, &params).await?;
 
     let pages = (count_without_paging as f64 / request.per_page as f64).ceil() as i64;
 
@@ -296,9 +288,7 @@ async fn entries(
     }
 
     // TODO implement all needed request filters and etc
-    let entries = entries::find_all(&mut tx, &params)
-        .await
-        .map_err(ErrorInternalServerError)?;
+    let entries = entries::find_all(&mut tx, &params).await?;
 
     let mut ents = vec![];
 
@@ -334,13 +324,9 @@ async fn get_tags_by_entry(
 
     let mut tx = tctx.tx()?;
 
-    if entries::exists_by_id(&mut tx, user_info.user_id, entry_id)
-        .await
-        .map_err(ErrorInternalServerError)?
-    {
+    if entries::exists_by_id(&mut tx, user_info.user_id, entry_id).await? {
         let result = tags::find_by_entry_id(&mut tx, user_info.user_id, entry_id)
-            .await
-            .map_err(ErrorInternalServerError)?
+            .await?
             .into_iter()
             .map(|tr| tr.into())
             .collect();
@@ -358,8 +344,7 @@ async fn get_tags(
     let mut tx = tctx.tx()?;
 
     let result = tags::get_all(&mut tx, user_info.user_id)
-        .await
-        .map_err(ErrorInternalServerError)?
+        .await?
         .into_iter()
         .map(|tr| tr.into())
         .collect();
@@ -381,8 +366,7 @@ async fn delete_tag_by_id(
     let mut tx = tctx.tx()?;
 
     let result = tags::delete_by_id(&mut tx, user_info.user_id, tag_id.into_inner())
-        .await
-        .map_err(ErrorInternalServerError)?
+        .await?
         .map(|tr| tr.into());
 
     if let Some(delete_tag) = result {
@@ -400,8 +384,7 @@ async fn delete_tag_by_label(
     let mut tx = tctx.tx()?;
 
     let result = tags::delete_by_label(&mut tx, user_info.user_id, &label.label)
-        .await
-        .map_err(ErrorInternalServerError)?
+        .await?
         .map(|tr| tr.into());
 
     if let Some(delete_tag) = result {
@@ -427,8 +410,7 @@ async fn delete_tags_by_label(
     let mut tx = tctx.tx()?;
 
     let result = tags::delete_all_by_label(&mut tx, user_info.user_id, &label.labels)
-        .await
-        .map_err(ErrorInternalServerError)?
+        .await?
         .into_iter()
         .map(|tr| tr.into())
         .collect();
@@ -472,18 +454,11 @@ async fn delete_tag_from_entry(
 
     let mut tx = tctx.tx()?;
 
-    if entries::exists_by_id(&mut tx, user_info.user_id, entry_id)
-        .await
-        .map_err(ErrorInternalServerError)?
-    {
-        entries::delete_tag_by_tag_id(&mut tx, user_info.user_id, entry_id, tag_id)
-            .await
-            .map_err(ErrorInternalServerError)?;
+    if entries::exists_by_id(&mut tx, user_info.user_id, entry_id).await? {
+        entries::delete_tag_by_tag_id(&mut tx, user_info.user_id, entry_id, tag_id).await?;
 
         if let Some((entry_row, tag_rows)) =
-            entries::find_by_id(&mut tx, user_info.user_id, entry_id)
-                .await
-                .map_err(ErrorInternalServerError)?
+            entries::find_by_id(&mut tx, user_info.user_id, entry_id).await?
         {
             let tags = tag_rows.into_iter().map(|tr| tr.into()).collect();
 
@@ -512,9 +487,7 @@ async fn delete_entry(
 
     match request.expect {
         Expect::Id => {
-            let deleted = entries::delete_by_id(&mut tx, user_info.user_id, entry_id)
-                .await
-                .map_err(ErrorInternalServerError)?;
+            let deleted = entries::delete_by_id(&mut tx, user_info.user_id, entry_id).await?;
 
             if !deleted {
                 return Err(ErrorNotFound("Entry not found"));
@@ -523,16 +496,12 @@ async fn delete_entry(
             Ok(Json(DeleteEntryResponse::Id { id: entry_id }))
         }
         Expect::Full => {
-            let full_entry = entries::find_by_id(&mut tx, user_info.user_id, entry_id)
-                .await
-                .map_err(ErrorInternalServerError)?;
+            let full_entry = entries::find_by_id(&mut tx, user_info.user_id, entry_id).await?;
 
             let (entry_row, tag_rows) =
                 full_entry.ok_or_else(|| ErrorNotFound("Entry not found"))?;
 
-            let deleted = entries::delete_by_id(&mut tx, user_info.user_id, entry_id)
-                .await
-                .map_err(ErrorInternalServerError)?;
+            let deleted = entries::delete_by_id(&mut tx, user_info.user_id, entry_id).await?;
 
             if !deleted {
                 return Err(ErrorNotFound("Entry not found"));
@@ -568,8 +537,7 @@ async fn post_entry_tags(
 
     // TODO dirty design - looks like we need entry repository method for it
     if entries::find_by_id(&mut tx, user_info.user_id, entry_id)
-        .await
-        .map_err(ErrorInternalServerError)?
+        .await?
         .is_some()
     {
         let full_tags: Vec<tags::CreateTag> = request
@@ -583,13 +551,10 @@ async fn post_entry_tags(
             })
             .collect();
 
-        tags::update_tags_by_entry_id(&mut tx, user_info.user_id, entry_id, &full_tags)
-            .await
-            .map_err(ErrorInternalServerError)?;
+        tags::update_tags_by_entry_id(&mut tx, user_info.user_id, entry_id, &full_tags).await?;
 
         let (entry_row, tag_rows) = entries::find_by_id(&mut tx, user_info.user_id, entry_id)
-            .await
-            .map_err(ErrorInternalServerError)?
+            .await?
             .ok_or(ErrorNotFound("Entry not found"))?;
 
         let entry_tags = tag_rows.into_iter().map(Tag::from).collect();
@@ -647,9 +612,7 @@ async fn patch_entry(
 
     let mut tx = tctx.tx()?;
 
-    let updated = entries::update_by_id(&mut tx, user_info.user_id, entry_id, repo_update)
-        .await
-        .map_err(ErrorInternalServerError)?;
+    let updated = entries::update_by_id(&mut tx, user_info.user_id, entry_id, repo_update).await?;
 
     if !updated {
         return Err(ErrorNotFound("Entry not found"));
@@ -665,14 +628,11 @@ async fn patch_entry(
             })
             .collect();
 
-        tags::update_tags_by_entry_id(&mut tx, user_info.user_id, entry_id, &full_tags)
-            .await
-            .map_err(ErrorInternalServerError)?;
+        tags::update_tags_by_entry_id(&mut tx, user_info.user_id, entry_id, &full_tags).await?;
     };
 
     let (entry_row, tag_rows) = entries::find_by_id(&mut tx, user_info.user_id, entry_id)
-        .await
-        .map_err(ErrorInternalServerError)?
+        .await?
         .ok_or_else(|| ErrorNotFound("Entry not found"))?;
 
     let entry_tags = tag_rows.into_iter().map(|t| t.into()).collect();

@@ -2,13 +2,15 @@ use std::ops::DerefMut;
 
 use sqlx::{Row, prelude::FromRow, sqlite::SqliteRow};
 
+use crate::result::ArticlerResult;
+
 use super::*;
 
 pub async fn find_by_username_and_password(
     tx: &mut sqlx::Transaction<'_, Db>,
     username: &str,
     password_hash: &str,
-) -> super::Result<Option<UserRow>> {
+) -> ArticlerResult<Option<UserRow>> {
     let result = sqlx::query_as::<_, UserRow>(&format!(
         "SELECT * FROM {} WHERE username = ? AND password_hash = ?",
         super::USERS_TABLE
@@ -24,7 +26,7 @@ pub async fn find_by_username_and_password(
 pub async fn find_by_username(
     tx: &mut sqlx::Transaction<'_, Db>,
     username: &str,
-) -> Result<Option<UserRow>> {
+) -> ArticlerResult<Option<UserRow>> {
     let result =
         sqlx::query_as::<_, UserRow>(&format!("SELECT * FROM {} WHERE username = ?", USERS_TABLE))
             .bind(username)

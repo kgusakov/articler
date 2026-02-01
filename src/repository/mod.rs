@@ -1,14 +1,13 @@
-pub mod users;
 pub mod clients;
 pub mod entries;
 pub mod tags;
+pub mod users;
 
 use sqlx::Error as SqlxError;
 use sqlx::Sqlite;
 use thiserror::Error;
 
 pub type Db = Sqlite;
-type Result<T> = std::result::Result<T, DbError>;
 type Id = i64;
 type Timestamp = i64;
 type ReadingTime = i32;
@@ -21,8 +20,7 @@ const CLIENTS_TABLE: &str = "clients";
 const SQLITE_LIMIT_VARIABLE_NUMBER: usize = 999;
 
 #[derive(Error, Debug)]
-pub enum DbError {
-    // TODO produce ugly wrapped SqliteError(Database(SqliteError { code: 1, message: "no such column: et.tag_id" }))
+pub enum DbErrorType {
     #[error(transparent)]
     SqliteRepositoryError(#[from] SqlxError),
     #[error("Repository error: {0}")]

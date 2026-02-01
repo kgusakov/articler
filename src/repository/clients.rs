@@ -2,6 +2,8 @@ use std::ops::DerefMut;
 
 use sqlx::{Row, prelude::FromRow, sqlite::SqliteRow};
 
+use crate::result::ArticlerResult;
+
 use super::*;
 
 pub async fn find_by_user_id_client_id_and_secret(
@@ -9,7 +11,7 @@ pub async fn find_by_user_id_client_id_and_secret(
     user_id: Id,
     client_id: &str,
     client_secret: &str,
-) -> Result<Option<ClientRow>> {
+) -> ArticlerResult<Option<ClientRow>> {
     let result = sqlx::query_as::<_, ClientRow>(&format!(
         "SELECT * FROM {} WHERE user_id = ? AND client_id = ? AND client_secret = ?",
         CLIENTS_TABLE
@@ -27,7 +29,7 @@ pub async fn find_by_client_id_and_secret(
     executor: &mut sqlx::Transaction<'_, Db>,
     client_id: &str,
     client_secret: &str,
-) -> Result<Option<ClientRow>> {
+) -> ArticlerResult<Option<ClientRow>> {
     let result = sqlx::query_as::<_, ClientRow>(&format!(
         "SELECT * FROM {} WHERE client_id = ? AND client_secret = ?",
         CLIENTS_TABLE
@@ -44,7 +46,7 @@ pub async fn find_by_client_name_and_user_id(
     tx: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     client_name: &str,
-) -> Result<Option<ClientRow>> {
+) -> ArticlerResult<Option<ClientRow>> {
     let result = sqlx::query_as::<_, ClientRow>(&format!(
         "SELECT * FROM {} WHERE user_id = ? AND name = ?",
         CLIENTS_TABLE
