@@ -5,6 +5,7 @@ use crate::{
     middleware::TransactionContext,
     models::{Entry, Tag},
     repository::{entries, tags},
+    result::{ArticlerError, ArticlerResult},
 };
 use actix_utils::future::{Ready, ready};
 use actix_web::web::{ServiceConfig, delete, get, patch, post};
@@ -15,7 +16,6 @@ use actix_web::{
 };
 use actix_web::{FromRequest, guard};
 use actix_web_httpauth::middleware::HttpAuthentication;
-use anyhow::anyhow;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_with::BoolFromInt;
@@ -24,7 +24,8 @@ use serde_with::formats::CommaSeparator;
 use serde_with::serde_as;
 use slug::slugify;
 use std::str::FromStr;
-use url::{ParseError, Url};
+use thiserror::Error;
+use url::Url;
 
 type Id = i64;
 
@@ -242,10 +243,11 @@ async fn do_post_entries(
     let tags = tag_rows.into_iter().map(Tag::from).collect();
 
     // TODO replace by real url
-    let self_url = Url::parse("https://example.com").map_err(ErrorInternalServerError)?;
+    #[allow(clippy::redundant_closure)] // Or Location of error will be not correct
+    let self_url = Url::parse("https://example.com").map_err(|e| Into::<ArticlerError>::into(e))?;
 
     Ok(web::Json(AddEntryResponse {
-        entry: Entry::try_from((entry_row, tags)).map_err(ErrorInternalServerError)?,
+        entry: Entry::try_from((entry_row, tags))?,
         _links: Links {
             _self: Link { href: self_url },
             first: None,
@@ -294,7 +296,7 @@ async fn entries(
 
     for (e, tags) in entries {
         let mapped_tags: Vec<Tag> = tags.into_iter().map(|tr| tr.into()).collect();
-        ents.push(Entry::try_from((e, mapped_tags)).map_err(ErrorInternalServerError)?);
+        ents.push(Entry::try_from((e, mapped_tags))?);
     }
 
     // TODO implement actual urls generating
@@ -462,9 +464,7 @@ async fn delete_tag_from_entry(
         {
             let tags = tag_rows.into_iter().map(|tr| tr.into()).collect();
 
-            Ok(Json(
-                Entry::try_from((entry_row, tags)).map_err(ErrorInternalServerError)?,
-            ))
+            Ok(Json(Entry::try_from((entry_row, tags))?))
         } else {
             // Due to transactions - entry couldn't be deleted here
             Err(ErrorInternalServerError("Unknown error"))
@@ -508,7 +508,7 @@ async fn delete_entry(
             }
 
             let tags: Vec<Tag> = tag_rows.into_iter().map(|tr| tr.into()).collect();
-            let entry = Entry::try_from((entry_row, tags)).map_err(ErrorInternalServerError)?;
+            let entry = Entry::try_from((entry_row, tags))?;
 
             Ok(Json(DeleteEntryResponse::Full {
                 entry: Box::new(entry),
@@ -559,9 +559,7 @@ async fn post_entry_tags(
 
         let entry_tags = tag_rows.into_iter().map(Tag::from).collect();
 
-        Ok(Json(
-            Entry::try_from((entry_row, entry_tags)).map_err(ErrorInternalServerError)?,
-        ))
+        Ok(Json(Entry::try_from((entry_row, entry_tags))?))
     } else {
         Err(ErrorNotFound("Entry not found"))
     }
@@ -637,7 +635,7 @@ async fn patch_entry(
 
     let entry_tags = tag_rows.into_iter().map(|t| t.into()).collect();
 
-    let entry = Entry::try_from((entry_row, entry_tags)).map_err(ErrorInternalServerError)?;
+    let entry = Entry::try_from((entry_row, entry_tags))?;
 
     Ok(Json(entry))
 }
@@ -665,24 +663,31 @@ struct Entries {
     _links: Links,
 }
 
-fn try_parse_url(s: Option<String>) -> Result<Option<Url>, ParseError> {
-    s.map(|u| Url::parse(&u)).transpose()
+fn try_parse_url(s: Option<String>) -> ArticlerResult<Option<Url>> {
+    Ok(s.map(|u| Url::parse(&u)).transpose()?)
 }
 
-fn try_parse_timestamp_opt(s: Option<i64>) -> anyhow::Result<Option<DateTime<Utc>>> {
+// TODO ugly place for errors - api module is overwhelmed with logic already
+#[derive(Error, Debug)]
+enum HandlerError {
+    #[error("Date from seconds convert error")]
+    DateFromError,
+}
+
+fn try_parse_timestamp_opt(s: Option<i64>) -> ArticlerResult<Option<DateTime<Utc>>> {
     match s {
         Some(t) => match DateTime::from_timestamp_secs(t) {
             Some(r) => Ok(Some(r)),
-            None => Err(anyhow!("Can't parse timestamp")),
+            None => Err(HandlerError::DateFromError.into()),
         },
         None => Ok(None),
     }
 }
 
-fn try_parse_timestamp(s: i64) -> anyhow::Result<DateTime<Utc>> {
+fn try_parse_timestamp(s: i64) -> ArticlerResult<DateTime<Utc>> {
     match DateTime::from_timestamp_secs(s) {
         Some(r) => Ok(r),
-        None => Err(anyhow!("Can't parse timestamp")),
+        None => Err(HandlerError::DateFromError.into()),
     }
 }
 
@@ -697,7 +702,7 @@ impl From<tags::TagRow> for Tag {
 }
 
 impl TryFrom<(entries::EntryRow, Vec<Tag>)> for Entry {
-    type Error = anyhow::Error;
+    type Error = ArticlerError;
 
     fn try_from((e, tags): (entries::EntryRow, Vec<Tag>)) -> Result<Self, Self::Error> {
         Ok(Entry {

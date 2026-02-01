@@ -4,11 +4,12 @@ use actix_web::cookie::Key;
 use sqlx::sqlite::SqlitePoolOptions;
 use wallabag_rs::{
     app::{app_state_init, http_server},
+    result::ArticlerResult,
     scraper::Scraper,
 };
 
 #[actix_web::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> ArticlerResult<()> {
     env_logger::init();
 
     let db_path = env::var("DATABASE_URL").expect("Environment variable DATABASE_URL is not set");
