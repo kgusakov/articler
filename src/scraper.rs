@@ -66,7 +66,8 @@ impl Scraper {
         let article: Article = readability.parse()?;
 
         let image_url = match article.image {
-            Some(u) => Some(Url::parse(&u)?),
+            // TODO support relative image paths
+            Some(u) => Url::parse(&u).ok(),
             _ => None,
         };
 
@@ -98,7 +99,7 @@ mod tests {
     use crate::scraper::{Document, Scraper};
 
     #[actix_web::test]
-    async fn test() {
+    async fn test_success() {
         let mock_server = MockServer::start().await;
 
         let content = r#"
@@ -123,6 +124,43 @@ mod tests {
                 "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>"
                     .into(),
             image_url: Some(Url::parse("http://example.com/main.jpg").unwrap()),
+            mime_type: Some("text/html".to_string()),
+            language: Some("en".to_string()),
+            published_at: Some(
+                NaiveDateTime::parse_from_str("2020-11-24T02:43:22+00:00", "%Y-%m-%dT%H:%M:%S%:z")
+                    .unwrap()
+                    .and_utc()
+            )
+        }, document);
+        mock_server.verify().await
+    }
+
+    #[actix_web::test]
+    async fn test_relative_image() {
+        let mock_server = MockServer::start().await;
+
+        let content = r#"
+            <!DOCTYPE html><html lang="en"><head><title>Test Title</title><meta property="article:published_time" content="2020-11-24T02:43:22+00:00"><meta property="og:image" content="/upload/main.jpg"></head><body><p>Test Content</p></body></html>
+        "#;
+
+        Mock::given(method("GET"))
+            .and(path("/test-article"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(content, "text/html"))
+            .mount(&mock_server)
+            .await;
+
+        let url = Url::parse(format!("{}/test-article", mock_server.uri()).as_str()).unwrap();
+
+        let scraper = Scraper::new(None).unwrap();
+
+        let document = scraper.extract(&url).await.unwrap();
+
+        assert_eq!(Document {
+            title: "Test Title".to_string(),
+            content_html:
+                "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>"
+                    .into(),
+            image_url: None,
             mime_type: Some("text/html".to_string()),
             language: Some("en".to_string()),
             published_at: Some(
