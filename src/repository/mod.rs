@@ -21,8 +21,6 @@ const SQLITE_LIMIT_VARIABLE_NUMBER: usize = 999;
 
 #[derive(Error, Debug)]
 pub enum DbErrorType {
-    #[error(transparent)]
-    SqliteRepositoryError(#[from] SqlxError),
     #[error("Repository error: {0}")]
     RepositoryError(String),
 }
