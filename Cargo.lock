@@ -366,6 +366,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "articler"
+version = "0.1.0"
+dependencies = [
+ "actix-http",
+ "actix-service",
+ "actix-session",
+ "actix-utils",
+ "actix-web",
+ "actix-web-httpauth",
+ "argon2",
+ "async-trait",
+ "chrono",
+ "dateparser",
+ "dom_smoothie",
+ "env_logger",
+ "indexmap 2.13.0",
+ "proptest",
+ "rand 0.9.2",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde-json-assert",
+ "serde_json",
+ "serde_with",
+ "sha1",
+ "slug",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "url",
+ "urlencoding",
+ "wiremock",
+]
+
+[[package]]
 name = "assert-json-diff"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3759,41 +3794,6 @@ checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
 dependencies = [
  "same-file",
  "winapi-util",
-]
-
-[[package]]
-name = "wallabag-rs"
-version = "0.1.0"
-dependencies = [
- "actix-http",
- "actix-service",
- "actix-session",
- "actix-utils",
- "actix-web",
- "actix-web-httpauth",
- "argon2",
- "async-trait",
- "chrono",
- "dateparser",
- "dom_smoothie",
- "env_logger",
- "indexmap 2.13.0",
- "proptest",
- "rand 0.9.2",
- "regex",
- "reqwest",
- "serde",
- "serde-json-assert",
- "serde_json",
- "serde_with",
- "sha1",
- "slug",
- "sqlx",
- "thiserror 2.0.17",
- "tokio",
- "url",
- "urlencoding",
- "wiremock",
 ]
 
 [[package]]

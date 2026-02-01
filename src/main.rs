@@ -1,12 +1,12 @@
 use std::env;
 
 use actix_web::cookie::Key;
-use sqlx::sqlite::SqlitePoolOptions;
-use wallabag_rs::{
+use articler::{
     app::{app_state_init, http_server},
     result::ArticlerResult,
     scraper::Scraper,
 };
+use sqlx::sqlite::SqlitePoolOptions;
 
 #[actix_web::main]
 async fn main() -> ArticlerResult<()> {

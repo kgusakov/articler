@@ -9,12 +9,12 @@ use actix_web::{
     test,
     web::{self},
 };
-use serde_json::Value;
-use sqlx::SqlitePool;
-use wallabag_rs::{
+use articler::{
     app::{app, app_state_init},
     scraper::Scraper,
 };
+use serde_json::Value;
+use sqlx::SqlitePool;
 
 static INIT: Once = Once::new();
 
