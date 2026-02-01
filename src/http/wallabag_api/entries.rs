@@ -66,6 +66,7 @@ async fn do_post_entries(
                 request.preview_picture,
             )
         } else {
+            // TODO on error persist entry with empty title/content anyway
             let document = data.scraper.extract(&request.url).await?;
 
             (
