@@ -916,7 +916,7 @@ impl FromRequest for UserInfo {
 
 #[cfg(test)]
 mod tests {
-    use crate::http::api::{Detail, EntriesRequest, FindSortEnum, FindSortOrder};
+    use crate::http::wallabag_api::{Detail, EntriesRequest, FindSortEnum, FindSortOrder};
 
     #[test]
     fn test() {

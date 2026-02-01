@@ -34,7 +34,7 @@ pub fn app(
         .wrap(Logger::default())
         .wrap(from_fn(wrap_with_tx))
         .configure(crate::http::oauth::routes)
-        .configure(crate::http::api::routes)
+        .configure(crate::http::wallabag_api::routes)
         .configure(|cfg| crate::http::fake_ui::routes(cfg, cookie_key))
 }
 
