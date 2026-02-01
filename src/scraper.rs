@@ -60,8 +60,11 @@ impl Scraper {
             ..Default::default()
         };
 
-        let mut readability =
-            Readability::new(String::from_utf8_lossy(&buf).into_owned(), None, Some(cfg))?;
+        let mut readability = Readability::new(
+            String::from_utf8_lossy(&buf).into_owned(),
+            Some(url.as_str()),
+            Some(cfg),
+        )?;
 
         let article: Article = readability.parse()?;
 
