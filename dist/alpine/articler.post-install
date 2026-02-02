@@ -1,0 +1,94 @@
+#!/bin/sh
+# Post-installation script for articler
+# This script:
+# - Creates the SQLite database directory and file
+# - Generates a secure cookie key
+# - Updates the configuration file with database path and cookie key
+
+set -e
+
+CONFIG_FILE="/etc/conf.d/articler"
+DB_DIR="/var/lib/articler"
+DB_FILE="$DB_DIR/articler.db"
+DB_URL="sqlite://$DB_FILE"
+
+# Log function for visibility
+log() {
+    echo "articler post-install: $*"
+}
+
+# Create database directory and file
+if [ ! -d "$DB_DIR" ]; then
+    log "Creating database directory: $DB_DIR"
+    mkdir -p "$DB_DIR"
+    chmod 755 "$DB_DIR"
+fi
+
+if [ ! -f "$DB_FILE" ]; then
+    log "Creating database file: $DB_FILE"
+    touch "$DB_FILE"
+    chmod 640 "$DB_FILE"
+
+    # Set ownership to articler user if it exists
+    if getent passwd articler >/dev/null 2>&1; then
+        chown articler:articler "$DB_FILE"
+        chown articler:articler "$DB_DIR"
+        log "Database ownership set to articler:articler"
+    else
+        log "Warning: articler user not found, database owned by root"
+    fi
+else
+    log "Database file already exists: $DB_FILE"
+fi
+
+# Update configuration file if DATABASE_URL is empty
+if grep -q "^export DATABASE_URL=$" "$CONFIG_FILE" 2>/dev/null; then
+    log "Setting DATABASE_URL in $CONFIG_FILE"
+    sed -i "s|^export DATABASE_URL=|export DATABASE_URL=\"$DB_URL\"|" "$CONFIG_FILE"
+else
+    log "DATABASE_URL already configured, skipping"
+fi
+
+# Generate and set cookie key if empty
+if grep -q "^export COOKIE_KEY=$" "$CONFIG_FILE" 2>/dev/null; then
+    log "Generating secure cookie key"
+    # Generate 64 random bytes and encode as base64
+    COOKIE_KEY=$(dd if=/dev/urandom bs=64 count=1 2>/dev/null | base64 | tr -d '\n')
+
+    if [ -n "$COOKIE_KEY" ]; then
+        log "Setting COOKIE_KEY in $CONFIG_FILE"
+        sed -i "s|^export COOKIE_KEY=|export COOKIE_KEY=\"$COOKIE_KEY\"|" "$CONFIG_FILE"
+    else
+        log "Error: Failed to generate cookie key"
+        exit 1
+    fi
+else
+    log "COOKIE_KEY already configured, skipping"
+fi
+
+# Create log files with proper permissions
+LOG_FILE="/var/log/articler.log"
+ERR_FILE="/var/log/articler.err"
+
+if [ ! -f "$LOG_FILE" ]; then
+    log "Creating log file: $LOG_FILE"
+    touch "$LOG_FILE"
+    chmod 644 "$LOG_FILE"
+
+    if getent passwd articler >/dev/null 2>&1; then
+        chown articler:articler "$LOG_FILE"
+    fi
+fi
+
+if [ ! -f "$ERR_FILE" ]; then
+    log "Creating error log file: $ERR_FILE"
+    touch "$ERR_FILE"
+    chmod 644 "$ERR_FILE"
+
+    if getent passwd articler >/dev/null 2>&1; then
+        chown articler:articler "$ERR_FILE"
+    fi
+fi
+
+log "Post-installation complete"
+exit 0

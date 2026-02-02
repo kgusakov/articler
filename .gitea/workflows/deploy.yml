@@ -1,0 +1,45 @@
+name: Deploy
+
+on: workflow_dispatch
+
+jobs:
+  build-alpine-package:
+    name: Build Alpine Package
+    runs-on: alpine-3.23
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build release binary
+        run: |
+          cargo build --release
+
+      - name: Build Alpine package
+        working-directory: ./dist/alpine
+        run: |
+          abuild-keygen -n -a
+          cp /root/.abuild/*.rsa.pub /etc/apk/keys/
+          abuild -F checksum
+          abuild -r -F
+      - uses: actions/upload-artifact@v3
+        with:
+          name: articler
+          path: /root/packages/dist/x86_64/*.apk
+          if-no-files-found: error
+
+  local-deploy:
+    runs-on: alpine-3.23
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: articler
+      - run: |
+          mkdir -p ~/.ssh/
+          echo "${{secrets.SSH_PRIVATE_KEY}}" > ~/.ssh/private.key
+          chmod 600 ~/.ssh/private.key
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/private.key *.apk root@${{ vars.DEPLOY_HOST }}:/tmp/
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/private.key root@${{ vars.DEPLOY_HOST }} "
+            set -x
+            apk add --allow-untrusted /tmp/articler-*.apk
+            rc-service articler restart
+            rm /tmp/articler-*.apk
+          "

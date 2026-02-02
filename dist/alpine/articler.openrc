@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+
+command="/usr/bin/articler"
+command_user="articler:articler"
+pidfile="/run/$RC_SVCNAME.pid"
+command_background="yes"
+output_log="/var/log/articler.log"
+error_log="/var/log/articler.err"
+
+depend() {
+        need net
+        use dns
+}

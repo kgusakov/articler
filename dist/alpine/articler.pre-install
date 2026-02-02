@@ -1,0 +1,34 @@
+#!/bin/sh
+# Pre-installation script for articler
+# Creates a dedicated system user and group for running the articler service
+
+set -e
+
+USER="articler"
+GROUP="articler"
+HOME_DIR="/var/lib/articler"
+COMMENT="Articler service user"
+
+# Log function for visibility
+log() {
+    echo "articler pre-install: $*"
+}
+
+# Create group if it doesn't exist
+if ! getent group "$GROUP" >/dev/null 2>&1; then
+    log "Creating group: $GROUP"
+    addgroup -S "$GROUP"
+else
+    log "Group $GROUP already exists"
+fi
+
+# Create user if it doesn't exist
+if ! getent passwd "$USER" >/dev/null 2>&1; then
+    log "Creating user: $USER"
+    adduser -S -D -H -h "$HOME_DIR" -s /sbin/nologin -G "$GROUP" -g "$COMMENT" "$USER"
+else
+    log "User $USER already exists"
+fi
+
+log "Pre-installation complete"
+exit 0
