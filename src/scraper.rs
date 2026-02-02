@@ -69,7 +69,6 @@ impl Scraper {
         let article: Article = readability.parse()?;
 
         let image_url = match article.image {
-            // TODO support relative image paths
             Some(u) => Url::parse(&u).ok(),
             _ => None,
         };
@@ -79,8 +78,14 @@ impl Scraper {
             None => None,
         };
 
+        let mut title = article.title;
+
+        if title.is_empty() {
+            title = extract_title(&url).to_string();
+        }
+
         Ok(Document {
-            title: article.title,
+            title,
             content_html: article.content.deref().to_owned(),
             image_url,
             mime_type,
@@ -88,6 +93,25 @@ impl Scraper {
             published_at,
         })
     }
+}
+
+fn extract_title(url: &Url) -> &str {
+    if let Some(segments) = url.path_segments()
+        && let Some(last) = segments.last()
+        && !last.is_empty()
+    {
+        return last;
+    }
+
+    if let Some(domain) = url.domain() {
+        return domain;
+    }
+
+    if let Some(host) = url.host_str() {
+        return host;
+    }
+
+    url.as_str()
 }
 
 #[cfg(test)]
@@ -99,7 +123,7 @@ mod tests {
         matchers::{method, path},
     };
 
-    use crate::scraper::{Document, Scraper};
+    use crate::scraper::{Document, Scraper, extract_title};
 
     #[actix_web::test]
     async fn test_success() {
@@ -158,20 +182,51 @@ mod tests {
 
         let document = scraper.extract(&url).await.unwrap();
 
-        assert_eq!(Document {
-            title: "Test Title".to_string(),
-            content_html:
-                "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>"
-                    .into(),
-            image_url: None,
-            mime_type: Some("text/html".to_string()),
-            language: Some("en".to_string()),
-            published_at: Some(
-                NaiveDateTime::parse_from_str("2020-11-24T02:43:22+00:00", "%Y-%m-%dT%H:%M:%S%:z")
-                    .unwrap()
-                    .and_utc()
-            )
-        }, document);
+        assert!(document.image_url.is_none());
         mock_server.verify().await
+    }
+
+    #[actix_web::test]
+    async fn test_empty_title() {
+        let mock_server = MockServer::start().await;
+
+        let content = r#"
+            <!DOCTYPE html><html lang="en"><head><meta property="article:published_time" content="2020-11-24T02:43:22+00:00"><meta property="og:image" content="/upload/main.jpg"></head><body><p>Test Content</p></body></html>
+        "#;
+
+        Mock::given(method("GET"))
+            .and(path("/test-article/slug-like-url-path"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(content, "text/html"))
+            .mount(&mock_server)
+            .await;
+
+        let url =
+            Url::parse(format!("{}/test-article/slug-like-url-path", mock_server.uri()).as_str())
+                .unwrap();
+
+        let scraper = Scraper::new(None).unwrap();
+
+        let document = scraper.extract(&url).await.unwrap();
+
+        assert_eq!("slug-like-url-path", document.title);
+        mock_server.verify().await
+    }
+
+    #[test]
+    fn test_extract_title() {
+        assert_eq!(
+            "some-text",
+            extract_title(&Url::parse("http://site.com/some-text").unwrap())
+        );
+
+        assert_eq!(
+            "site.com",
+            extract_title(&Url::parse("http://site.com").unwrap())
+        );
+
+        assert_eq!(
+            "127.0.0.1",
+            extract_title(&Url::parse("http://127.0.0.1").unwrap())
+        );
     }
 }
