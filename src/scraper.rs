@@ -81,7 +81,7 @@ impl Scraper {
         let mut title = article.title;
 
         if title.is_empty() {
-            title = extract_title(&url).to_string();
+            title = extract_title(url).to_string();
         }
 
         Ok(Document {
@@ -96,8 +96,8 @@ impl Scraper {
 }
 
 fn extract_title(url: &Url) -> &str {
-    if let Some(segments) = url.path_segments()
-        && let Some(last) = segments.last()
+    if let Some(mut segments) = url.path_segments()
+        && let Some(last) = segments.next_back()
         && !last.is_empty()
     {
         return last;

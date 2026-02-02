@@ -126,6 +126,34 @@ async fn test_get_version(pool: SqlitePool) {
     assert_eq!("2.6.12", resp.as_str().unwrap());
 }
 
+#[sqlx::test(migrations = "./migrations")]
+async fn test_options_version_json(pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    let req = test::TestRequest::default()
+        .method(actix_http::Method::OPTIONS)
+        .uri("/api/version.json")
+        .to_request();
+
+    let resp: Value = test::call_and_read_body_json(&app, req).await;
+
+    assert_eq!("2.6.12", resp.as_str().unwrap());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn test_options_version(pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    let req = test::TestRequest::default()
+        .method(actix_http::Method::OPTIONS)
+        .uri("/api/version")
+        .to_request();
+
+    let resp: Value = test::call_and_read_body_json(&app, req).await;
+
+    assert_eq!("2.6.12", resp.as_str().unwrap());
+}
+
 #[sqlx::test(migrations = "./migrations", fixtures("users", "entries"))]
 async fn get_entries(pool: SqlitePool) {
     let app = init_app(pool).await;

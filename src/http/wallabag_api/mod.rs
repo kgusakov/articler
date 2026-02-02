@@ -24,6 +24,15 @@ pub fn routes(cfg: &mut ServiceConfig) {
     cfg.route("/api/version.json", get().to(version))
         .route("/api/version", get().to(version));
 
+    cfg.route(
+        "/api/version.json",
+        web::route().guard(guard::Options()).to(version),
+    )
+    .route(
+        "/api/version",
+        web::route().guard(guard::Options()).to(version),
+    );
+
     cfg.service(
         web::scope("/api")
             .wrap(oauth)
