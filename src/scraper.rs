@@ -7,6 +7,7 @@ use reqwest::Proxy;
 use reqwest::header;
 use reqwest::header::USER_AGENT;
 use std::ops::Deref;
+use std::time::Duration;
 use url::Url;
 
 use crate::result::ArticlerResult;
@@ -45,6 +46,7 @@ impl Scraper {
             .client
             .get(url.as_str())
             .header(USER_AGENT, USER_AGENT_VALUE)
+            .timeout(Duration::from_secs(30))
             .send()
             .await?;
 
