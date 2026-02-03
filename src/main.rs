@@ -21,6 +21,12 @@ async fn main() -> ArticlerResult<()> {
     };
 
     let pool = SqlitePoolOptions::new().connect(&db_path).await?;
+
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("Failed to run database migrations");
+
     let scraper = Scraper::new(proxy_scheme.as_deref()).expect("Scraper can't be initialized");
 
     let port = env::var("HTTP_PORT")
