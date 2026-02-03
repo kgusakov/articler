@@ -1,6 +1,7 @@
 use chrono::DateTime;
 use chrono::Utc;
 use dateparser::parse;
+use dom_smoothie::ReadabilityError;
 use dom_smoothie::{Article, CandidateSelectMode, Config, Readability};
 use reqwest::Client;
 use reqwest::Proxy;
@@ -8,25 +9,12 @@ use reqwest::header;
 use reqwest::header::USER_AGENT;
 use std::ops::Deref;
 use std::time::Duration;
+use thiserror::Error;
 use url::Url;
 
 use crate::result::ArticlerResult;
 
 const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
-
-pub struct Scraper {
-    client: Client,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Document {
-    pub title: String,
-    pub content_html: String,
-    pub image_url: Option<Url>,
-    pub mime_type: Option<String>,
-    pub language: Option<String>,
-    pub published_at: Option<DateTime<Utc>>,
-}
 
 impl Scraper {
     pub fn new(proxy_scheme: Option<&str>) -> ArticlerResult<Self> {
@@ -79,7 +67,8 @@ impl Scraper {
             String::from_utf8_lossy(&buf).into_owned(),
             Some(url.as_str()),
             Some(cfg),
-        )?;
+        )
+        .map_err(|e| ScraperError::ArticleTextParsingError(e, url.clone()))?;
 
         let article: Article = readability.parse()?;
 
@@ -127,6 +116,26 @@ fn extract_title(url: &Url) -> &str {
     }
 
     url.as_str()
+}
+
+#[derive(Error, Debug)]
+enum ScraperError {
+    #[error("Can't receive readable text from url {1}: {0:?}")]
+    ArticleTextParsingError(ReadabilityError, Url),
+}
+
+pub struct Scraper {
+    client: Client,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Document {
+    pub title: String,
+    pub content_html: String,
+    pub image_url: Option<Url>,
+    pub mime_type: Option<String>,
+    pub language: Option<String>,
+    pub published_at: Option<DateTime<Utc>>,
 }
 
 #[cfg(test)]
