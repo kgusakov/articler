@@ -14,7 +14,11 @@ async fn main() -> ArticlerResult<()> {
 
     let db_path = env::var("DATABASE_URL").expect("Environment variable DATABASE_URL is not set");
     let cookie_key = env::var("COOKIE_KEY").expect("Environment variable COOKIE_KEY is not set");
-    let proxy_scheme = env::var("ALL_PROXY").ok();
+
+    let proxy_scheme = match env::var("ALL_PROXY") {
+        Ok(p) if !p.is_empty() => Some(p),
+        _ => None,
+    };
 
     let pool = SqlitePoolOptions::new().connect(&db_path).await?;
     let scraper = Scraper::new(proxy_scheme.as_deref()).expect("Scraper can't be initialized");
