@@ -67,10 +67,11 @@ impl Scraper {
             String::from_utf8_lossy(&buf).into_owned(),
             Some(url.as_str()),
             Some(cfg),
-        )
-        .map_err(|e| ScraperError::ArticleTextParsingError(e, url.clone()))?;
+        )?;
 
-        let article: Article = readability.parse()?;
+        let article: Article = readability
+            .parse()
+            .map_err(|e| ScraperError::ArticleTextParsingError(e, url.clone()))?;
 
         let image_url = match article.image {
             Some(u) => Url::parse(&u).ok(),
