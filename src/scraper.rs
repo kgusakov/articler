@@ -53,6 +53,19 @@ impl Scraper {
             .get(header::CONTENT_TYPE)
             .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string());
 
+        if let Some(m) = &mime_type
+            && !m.contains("text/html")
+        {
+            return Ok(Document {
+                title: extract_title(url).to_string(),
+                content_html: "".to_string(),
+                image_url: None,
+                mime_type,
+                language: None,
+                published_at: None,
+            });
+        }
+
         let buf = response.bytes().await?;
 
         let cfg = Config {
@@ -209,6 +222,30 @@ mod tests {
         let document = scraper.extract(&url).await.unwrap();
 
         assert_eq!("slug-like-url-path", document.title);
+        mock_server.verify().await
+    }
+
+    #[actix_web::test]
+    async fn test_non_html_mime_type() {
+        let mock_server = MockServer::start().await;
+
+        let content = "no valid content";
+
+        Mock::given(method("GET"))
+            .and(path("/test-article/new.pdf"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(content, "application/pdf"))
+            .mount(&mock_server)
+            .await;
+
+        let url =
+            Url::parse(format!("{}/test-article/new.pdf", mock_server.uri()).as_str()).unwrap();
+
+        let scraper = Scraper::new(None).unwrap();
+
+        let document = scraper.extract(&url).await.unwrap();
+
+        assert_eq!("new.pdf", document.title);
+        assert_eq!("", document.content_html);
         mock_server.verify().await
     }
 
