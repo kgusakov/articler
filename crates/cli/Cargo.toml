@@ -1,0 +1,9 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+result.workspace = true
+db.workspace = true
+helpers.workspace = true

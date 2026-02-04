@@ -1,40 +1,31 @@
-[package]
-name = "articler"
+[workspace]
+resolver = "2"
+members = [
+    "crates/result",
+    "crates/helpers",
+    "crates/db",
+    "crates/api",
+    "crates/cli",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[workspace.dependencies]
 sqlx = { version = "0.8.6", features = ["migrate", "sqlite", "runtime-tokio", "chrono"] }
 actix-web = "4.12.1"
-env_logger = "0.11.8"
-serde = "1.0.228"
-serde_json = "1.0.145"
-serde_with = "3.16.1"
-rand = "0.9.2"
-url = { version = "2.5.7", features = ["serde"] }
+serde = { version = "1.0.228", features = ["derive"] }
 chrono = { version = "0.4.42", features = ["serde"] }
-async-trait = "0.1.89"
-indexmap = "2.12.1"
-serde-json-assert = "0.4.0"
-sha1 = "0.10.6"
-slug = "0.1.6"
+tokio = { version = "1.49.0", features = ["full"] }
 thiserror = "2.0.17"
-argon2 = {version = "0.5.3", features = ["std"]}
-tokio = "1.49.0"
-actix-web-httpauth = "0.8.2"
-actix-session = { version = "0.11.0", features = ["cookie-session"] }
-actix-http = "3.11.2"
-actix-service = "2.0.3"
-actix-utils = "3.0.1"
-dom_smoothie = "0.15.0"
-reqwest = { version = "0.13.1", features = ["socks"]}
-dateparser = "0.2.1"
+url = { version = "2.5.7", features = ["serde"] }
 
-[dev-dependencies]
-proptest = "1.4"
-urlencoding = "2.1"
-regex = "1.11"
-wiremock = "0.6.5"
+result = { path = "crates/result" }
+helpers = { path = "crates/helpers" }
+db = { path = "crates/db" }
+api = { path = "crates/api" }
+cli = { path = "crates/cli" }
 
 [profile.release]
 strip = true

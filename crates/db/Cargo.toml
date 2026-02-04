@@ -1,0 +1,17 @@
+[package]
+name = "db"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+result.workspace = true
+helpers.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+url.workspace = true
+indexmap = "2.12.1"
+
+[dev-dependencies]
+tokio.workspace = true
