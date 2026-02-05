@@ -43,5 +43,7 @@ pub async fn create_user(
     )
     .await?;
 
+    tx.commit().await?;
+
     Ok(())
 }
