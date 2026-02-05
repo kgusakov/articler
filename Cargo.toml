@@ -20,6 +20,8 @@ chrono = { version = "0.4.42", features = ["serde"] }
 tokio = { version = "1.49.0", features = ["full"] }
 thiserror = "2.0.17"
 url = { version = "2.5.7", features = ["serde"] }
+serde_json = "1.0.145"
+serde_with = "3.16.1"
 
 result = { path = "crates/result" }
 helpers = { path = "crates/helpers" }

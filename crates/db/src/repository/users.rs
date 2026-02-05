@@ -6,6 +6,26 @@ use result::ArticlerResult;
 
 use super::*;
 
+pub async fn create_user(
+    tx: &mut sqlx::Transaction<'_, Db>,
+    username: &str,
+    password_hash: &str,
+    name: &str,
+    email: &str,
+    created_at: Timestamp,
+    updated_at: Timestamp,
+) -> ArticlerResult<UserRow> {
+    Ok(sqlx::query_as::<_, UserRow>(&format!("INSERT INTO {USERS_TABLE} (username, email, name, password_hash, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?) RETURNING *;"))
+            .bind(username)
+            .bind(email)
+            .bind(name)
+            .bind(password_hash)
+            .bind(created_at)
+            .bind(updated_at)
+            .fetch_one(tx.deref_mut())
+            .await?)
+}
+
 pub async fn find_by_username_and_password(
     tx: &mut sqlx::Transaction<'_, Db>,
     username: &str,
@@ -65,6 +85,113 @@ impl<'r> FromRow<'r, SqliteRow> for UserRow {
 mod tests {
     use super::*;
     use sqlx::SqlitePool;
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn test_create_user(pool: SqlitePool) {
+        let mut tx = pool.begin().await.unwrap();
+
+        let now = chrono::Utc::now().timestamp();
+        let password_hash = "$argon2id$v=19$m=19456,t=2,p=1$test$testhash";
+
+        // Create a new user
+        let user = create_user(
+            &mut tx,
+            "testuser",
+            password_hash,
+            "Test User",
+            "test@example.com",
+            now,
+            now,
+        )
+        .await
+        .unwrap();
+
+        // Verify the created user has the correct fields
+        assert_eq!(user.username, "testuser");
+        assert_eq!(user.password_hash, password_hash);
+        assert_eq!(user.name, "Test User");
+        assert_eq!(user.email, "test@example.com");
+        assert_eq!(user.created_at, now);
+        assert_eq!(user.updated_at, now);
+        assert!(user.id > 0, "User should have a positive id");
+
+        // Verify we can find the user by username
+        let found_user = find_by_username(&mut tx, "testuser").await.unwrap();
+
+        assert!(found_user.is_some(), "Should find newly created user");
+        let found_user = found_user.unwrap();
+        assert_eq!(found_user.id, user.id);
+        assert_eq!(found_user.username, user.username);
+        assert_eq!(found_user.email, user.email);
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn test_create_user_duplicate_username(pool: SqlitePool) {
+        let mut tx = pool.begin().await.unwrap();
+
+        let now = chrono::Utc::now().timestamp();
+        let password_hash = "$argon2id$v=19$m=19456,t=2,p=1$test$testhash";
+
+        // Create the first user
+        let first_user = create_user(
+            &mut tx,
+            "duplicateuser",
+            password_hash,
+            "First User",
+            "first@example.com",
+            now,
+            now,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(first_user.username, "duplicateuser");
+
+        // Try to create a second user with the same username
+        let result = create_user(
+            &mut tx,
+            "duplicateuser",
+            "$argon2id$v=19$m=19456,t=2,p=1$other$otherhash",
+            "Second User",
+            "second@example.com",
+            now,
+            now,
+        )
+        .await;
+
+        // Should fail due to unique constraint on username
+        assert!(
+            result.is_err(),
+            "Should fail when creating user with duplicate username"
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_find_by_username(pool: SqlitePool) {
+        let mut tx = pool.begin().await.unwrap();
+
+        // Test finding an existing user from fixtures
+        let user = find_by_username(&mut tx, "wallabag").await.unwrap();
+
+        assert!(user.is_some(), "Should find existing user");
+        let user = user.unwrap();
+        assert_eq!(user.id, 1, "User should have id 1");
+        assert_eq!(user.username, "wallabag", "Username should match");
+        assert_eq!(user.email, "wallabag@wallabag.io", "Email should match");
+        assert_eq!(user.name, "Walla Baggger", "Name should match");
+        assert_eq!(
+            user.password_hash,
+            "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
+            "Password hash should match"
+        );
+
+        // Test finding a non-existent user
+        let no_user = find_by_username(&mut tx, "nonexistent").await.unwrap();
+        assert!(no_user.is_none(), "Should not find non-existent user");
+    }
 
     #[sqlx::test(
         migrations = "../../migrations",
