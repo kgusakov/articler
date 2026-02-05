@@ -520,6 +520,73 @@ async fn test_post_entries_with_scraping_needed(pool: SqlitePool) {
     );
 }
 
+#[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
+async fn test_post_entries_with_scraping_error(pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    let mock_server = MockServer::start().await;
+    let base_server_uri = mock_server.uri();
+
+    // Return malformed HTML that will cause readability parser to fail
+    let content = r#"
+            <!DOCTYPE html><html><body><!-- This HTML is intentionally broken and incomplete to trigger parsing error
+        "#;
+
+    Mock::given(method("GET"))
+        .and(path("/test-article/parsing-error"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(content, "text/html"))
+        .mount(&mock_server)
+        .await;
+
+    let url = format!("{base_server_uri}/test-article/parsing-error");
+
+    let payload = format!("url={url}");
+
+    let req = test::TestRequest::post()
+        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
+        .uri("/api/entries.json")
+        .set_payload(payload)
+        .insert_header(("content-type", "application/x-www-form-urlencoded"))
+        .to_request();
+
+    let before_call_time = Utc::now();
+    let resp = test::call_and_read_body(&app, req).await;
+    let after_call_time = Utc::now();
+
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    // Verify that entry was created despite scraping error
+    assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
+
+    // Verify URL fields are set correctly
+    assert_eq!(url, result.get("url").unwrap().as_str().unwrap());
+    assert_eq!(
+        hash_str(&url),
+        result.get("hashed_url").unwrap().as_str().unwrap()
+    );
+
+    // Verify title is extracted from URL path (fallback behavior)
+    assert_eq!(
+        "parsing-error",
+        result.get("title").unwrap().as_str().unwrap()
+    );
+
+    // Verify content is empty (fallback behavior)
+    assert_eq!("", result.get("content").unwrap().as_str().unwrap());
+
+    // Verify mime_type is empty (fallback behavior)
+    assert_eq!("", result.get("mimetype").unwrap().as_str().unwrap());
+
+    // Verify optional fields are null (fallback behavior)
+    assert!(result.get("published_at").unwrap().is_null());
+    assert!(result.get("language").unwrap().is_null());
+    assert!(result.get("preview_picture").unwrap().is_null());
+
+    // Verify timestamps are set
+    assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
+    assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
+}
+
 fn assert_json_date_between(
     before: &DateTime<Utc>,
     after: &DateTime<Utc>,

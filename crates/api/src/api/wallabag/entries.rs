@@ -3,6 +3,7 @@ use actix_web::{
     web::{self, Json, Query},
 };
 use chrono::{DateTime, Utc};
+use log::error;
 use serde::{Deserialize, Serialize};
 use serde_with::{BoolFromInt, StringWithSeparator};
 use serde_with::{formats::CommaSeparator, serde_as};
@@ -15,6 +16,7 @@ use crate::{
     app::AppState,
     middleware::TransactionContext,
     models::{Entry, Tag},
+    scraper::extract_title,
 };
 use db::repository::{entries, tags};
 use helpers::{generate_uid, hash_str};
@@ -66,17 +68,28 @@ async fn do_post_entries(
                 request.preview_picture,
             )
         } else {
-            // TODO on error persist entry with empty title/content anyway
-            let document = data.scraper.extract(&request.url).await?;
-
-            (
-                document.title,
-                document.content_html,
-                document.mime_type.unwrap_or("".to_string()),
-                document.published_at,
-                document.language,
-                document.image_url,
-            )
+            match data.scraper.extract(&request.url).await {
+                Ok(document) => (
+                    document.title,
+                    document.content_html,
+                    document.mime_type.unwrap_or("".to_string()),
+                    document.published_at,
+                    document.language,
+                    document.image_url,
+                ),
+                Err(err) => {
+                    error!("Error while parsing url {}: {:?}", request.url, err);
+                    (
+                        // TODO abstraction is leaking here - we need to generalize handling of parsing errors
+                        extract_title(&request.url).to_string(),
+                        "".to_string(),
+                        "".to_string(),
+                        None,
+                        None,
+                        None,
+                    )
+                }
+            }
         };
 
     // TODO must be calculated

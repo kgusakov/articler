@@ -22,6 +22,7 @@ thiserror = "2.0.17"
 url = { version = "2.5.7", features = ["serde"] }
 serde_json = "1.0.145"
 serde_with = "3.16.1"
+log = "0.4.29"
 
 result = { path = "crates/result" }
 helpers = { path = "crates/helpers" }
