@@ -20,7 +20,7 @@ source="
 
 package() {
         install -Dm755 "$srcdir"/articler "$pkgdir"/usr/bin/articler
-        install -Dm755 "$srcdir"/articler "$pkgdir"/usr/bin/articlerctl
+        install -Dm755 "$srcdir"/articlerctl "$pkgdir"/usr/bin/articlerctl
         install -Dm755 "$srcdir"/articler.openrc "$pkgdir"/etc/init.d/articler
         install -Dm644 "$srcdir"/articler.profile "$pkgdir"/etc/conf.d/articler
 }
