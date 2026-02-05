@@ -6,6 +6,24 @@ use result::ArticlerResult;
 
 use super::*;
 
+pub async fn create_client(
+    tx: &mut sqlx::Transaction<'_, Db>,
+    user_id: Id,
+    client_name: &str,
+    client_id: &str,
+    client_secret: &str,
+    created_at: Timestamp,
+) -> ArticlerResult<ClientRow> {
+    Ok(sqlx::query_as::<_, ClientRow>(&format!("INSERT INTO {CLIENTS_TABLE} (name, client_id, client_secret, user_id, created_at) VALUES(?, ?, ?, ?, ?) RETURNING *;"))
+            .bind(client_name)
+            .bind(client_id)
+            .bind(client_secret)
+            .bind(user_id)
+            .bind(created_at)
+            .fetch_one(tx.deref_mut())
+            .await?)
+}
+
 pub async fn find_by_user_id_client_id_and_secret(
     executor: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
@@ -86,6 +104,56 @@ impl<'r> FromRow<'r, SqliteRow> for ClientRow {
 mod tests {
     use super::*;
     use sqlx::SqlitePool;
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql")
+    )]
+    async fn test_create_client(pool: SqlitePool) {
+        let mut tx = pool.begin().await.unwrap();
+
+        let now = chrono::Utc::now().timestamp();
+        let user_id = 1;
+
+        // Create a new client
+        let client = create_client(
+            &mut tx,
+            user_id,
+            "Test Client",
+            "test_client_id",
+            "test_client_secret",
+            now,
+        )
+        .await
+        .unwrap();
+
+        // Verify the created client has the correct fields
+        assert_eq!(client.name, "Test Client");
+        assert_eq!(client.client_id, "test_client_id");
+        assert_eq!(client.client_secret, "test_client_secret");
+        assert_eq!(client.user_id, user_id);
+        assert_eq!(client.created_at, now);
+        assert!(client.id > 0, "Client should have a positive id");
+
+        // Verify client is in database by finding it
+        let found_client = find_by_user_id_client_id_and_secret(
+            &mut tx,
+            user_id,
+            "test_client_id",
+            "test_client_secret",
+        )
+        .await
+        .unwrap();
+
+        assert!(found_client.is_some(), "Should find newly created client");
+        let found_client = found_client.unwrap();
+        assert_eq!(found_client.id, client.id);
+        assert_eq!(found_client.name, client.name);
+        assert_eq!(found_client.client_id, client.client_id);
+        assert_eq!(found_client.client_secret, client.client_secret);
+        assert_eq!(found_client.user_id, client.user_id);
+        assert_eq!(found_client.created_at, client.created_at);
+    }
 
     #[sqlx::test(
         migrations = "../../migrations",

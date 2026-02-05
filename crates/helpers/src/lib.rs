@@ -4,6 +4,7 @@ use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
     password_hash::{PasswordHashString, SaltString, rand_core::OsRng},
 };
+use rand::{Rng, distr::Alphanumeric};
 use sha1::{Digest, Sha1};
 
 static PASSWORD_HASHER: LazyLock<Argon2> = LazyLock::new(Argon2::default);
@@ -29,6 +30,22 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, argon2::passw
 
 pub fn generate_uid() -> String {
     format!("{:x}", rand::random::<u64>())
+}
+
+pub fn generate_client_id() -> String {
+    rand::rng()
+        .sample_iter(Alphanumeric)
+        .take(48)
+        .map(char::from)
+        .collect()
+}
+
+pub fn generate_client_secret() -> String {
+    rand::rng()
+        .sample_iter(Alphanumeric)
+        .take(48)
+        .map(char::from)
+        .collect()
 }
 
 #[cfg(test)]
