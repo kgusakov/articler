@@ -4,7 +4,7 @@ mod tags;
 use super::oauth::UserInfo;
 use crate::api::wallabag::entries::exists;
 use actix_utils::future::{Ready, ready};
-use actix_web::web::{ServiceConfig, delete, get, patch, post};
+use actix_web::web::{ServiceConfig, delete, get, post};
 use actix_web::{
     Error, HttpMessage,
     web::{self, Json},
@@ -78,8 +78,40 @@ pub fn routes(cfg: &mut ServiceConfig) {
                     .route("/exists", get().to(exists))
                     .route("/{entry_id}.json", delete().to(delete_entry))
                     .route("/{entry_id}", delete().to(delete_entry))
-                    .route("/{entry_id}.json", patch().to(patch_entry))
-                    .route("/{entry_id}", patch().to(patch_entry))
+                    .route(
+                        "/{entry_id}.json",
+                        web::route()
+                            .guard(guard::Patch())
+                            .guard(guard::Header(
+                                "content-type",
+                                "application/x-www-form-urlencoded",
+                            ))
+                            .to(patch_entry_form),
+                    )
+                    .route(
+                        "/{entry_id}.json",
+                        web::route()
+                            .guard(guard::Patch())
+                            .guard(guard::Header("content-type", "application/json"))
+                            .to(patch_entry_json),
+                    )
+                    .route(
+                        "/{entry_id}",
+                        web::route()
+                            .guard(guard::Patch())
+                            .guard(guard::Header(
+                                "content-type",
+                                "application/x-www-form-urlencoded",
+                            ))
+                            .to(patch_entry_form),
+                    )
+                    .route(
+                        "/{entry_id}",
+                        web::route()
+                            .guard(guard::Patch())
+                            .guard(guard::Header("content-type", "application/json"))
+                            .to(patch_entry_json),
+                    )
                     .route("/{entry_id}/tags", get().to(get_tags_by_entry))
                     .route("/{entry_id}/tags.json", post().to(post_entry_tags))
                     .route("/{entry_id}/tags", post().to(post_entry_tags))

@@ -362,14 +362,31 @@ pub async fn post_entry_tags(
     }
 }
 
-pub async fn patch_entry(
+pub async fn patch_entry_json(
+    tctx: web::ReqData<TransactionContext<'_>>,
+    entry_id: web::Path<i64>,
+    request: web::Json<UpdateEntry>,
+    user_info: UserInfo,
+) -> actix_web::Result<Json<Entry>> {
+    do_patch_entry(tctx, entry_id, request.into_inner(), user_info).await
+}
+
+pub async fn patch_entry_form(
     tctx: web::ReqData<TransactionContext<'_>>,
     entry_id: web::Path<i64>,
     request: web::Form<UpdateEntry>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Entry>> {
+    do_patch_entry(tctx, entry_id, request.into_inner(), user_info).await
+}
+
+async fn do_patch_entry(
+    tctx: web::ReqData<TransactionContext<'_>>,
+    entry_id: web::Path<i64>,
+    request: UpdateEntry,
+    user_info: UserInfo,
+) -> actix_web::Result<Json<Entry>> {
     let entry_id = entry_id.into_inner();
-    let request = request.into_inner();
 
     let now = Utc::now().timestamp();
 
