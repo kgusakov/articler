@@ -93,8 +93,10 @@ async fn create_token(
                             )
                             .await?
                             {
-                                let new_token =
-                                    data.token_storage.new_token(user_row.id, client_row.id)?;
+                                let new_token = data
+                                    .token_storage
+                                    .new_token(&mut tx, user_row.id, client_row.id)
+                                    .await?;
 
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
@@ -142,7 +144,9 @@ async fn create_token(
                         .is_some()
                     {
                         if let Some(refresh_token) = r.refresh_token {
-                            if let Some(new_token) = data.token_storage.refresh(&refresh_token)? {
+                            if let Some(new_token) =
+                                data.token_storage.refresh(&mut tx, &refresh_token).await?
+                            {
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
                                     expires_in: new_token.expires_in,
@@ -203,7 +207,7 @@ pub async fn auth_extractor(
     };
     let token_storage = &req.app_data::<web::Data<AppState>>().unwrap().token_storage;
 
-    match token_storage.validate(credentials.token()) {
+    match token_storage.validate(credentials.token()).await {
         Ok(Some(claim)) => {
             req.extensions_mut().insert(UserInfo {
                 user_id: claim.user_id,
