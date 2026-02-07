@@ -34,7 +34,7 @@ async fn login(_session: Session) -> impl Responder {
         r#"
         <html>
             <body>
-            <div class="card sw">
+            <div class="card sw" style="display:none">
                 <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
                 <form action="/login_check" method="post" name="loginform">
                     <div class="card-content">
@@ -82,8 +82,10 @@ async fn index(session: Session) -> impl Responder {
                 r#"
                 <html>
                     <body>
-                        <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
-                        <a href="/logout"><i class="material-icons">input</i> Logout</a>
+                        <div style="display:none">
+                            <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
+                            <a href="/logout"><i class="material-icons">input</i> Logout</a>
+                        </div>
                     </body>
                 </html>
         "#,
@@ -107,12 +109,16 @@ async fn developer(session: Session, tctx: web::ReqData<TransactionContext<'_>>)
         if let Ok(Some(client_row)) =
             clients::find_by_client_name_and_user_id(&mut tx, user_id, ANDROID_APP_NAME).await
         {
-            let (client_id, client_secret) = (client_row.client_id, client_row.client_secret);
+            let (id, client_id, client_secret) = (
+                client_row.id,
+                client_row.client_id,
+                client_row.client_secret,
+            );
             HttpResponse::Ok().append_header(("Content-type", "text/html")).body(format!(
             r#"
             <html>
                 <body>
-                    <ul class="collapsible" data-collapsible="expandable">
+                    <ul class="collapsible" data-collapsible="expandable" display:none>
                         <li>
                             <div class="collapsible-header">{ANDROID_APP_NAME} - #1</div>
                             <div class="collapsible-body">
@@ -121,14 +127,14 @@ async fn developer(session: Session, tctx: web::ReqData<TransactionContext<'_>>)
                                         <td>Client ID</td>
                                         <td>
                                             <strong><code>{client_id}</code></strong>
-                                            <button class="btn" data-clipboard-text="6_3hday2utyqww40cwosw8c0w88wk00os0koowo8ksg0ccgccksc">Copy</button>
+                                            <button class="btn">Copy</button>
                                         </td>
                                     </tr>
                                     <tr>
                                         <td>Client secret</td>
                                         <td>
                                             <strong><code>{client_secret}</code></strong>
-                                            <button class="btn" data-clipboard-text="1j9zp8t547r4woc0oo4og0s4oo0csc0ws840ksokscwskg80os">Copy</button>
+                                            <button class="btn">Copy</button>
                                         </td>
                                     </tr>
                                     <tr>
@@ -140,13 +146,11 @@ async fn developer(session: Session, tctx: web::ReqData<TransactionContext<'_>>)
                                         <td><strong><code>["token","authorization_code","password","refresh_token"]</code></strong></td>
                                     </tr>
                                 </tbody></table>
+                                
+                                <form action="/developer/client/delete/{id}" method="post" name="delete-client">
+                                    <input type="hidden" name="token" value="">
 
-                                <p>You have the ability to remove the client httpie. This action is IRREVERSIBLE !</p>
-                                <p>If you remove it, every app configured with that client won't be able to auth on your wallabag.</p>
-                                <form action="/developer/client/delete/6" method="post" name="delete-client">
-                                    <input type="hidden" name="token" value="CkHfckZmWbqhAg5rpx031STjJjIQ8XGRmUstX3v_yOA">
-
-                                    <button class="waves-effect waves-light btn red" type="submit">Remove the client httpie</button>
+                                    <button class="waves-effect waves-light btn red" type="submit">Remove the client {ANDROID_APP_NAME}</button>
                                 </form>
                             </div>
                         </li>
