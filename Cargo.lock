@@ -354,41 +354,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
-name = "api"
-version = "0.1.0"
-dependencies = [
- "actix-http",
- "actix-service",
- "actix-session",
- "actix-utils",
- "actix-web",
- "actix-web-httpauth",
- "chrono",
- "dateparser",
- "db",
- "dom_smoothie",
- "env_logger",
- "helpers",
- "log",
- "proptest",
- "rand 0.9.2",
- "regex",
- "reqwest",
- "result",
- "serde",
- "serde-json-assert",
- "serde_json",
- "serde_with",
- "slug",
- "sqlx",
- "thiserror 2.0.17",
- "tokio",
- "url",
- "urlencoding",
- "wiremock",
-]
-
-[[package]]
 name = "argon2"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3050,6 +3015,41 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "server"
+version = "0.1.0"
+dependencies = [
+ "actix-http",
+ "actix-service",
+ "actix-session",
+ "actix-utils",
+ "actix-web",
+ "actix-web-httpauth",
+ "chrono",
+ "dateparser",
+ "db",
+ "dom_smoothie",
+ "env_logger",
+ "helpers",
+ "log",
+ "proptest",
+ "rand 0.9.2",
+ "regex",
+ "reqwest",
+ "result",
+ "serde",
+ "serde-json-assert",
+ "serde_json",
+ "serde_with",
+ "slug",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "url",
+ "urlencoding",
+ "wiremock",
 ]
 
 [[package]]

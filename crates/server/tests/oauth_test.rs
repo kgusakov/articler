@@ -9,7 +9,7 @@ use actix_web::{
     test,
     web::{self},
 };
-use api::{
+use server::{
     app::{app, app_state_init},
     scraper::Scraper,
 };

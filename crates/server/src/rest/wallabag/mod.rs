@@ -2,7 +2,7 @@ mod entries;
 mod tags;
 
 use super::oauth::UserInfo;
-use crate::api::wallabag::entries::exists;
+use crate::rest::wallabag::entries::exists;
 use actix_utils::future::{Ready, ready};
 use actix_web::web::{ServiceConfig, delete, get, post};
 use actix_web::{

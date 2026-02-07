@@ -34,9 +34,9 @@ pub fn app(
         .app_data(app_data.clone())
         .wrap(Logger::default())
         .wrap(from_fn(wrap_with_tx))
-        .configure(crate::api::oauth::routes)
-        .configure(crate::api::wallabag::routes)
-        .configure(|cfg| crate::api::fake_ui::routes(cfg, cookie_key))
+        .configure(crate::rest::oauth::routes)
+        .configure(crate::rest::wallabag::routes)
+        .configure(|cfg| crate::web::fake_ui::routes(cfg, cookie_key))
 }
 
 pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::Result<Server> {

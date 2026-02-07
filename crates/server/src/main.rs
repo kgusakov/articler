@@ -1,7 +1,7 @@
 use std::env;
 
 use actix_web::cookie::Key;
-use api::{
+use server::{
     app::{app_state_init, http_server},
     scraper::Scraper,
 };

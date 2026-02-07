@@ -19,7 +19,7 @@ pub fn routes(cfg: &mut ServiceConfig, cookie_key: Key) {
         web::scope("")
             .wrap(
                 SessionMiddleware::builder(CookieSessionStore::default(), cookie_key.clone())
-                    .cookie_secure(false) // Set to true in production with HTTPS
+                    .cookie_secure(false) // TODO Set to true in production with HTTPS
                     .build(),
             )
             .route("/login", get().to(login))

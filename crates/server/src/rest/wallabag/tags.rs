@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_with::{StringWithSeparator, formats::CommaSeparator, serde_as};
 
 use crate::{
-    api::{oauth::UserInfo, wallabag::Id},
+    rest::{oauth::UserInfo, wallabag::Id},
     middleware::TransactionContext,
     models::Tag,
 };

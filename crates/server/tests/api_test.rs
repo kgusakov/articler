@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
 // TODO is it appropriate way?
-use api::{
+use server::{
     app::{app, app_state_init},
     scraper::Scraper,
 };

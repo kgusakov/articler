@@ -12,7 +12,7 @@ use thiserror::Error;
 use url::Url;
 
 use crate::{
-    api::{oauth::UserInfo, wallabag::Id},
+    rest::{oauth::UserInfo, wallabag::Id},
     app::AppState,
     middleware::TransactionContext,
     models::{Entry, Tag},

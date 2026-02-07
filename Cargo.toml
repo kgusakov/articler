@@ -4,7 +4,7 @@ members = [
     "crates/result",
     "crates/helpers",
     "crates/db",
-    "crates/api",
+    "crates/server",
     "crates/cli",
 ]
 
@@ -27,7 +27,7 @@ log = "0.4.29"
 result = { path = "crates/result" }
 helpers = { path = "crates/helpers" }
 db = { path = "crates/db" }
-api = { path = "crates/api" }
+server = { path = "crates/server" }
 cli = { path = "crates/cli" }
 
 [profile.release]
