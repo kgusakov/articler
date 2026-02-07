@@ -7,7 +7,7 @@ use actix_web::{
 };
 use serde::Deserialize;
 
-use crate::{auth::find_user, middleware::TransactionContext};
+use crate::{app::static_resources, auth::find_user, middleware::TransactionContext};
 use db::repository::clients;
 
 const ANDROID_APP_NAME: &str = "Android app";
@@ -25,71 +25,29 @@ pub fn routes(cfg: &mut ServiceConfig, cookie_key: Key) {
             .route("/login", get().to(login))
             .route("/", get().to(index))
             .route("/developer", get().to(developer))
-            .route("/login_check", post().to(login_check)),
+            .route("/login_check", post().to(login_check))
+            .route("/login_check_normal", post().to(login_check)),
     );
 }
 
 async fn login(_session: Session) -> impl Responder {
-    HttpResponse::Ok().append_header(("Content-type", "text/html")).body(
-        r#"
-        <html>
-            <body>
-            <div class="card sw" style="display:none">
-                <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
-                <form action="/login_check" method="post" name="loginform">
-                    <div class="card-content">
-                        <div class="row">
+    let st = static_resources();
+    let login_html = st.get("login.html").unwrap();
+    let body = std::str::from_utf8(login_html.data).unwrap();
 
-                            <div class="input-field col s12">
-                                <label for="username" class="">Username</label>
-                                <input type="text" id="username" name="_username" value="" autofocus="">
-                            </div>
-
-                            <div class="input-field col s12">
-                                <label for="password">Password</label>
-                                <input type="password" id="password" name="_password">
-                            </div>
-
-                            <div class="input-field col s12">
-                                <input type="checkbox" id="remember_me" name="_remember_me" checked="">
-                                <label for="remember_me">Keep me logged in</label>
-                            </div>
-
-                        </div>
-                    </div>
-                    <div class="card-action center">
-                        <input type="hidden" name="_csrf_token" value="fUYkqRJIgF0uxA6GUEk9ZrwnUEnuvQEUxiPPls1CDOc">
-                                <button class="btn waves-effect waves-light" type="submit" name="send">
-                            Log in
-                            <i class="material-icons right">send</i>
-                        </button>
-                    </div>
-                    <div class="card-action center">
-                        <a href="/resetting/request">Forgot your password?</a>
-                    </div>
-                </form>
-            </div>
-            </body>
-        </html>
-    "#)
+    HttpResponse::Ok()
+        .append_header(("Content-type", "text/html"))
+        .body(body)
 }
 
 async fn index(session: Session) -> impl Responder {
     if session.contains_key("user_id") {
+        let st = static_resources();
+        let index_html = st.get("index.html").unwrap();
+        let body = std::str::from_utf8(index_html.data).unwrap();
         HttpResponse::Ok()
             .append_header(("Content-type", "text/html"))
-            .body(
-                r#"
-                <html>
-                    <body>
-                        <div style="display:none">
-                            <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
-                            <a href="/logout"><i class="material-icons">input</i> Logout</a>
-                        </div>
-                    </body>
-                </html>
-        "#,
-            )
+            .body(body)
     } else {
         HttpResponse::Found()
             .append_header(("Location", "/login"))

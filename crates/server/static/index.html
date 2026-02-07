@@ -27,7 +27,7 @@
   <!-- Header -->
   <header class="h-[72px] px-4 md:px-8 lg:px-[120px] flex items-center justify-between border-b border-surface">
     <div class="flex items-center gap-3">
-      <img src="images/Logo.svg" />
+      <img src="/static/images/Logo.svg" />
     </div>
     <nav class="flex items-center gap-6">
       <button class="flex items-center gap-2 text-secondary hover:text-primary">
@@ -35,14 +35,14 @@
       </button>
       <div class="flex items-center gap-4">
         <button class="text-secondary hover:text-primary">
-          <img src="images/Search.svg" />
+          <img src="/static/images/Search.svg" />
         </button>
         <div class="w-px h-6 bg-border"></div>
         <button class="text-secondary hover:text-primary">
-          <img src="images/Settings.svg" />
+          <img src="/static/images/Settings.svg" />
         </button>
         <button class="text-secondary hover:text-primary">
-          <img src="images/Profile.svg" />
+          <img src="/static/images/Profile.svg" />
         </button>
       </div>
     </nav>
@@ -54,32 +54,32 @@
     <aside class="w-full lg:w-[348px] lg:pr-8 space-y-1 flex lg:block gap-2 overflow-x-auto lg:overflow-visible">
       <!-- Unread (active) -->
       <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 bg-surface rounded text-left">
-        <img src="images/MarkUnRead.svg" />
+        <img src="/static/images/MarkUnRead.svg" />
         <span class="hidden lg:inline flex-1 font-medium">Unread</span>
         <span class="hidden lg:inline text-xs text-muted">3</span>
       </button>
       <!-- All -->
       <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
-        <img src="images/All.svg" />
+        <img src="/static/images/All.svg" />
         <span class="hidden lg:inline flex-1">All</span>
         <span class="hidden lg:inline text-xs text-muted">12</span>
       </button>
       <!-- Starred -->
       <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
-        <img src="images/FavoriteOff.svg" />
+        <img src="/static/images/FavoriteOff.svg" />
         <span class="hidden lg:inline flex-1">Starred</span>
         <span class="hidden lg:inline text-xs text-muted">2</span>
       </button>
       <!-- Archive -->
       <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
-        <img src="images/Archived.svg" />
+        <img src="/static/images/Archived.svg" />
         <span class="hidden lg:inline flex-1">Archived</span>
         <span class="hidden lg:inline text-xs text-muted">9</span>
       </button>
       <!-- Tags -->
       <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
         <!-- TODO replace tagged svg by normal variant -->
-        <img class="w-5 h-5" src="images/Tagged.svg" />
+        <img class="w-5 h-5" src="/static/images/Tagged.svg" />
         <span class="hidden lg:inline flex-1">Tags</span>
       </button>
     </aside>
@@ -89,18 +89,20 @@
       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8">
         <!-- Article 1 -->
         <article class="group cursor-pointer">
-          <div class="aspect-[347/200] rounded overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 mb-4 relative">
+          <div
+            class="aspect-[347/200] rounded overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 mb-4 relative">
             <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=230&fit=crop" alt=""
               class="w-full h-full object-cover">
-            <div class="absolute bottom-0 right-0 flex items-center gap-5 pl-5 pr-4 py-2.5 rounded-tl-lg" style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+            <div class="absolute bottom-0 right-0 flex items-center gap-5 pl-5 pr-4 py-2.5 rounded-tl-lg"
+              style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
               <button class="hover:scale-110 transition-transform" title="Favourite">
-                <img src="images/FavoriteOn.svg" alt="Favourite" />
+                <img src="/static/images/FavoriteOn.svg" alt="Favourite" />
               </button>
               <button class="hover:scale-110 transition-transform" title="Mark as read">
-                <img src="images/MarkRead.svg" alt="Mark as read" />
+                <img src="/static/images/MarkRead.svg" alt="Mark as read" />
               </button>
               <button class="hover:scale-110 transition-transform" title="Delete">
-                <img src="images/Delete.svg" alt="Delete" />
+                <img src="/static/images/Delete.svg" alt="Delete" />
               </button>
             </div>
           </div>
@@ -117,18 +119,20 @@
 
         <!-- Article 2 -->
         <article class="group cursor-pointer">
-          <div class="aspect-[347/200] rounded overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 mb-4 relative">
+          <div
+            class="aspect-[347/200] rounded overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 mb-4 relative">
             <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=230&fit=crop" alt=""
               class="w-full h-full object-cover">
-            <div class="absolute bottom-0 right-0 flex items-center gap-5 pl-5 pr-4 py-2.5 rounded-tl-lg" style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+            <div class="absolute bottom-0 right-0 flex items-center gap-5 pl-5 pr-4 py-2.5 rounded-tl-lg"
+              style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
               <button class="hover:scale-110 transition-transform" title="Favourite">
-                <img src="images/FavoriteOn.svg" alt="Favourite" />
+                <img src="/static/images/FavoriteOn.svg" alt="Favourite" />
               </button>
               <button class="hover:scale-110 transition-transform" title="Mark as read">
-                <img src="images/MarkRead.svg" alt="Mark as read" />
+                <img src="/static/images/MarkRead.svg" alt="Mark as read" />
               </button>
               <button class="hover:scale-110 transition-transform" title="Delete">
-                <img src="images/Delete.svg" alt="Delete" />
+                <img src="/static/images/Delete.svg" alt="Delete" />
               </button>
             </div>
           </div>
@@ -145,18 +149,20 @@
 
         <!-- Article 3 -->
         <article class="group cursor-pointer">
-          <div class="aspect-[347/200] rounded overflow-hidden bg-gradient-to-br from-orange-500 to-red-600 mb-4 relative">
+          <div
+            class="aspect-[347/200] rounded overflow-hidden bg-gradient-to-br from-orange-500 to-red-600 mb-4 relative">
             <img src="https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=400&h=230&fit=crop" alt=""
               class="w-full h-full object-cover">
-            <div class="absolute bottom-0 right-0 flex items-center gap-5 pl-5 pr-4 py-2.5 rounded-tl-lg" style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+            <div class="absolute bottom-0 right-0 flex items-center gap-5 pl-5 pr-4 py-2.5 rounded-tl-lg"
+              style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
               <button class="hover:scale-110 transition-transform" title="Favourite">
-                <img src="images/FavoriteOn.svg" alt="Favourite" />
+                <img src="/static/images/FavoriteOn.svg" alt="Favourite" />
               </button>
               <button class="hover:scale-110 transition-transform" title="Mark as read">
-                <img src="images/MarkRead.svg" alt="Mark as read" />
+                <img src="/static/images/MarkRead.svg" alt="Mark as read" />
               </button>
               <button class="hover:scale-110 transition-transform" title="Delete">
-                <img src="images/Delete.svg" alt="Delete" />
+                <img src="/static/images/Delete.svg" alt="Delete" />
               </button>
             </div>
           </div>
@@ -173,6 +179,10 @@
       </div>
     </section>
   </main>
+  <div style="display:none">
+    <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
+    <a href="/logout"><i class="material-icons">input</i> Logout</a>
+  </div>
 </body>
 
 </html>

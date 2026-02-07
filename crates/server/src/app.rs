@@ -7,6 +7,7 @@ use actix_web::{
     middleware::{Logger, from_fn},
     web,
 };
+use actix_web_static_files::ResourceFiles;
 use sqlx::{Pool, Sqlite};
 
 use crate::{middleware::wrap_with_tx, scraper::Scraper, token_storage::TokenStorage};
@@ -17,7 +18,7 @@ pub struct AppState {
     pub token_storage: TokenStorage,
     pub scraper: Scraper,
 }
-
+include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 pub fn app(
     app_data: web::Data<AppState>,
     cookie_key: Key,
@@ -30,12 +31,14 @@ pub fn app(
         InitError = (),
     >,
 > {
+    let generated = static_resources();
     App::new()
         .app_data(app_data.clone())
         .wrap(Logger::default())
         .wrap(from_fn(wrap_with_tx))
         .configure(crate::rest::oauth::routes)
         .configure(crate::rest::wallabag::routes)
+        .service(ResourceFiles::new("/static", generated))
         .configure(|cfg| crate::web::fake_ui::routes(cfg, cookie_key))
 }
 
