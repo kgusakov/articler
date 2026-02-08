@@ -1,3 +1,5 @@
+// This tests checks if Android wallabag app can login correctly
+
 use std::sync::Once;
 
 use actix_http::Request;
@@ -9,11 +11,11 @@ use actix_web::{
     test,
     web::{self},
 };
+use regex::Regex;
 use server::{
     app::{app, app_state_init},
     scraper::Scraper,
 };
-use regex::Regex;
 use sqlx::SqlitePool;
 
 static INIT: Once = Once::new();

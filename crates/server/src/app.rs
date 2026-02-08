@@ -38,8 +38,8 @@ pub fn app(
         .wrap(from_fn(wrap_with_tx))
         .configure(crate::rest::oauth::routes)
         .configure(crate::rest::wallabag::routes)
+        .configure(|cfg| crate::web::routes(cfg, cookie_key.clone()))
         .service(ResourceFiles::new("/static", generated))
-        .configure(|cfg| crate::web::fake_ui::routes(cfg, cookie_key))
 }
 
 pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::Result<Server> {
