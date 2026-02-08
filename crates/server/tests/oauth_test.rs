@@ -9,11 +9,11 @@ use actix_web::{
     test,
     web::{self},
 };
+use serde_json::Value;
 use server::{
-    app::{app, app_state_init},
+    app::{app, app_state_init, init_handlebars},
     scraper::Scraper,
 };
-use serde_json::Value;
 use sqlx::SqlitePool;
 
 static INIT: Once = Once::new();
@@ -32,7 +32,11 @@ async fn init_app(
     let cookie_key = Key::from(&[0u8; 64]);
 
     test::init_service(app(
-        web::Data::new(app_state_init(pool, Scraper::new(None).unwrap())),
+        web::Data::new(app_state_init(
+            pool,
+            Scraper::new(None).unwrap(),
+            init_handlebars(),
+        )),
         cookie_key,
     ))
     .await

@@ -8,6 +8,7 @@ use actix_web::{
     web,
 };
 use actix_web_static_files::ResourceFiles;
+use handlebars::{DirectorySourceOptionsBuilder, Handlebars};
 use sqlx::{Pool, Sqlite};
 
 use crate::{middleware::wrap_with_tx, scraper::Scraper, token_storage::TokenStorage};
@@ -17,8 +18,11 @@ pub struct AppState {
     pub pool: Pool<repository::Db>,
     pub token_storage: TokenStorage,
     pub scraper: Scraper,
+    pub handlebars: Handlebars<'static>,
 }
+
 include!(concat!(env!("OUT_DIR"), "/generated.rs"));
+
 pub fn app(
     app_data: web::Data<AppState>,
     cookie_key: Key,
@@ -42,6 +46,24 @@ pub fn app(
         .service(ResourceFiles::new("/static", generated))
 }
 
+// TODO rethink 'static hardcode
+pub fn init_handlebars() -> Handlebars<'static> {
+    let mut handlebars = Handlebars::new();
+    handlebars
+        .register_templates_directory(
+            "./templates",
+            DirectorySourceOptionsBuilder::default()
+                .tpl_extension(".html")
+                .hidden(false)
+                .temporary(false)
+                .build()
+                .unwrap(),
+        )
+        .unwrap();
+
+    handlebars
+}
+
 pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::Result<Server> {
     let app_data = web::Data::new(app_state);
 
@@ -53,10 +75,15 @@ pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::
     )
 }
 
-pub fn app_state_init(pool: Pool<Sqlite>, scraper: Scraper) -> AppState {
+pub fn app_state_init(
+    pool: Pool<Sqlite>,
+    scraper: Scraper,
+    handlebars: Handlebars<'static>,
+) -> AppState {
     AppState {
         pool,
         token_storage: TokenStorage::default(),
         scraper,
+        handlebars,
     }
 }

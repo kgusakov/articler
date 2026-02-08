@@ -5,7 +5,7 @@ use actix_web::{
 };
 use scraper::{Html, Selector};
 use server::{
-    app::{app, app_state_init},
+    app::{app, app_state_init, init_handlebars},
     scraper::Scraper,
 };
 use sqlx::SqlitePool;
@@ -27,7 +27,11 @@ async fn init_ui_app(
     let cookie_key = Key::from(&[0u8; 64]);
 
     test::init_service(app(
-        web::Data::new(app_state_init(pool, Scraper::new(None).unwrap())),
+        web::Data::new(app_state_init(
+            pool,
+            Scraper::new(None).unwrap(),
+            init_handlebars(),
+        )),
         cookie_key,
     ))
     .await
@@ -42,7 +46,12 @@ async fn index_without_auth_must_redirect_to_login(pool: SqlitePool) {
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::FOUND);
-    let location = resp.headers().get(header::LOCATION).unwrap().to_str().unwrap();
+    let location = resp
+        .headers()
+        .get(header::LOCATION)
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert_eq!(location, "/login");
 }
 

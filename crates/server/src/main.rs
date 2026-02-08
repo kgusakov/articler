@@ -1,11 +1,12 @@
 use std::env;
 
 use actix_web::cookie::Key;
+use handlebars::{DirectorySourceOptionsBuilder, Handlebars};
+use result::ArticlerResult;
 use server::{
     app::{app_state_init, http_server},
     scraper::Scraper,
 };
-use result::ArticlerResult;
 use sqlx::sqlite::SqlitePoolOptions;
 
 #[actix_web::main]
@@ -34,9 +35,22 @@ async fn main() -> ArticlerResult<()> {
         .parse::<u16>()
         .expect("HTTP_PORT must be valid port number");
 
+    let mut handlebars = Handlebars::new();
+    handlebars
+        .register_templates_directory(
+            "./templates",
+            DirectorySourceOptionsBuilder::default()
+                .tpl_extension(".html")
+                .hidden(false)
+                .temporary(false)
+                .build()
+                .unwrap(),
+        )
+        .unwrap();
+
     http_server(
         port,
-        app_state_init(pool.clone(), scraper),
+        app_state_init(pool.clone(), scraper, handlebars),
         Key::from(cookie_key.as_bytes()),
     )?
     .await?;

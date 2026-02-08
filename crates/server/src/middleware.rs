@@ -120,8 +120,9 @@ mod tests {
     use actix_web::{HttpResponse, middleware::from_fn, test, web};
     use sqlx::SqlitePool;
 
-    use db::repository::users;
+    use crate::app::init_handlebars;
     use crate::scraper::Scraper;
+    use db::repository::users;
 
     static INIT: Once = Once::new();
 
@@ -140,6 +141,7 @@ mod tests {
             pool: pool.clone(),
             token_storage: crate::token_storage::TokenStorage::default(),
             scraper: Scraper::new(None).unwrap(),
+            handlebars: init_handlebars(),
         });
 
         test::init_service(
@@ -208,6 +210,7 @@ mod tests {
             pool: pool.clone(),
             token_storage: crate::token_storage::TokenStorage::default(),
             scraper: Scraper::new(None).unwrap(),
+            handlebars: init_handlebars(),
         });
 
         let app = test::init_service(

@@ -15,12 +15,12 @@ use serde_json::{Value, json};
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
 // TODO is it appropriate way?
+use db::repository::entries;
+use helpers::hash_str;
 use server::{
-    app::{app, app_state_init},
+    app::{app, app_state_init, init_handlebars},
     scraper::Scraper,
 };
-use helpers::hash_str;
-use db::repository::entries;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
     matchers::{method, path},
@@ -42,7 +42,11 @@ async fn init_app(
     let cookie_key = Key::from(&[0u8; 64]);
 
     test::init_service(app(
-        web::Data::new(app_state_init(pool, Scraper::new(None).unwrap())),
+        web::Data::new(app_state_init(
+            pool,
+            Scraper::new(None).unwrap(),
+            init_handlebars(),
+        )),
         cookie_key,
     ))
     .await
