@@ -26,7 +26,7 @@ pub fn routes(cfg: &mut ServiceConfig, cookie_key: Key) {
             .route("/", get().to(index))
             .route("/developer", get().to(developer))
             .route("/login_check", post().to(login_check))
-            .route("/login_check_normal", post().to(login_check)),
+            .route("/do_login", post().to(login_check)),
     );
 }
 

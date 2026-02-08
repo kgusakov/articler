@@ -36,7 +36,7 @@
     <div class="w-full max-w-[360px]">
       <h1 class="text-2xl font-semibold mb-8 text-center">Sign in</h1>
 
-      <form action="/login_check_normal" method="post" class="space-y-5">
+      <form action="/do_login" method="post" class="space-y-5">
         <div>
           <label for="login" class="block text-sm font-medium mb-1.5">Login</label>
           <input type="text" id="login" name="_username" autocomplete="username" required
@@ -59,6 +59,7 @@
     </div>
   </main>
 
+  <!-- DO NOT REMOVE THIS. Needed for wallabag android app autorization -->
   <div class="card sw" style="display:none">
     <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
     <form action="/login_check" method="post" name="loginform">
