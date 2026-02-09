@@ -289,6 +289,35 @@ async fn favourite_page(pool: SqlitePool) {
     assert!(article_titles.iter().any(|t| t == "title6"));
 }
 
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn archive_page(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/archive")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let article_titles = helpers::find_article_titles(content);
+
+    // Entries 2, 4, and 6 are archived
+    assert_eq!(article_titles.len(), 3);
+    assert!(article_titles.iter().any(|t| t == "title2"));
+    assert!(article_titles.iter().any(|t| t == "title4"));
+    assert!(article_titles.iter().any(|t| t == "title6"));
+}
+
 async fn login(
     username: &str,
     password: &str,

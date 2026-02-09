@@ -23,6 +23,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/", get().to(index))
         .route("/all", get().to(all))
         .route("/favourite", get().to(favourite))
+        .route("/archive", get().to(archive))
         .route("/do_login", post().to(do_login))
         .route("/do_archive", post().to(do_archive));
 }
@@ -106,6 +107,32 @@ async fn favourite(
             EntriesCriteria {
                 user_id,
                 starred: Some(true),
+                sort: Some(entries::SortColumn::Updated),
+                order: Some(SortOrder::Desc),
+                ..Default::default()
+            },
+        )
+        .await
+    } else {
+        Ok(HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish())
+    }
+}
+
+async fn archive(
+    session: Session,
+    app: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+) -> actix_web::Result<HttpResponse> {
+    if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
+        main(
+            app,
+            tctx,
+            user_id,
+            EntriesCriteria {
+                user_id,
+                archive: Some(true),
                 sort: Some(entries::SortColumn::Updated),
                 order: Some(SortOrder::Desc),
                 ..Default::default()
