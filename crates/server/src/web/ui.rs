@@ -57,7 +57,7 @@ async fn index(
             EntriesCriteria {
                 user_id,
                 archive: Some(false),
-                sort: Some(entries::SortColumn::Updated),
+                sort: Some(entries::SortColumn::Created),
                 order: Some(SortOrder::Desc),
                 ..Default::default()
             },
@@ -82,7 +82,7 @@ async fn all(
             user_id,
             EntriesCriteria {
                 user_id,
-                sort: Some(entries::SortColumn::Updated),
+                sort: Some(entries::SortColumn::Created),
                 order: Some(SortOrder::Desc),
                 ..Default::default()
             },
@@ -108,7 +108,7 @@ async fn favourite(
             EntriesCriteria {
                 user_id,
                 starred: Some(true),
-                sort: Some(entries::SortColumn::Updated),
+                sort: Some(entries::SortColumn::Created),
                 order: Some(SortOrder::Desc),
                 ..Default::default()
             },
@@ -134,7 +134,7 @@ async fn archive(
             EntriesCriteria {
                 user_id,
                 archive: Some(true),
-                sort: Some(entries::SortColumn::Updated),
+                sort: Some(entries::SortColumn::Created),
                 order: Some(SortOrder::Desc),
                 ..Default::default()
             },
