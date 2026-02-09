@@ -51,6 +51,7 @@
                         style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
                         <form method="post" action="/do_favourite" class="flex items-center">
                             <input type="hidden" name="article_id" value="{{id}}" />
+                            <input type="hidden" name="starred" value="{{#unless is_starred}}true{{else}}false{{/unless}}" />
                             {{#if is_starred}}
                             <button type="submit" class="hover:scale-110 transition-transform" title="Unstar">
                                 <img src="/static/images/FavoriteOn.svg" alt="Unstar" />

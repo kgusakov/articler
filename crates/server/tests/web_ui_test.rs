@@ -438,7 +438,7 @@ async fn do_favourite(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .uri("/do_favourite")
         .cookie(cookie.clone())
-        .set_form([("article_id", "1")])
+        .set_form([("article_id", "1"), ("starred", "true")])
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -473,6 +473,55 @@ async fn do_favourite(pool: SqlitePool) {
 
     let icons = helpers::find_favourite_icons_by_article(content);
     assert!(icons.contains(&("1".to_string(), "/static/images/FavoriteOn.svg".to_string())));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_unfavourite(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    // Unstar entry 3 (currently starred)
+    let req = test::TestRequest::post()
+        .uri("/do_favourite")
+        .cookie(cookie.clone())
+        .set_form([("article_id", "3"), ("starred", "false")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
+
+    // Verify entry 3 no longer appears on the favourite page
+    let req = test::TestRequest::get()
+        .uri("/favourite")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let article_titles = helpers::find_article_titles(content);
+    assert_eq!(article_titles.len(), 2);
+    assert!(!article_titles.iter().any(|t| t == "title3"));
+
+    // Verify entry 3 now shows FavoriteOff icon on the index page
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let icons = helpers::find_favourite_icons_by_article(content);
+    assert!(icons.contains(&("3".to_string(), "/static/images/FavoriteOff.svg".to_string())));
 }
 
 async fn login(

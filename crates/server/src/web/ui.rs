@@ -227,6 +227,7 @@ async fn do_archive(
 #[derive(Deserialize)]
 struct FavouriteForm {
     article_id: repository::Id,
+    starred: bool,
 }
 
 async fn do_favourite(
@@ -242,15 +243,19 @@ async fn do_favourite(
         .map_err(ErrorInternalServerError)?
         .ok_or(ErrorForbidden(""))?;
 
-    let now = Utc::now().timestamp();
+    let form = form.into_inner();
 
     let update = UpdateEntry {
-        is_starred: Some(Some(true)),
-        starred_at: Some(Some(now)),
+        is_starred: Some(Some(form.starred)),
+        starred_at: Some(if form.starred {
+            Some(Utc::now().timestamp())
+        } else {
+            None
+        }),
         ..Default::default()
     };
 
-    entries::update_by_id(&mut tx, user_id, form.into_inner().article_id, update).await?;
+    entries::update_by_id(&mut tx, user_id, form.article_id, update).await?;
 
     let referer = req
         .headers()
