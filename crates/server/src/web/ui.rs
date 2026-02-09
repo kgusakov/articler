@@ -260,6 +260,7 @@ struct ArticleMetadata {
     image_url: Option<String>,
     domain: String,
     reading_time: i32,
+    is_archived: bool,
 }
 
 impl From<EntryRow> for ArticleMetadata {
@@ -270,6 +271,7 @@ impl From<EntryRow> for ArticleMetadata {
             image_url: entry.preview_picture,
             domain: entry.domain_name,
             reading_time: entry.reading_time,
+            is_archived: entry.is_archived,
         }
     }
 }

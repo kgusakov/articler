@@ -186,6 +186,11 @@ async fn index_page(pool: SqlitePool) {
     assert!(archive_forms.contains(&"1".to_string()));
     assert!(archive_forms.contains(&"3".to_string()));
     assert!(archive_forms.contains(&"5".to_string()));
+
+    // Unarchived articles must show MarkUnRead icon
+    let archive_icons = helpers::find_archive_icons(content);
+    assert_eq!(archive_icons.len(), 3);
+    assert!(archive_icons.iter().all(|src| src == "/static/images/MarkUnRead.svg"));
 }
 
 #[sqlx::test(
@@ -316,6 +321,11 @@ async fn archive_page(pool: SqlitePool) {
     assert!(article_titles.iter().any(|t| t == "title2"));
     assert!(article_titles.iter().any(|t| t == "title4"));
     assert!(article_titles.iter().any(|t| t == "title6"));
+
+    // Archived articles must show MarkRead icon
+    let archive_icons = helpers::find_archive_icons(content);
+    assert_eq!(archive_icons.len(), 3);
+    assert!(archive_icons.iter().all(|src| src == "/static/images/MarkRead.svg"));
 }
 
 async fn login(
@@ -347,6 +357,23 @@ mod helpers {
         document
             .select(&Selector::parse("article h3").unwrap())
             .map(|el| el.text().collect::<String>())
+            .collect()
+    }
+
+    /// Returns the icon src from the archive button in each archive form.
+    pub fn find_archive_icons(content: &str) -> Vec<String> {
+        let document = Html::parse_document(content);
+        let form_sel = Selector::parse(r#"form[action="/do_archive"]"#).unwrap();
+        let img_sel = Selector::parse("button img").unwrap();
+
+        document
+            .select(&form_sel)
+            .filter_map(|form| {
+                form.select(&img_sel)
+                    .next()
+                    .and_then(|img| img.value().attr("src"))
+                    .map(|v| v.to_string())
+            })
             .collect()
     }
 
