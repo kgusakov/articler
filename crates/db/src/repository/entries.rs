@@ -530,7 +530,7 @@ pub struct CreateEntry {
 // Some(Some(v)) - update to v
 type UpdateField<T> = Option<Option<T>>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct UpdateEntry {
     pub title: UpdateField<String>,
     pub content: UpdateField<String>,

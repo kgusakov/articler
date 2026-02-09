@@ -172,15 +172,51 @@ async fn main_page(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
 
-    let document = Html::parse_document(content);
-    let article_titles: Vec<String> = document
-        .select(&Selector::parse("article h3").unwrap())
-        .map(|el| el.text().collect::<String>())
-        .collect();
+    let article_titles: Vec<String> = helpers::find_article_titles(content);
 
     // Exactly 3 unread (not archived) articles from fixtures: entries 1, 3, and 5
     assert_eq!(article_titles.len(), 3);
     assert!(article_titles.iter().any(|t| t == "title1"));
+    assert!(article_titles.iter().any(|t| t == "title3"));
+    assert!(article_titles.iter().any(|t| t == "title5"));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_archive(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    // Archive entry 1 (currently unarchived)
+    let req = test::TestRequest::post()
+        .uri("/do_archive")
+        .cookie(cookie.clone())
+        .set_form([("article_id", "1")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
+
+    // Verify main page no longer shows the archived article
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let article_titles = helpers::find_article_titles(content);
+
+    // Entry 1 should no longer appear, only entries 3 and 5 remain
+    assert_eq!(article_titles.len(), 2);
     assert!(article_titles.iter().any(|t| t == "title3"));
     assert!(article_titles.iter().any(|t| t == "title5"));
 }
@@ -204,4 +240,16 @@ async fn login(
         .find(|c| c.name() == "id")
         .unwrap()
         .into_owned()
+}
+
+mod helpers {
+    use scraper::{Html, Selector};
+
+    pub fn find_article_titles(content: &str) -> Vec<String> {
+        let document = Html::parse_document(content);
+        document
+            .select(&Selector::parse("article h3").unwrap())
+            .map(|el| el.text().collect::<String>())
+            .collect()
+    }
 }

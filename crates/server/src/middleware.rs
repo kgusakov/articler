@@ -76,7 +76,7 @@ pub async fn wrap_with_tx(
         Ok(response) => {
             let status = response.status();
 
-            if status.is_success() {
+            if !(status.is_client_error() || status.is_server_error()) {
                 // Take the transaction out, dropping the RefMut before await
                 let tx_option = request_context.tx.borrow_mut().take();
                 if let Some(tx) = tx_option {

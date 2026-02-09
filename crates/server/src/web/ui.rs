@@ -1,12 +1,16 @@
 use actix_session::Session;
 use actix_web::{
-    HttpResponse, Responder,
-    error::ErrorInternalServerError,
+    HttpRequest, HttpResponse, Responder,
+    error::{ErrorForbidden, ErrorInternalServerError},
     http::header,
     mime,
-    web::{self, ServiceConfig, get, post},
+    web::{self, Redirect, ServiceConfig, get, post},
 };
-use db::repository::entries::{self, EntriesCriteria, SortOrder};
+use chrono::Utc;
+use db::repository::{
+    self,
+    entries::{self, EntriesCriteria, SortOrder, UpdateEntry},
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{app::AppState, auth::find_user, middleware::TransactionContext};
@@ -14,7 +18,8 @@ use crate::{app::AppState, auth::find_user, middleware::TransactionContext};
 pub fn routes(cfg: &mut ServiceConfig) {
     cfg.route("/login", get().to(login))
         .route("/", get().to(index))
-        .route("/do_login", post().to(do_login));
+        .route("/do_login", post().to(do_login))
+        .route("/do_archive", post().to(do_archive));
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
@@ -122,6 +127,45 @@ async fn index(
             .append_header(("Location", "/login"))
             .finish())
     }
+}
+
+#[derive(Deserialize)]
+struct ArchiveForm {
+    article_id: repository::Id,
+}
+
+async fn do_archive(
+    session: Session,
+    req: HttpRequest,
+    form: web::Form<ArchiveForm>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+) -> actix_web::Result<impl Responder> {
+    let mut tx = tctx.tx()?;
+
+    // TODO error messages must be reworked
+    let user_id = session
+        .get("user_id")
+        .map_err(ErrorInternalServerError)?
+        .ok_or(ErrorForbidden(""))?;
+
+    let now = Utc::now().timestamp();
+
+    let update = UpdateEntry {
+        is_archived: Some(Some(true)),
+        archived_at: Some(Some(now)),
+        ..Default::default()
+    };
+
+    entries::update_by_id(&mut tx, user_id, form.into_inner().article_id, update).await?;
+
+    let referer = req
+        .headers()
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("/")
+        .to_string();
+
+    Ok(Redirect::to(referer))
 }
 
 #[derive(Deserialize)]

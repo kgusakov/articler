@@ -9,9 +9,9 @@ use sqlx::Sqlite;
 use thiserror::Error;
 
 pub type Db = Sqlite;
-type Id = i64;
+pub type Id = i64;
 type Timestamp = i64;
-type ReadingTime = i32;
+pub type ReadingTime = i32;
 
 const ENTRIES_TABLE: &str = "entries";
 const TAGS_TABLE: &str = "tags";
