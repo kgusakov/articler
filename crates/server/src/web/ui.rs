@@ -183,6 +183,7 @@ async fn main(
 #[derive(Deserialize)]
 struct ArchiveForm {
     article_id: repository::Id,
+    archived: bool,
 }
 
 async fn do_archive(
@@ -199,15 +200,19 @@ async fn do_archive(
         .map_err(ErrorInternalServerError)?
         .ok_or(ErrorForbidden(""))?;
 
-    let now = Utc::now().timestamp();
+    let form = form.into_inner();
 
     let update = UpdateEntry {
-        is_archived: Some(Some(true)),
-        archived_at: Some(Some(now)),
+        is_archived: Some(Some(form.archived)),
+        archived_at: Some(if form.archived {
+            Some(Utc::now().timestamp())
+        } else {
+            None
+        }),
         ..Default::default()
     };
 
-    entries::update_by_id(&mut tx, user_id, form.into_inner().article_id, update).await?;
+    entries::update_by_id(&mut tx, user_id, form.article_id, update).await?;
 
     let referer = req
         .headers()

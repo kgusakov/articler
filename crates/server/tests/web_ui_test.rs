@@ -206,7 +206,7 @@ async fn do_archive(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .uri("/do_archive")
         .cookie(cookie.clone())
-        .set_form([("article_id", "1")])
+        .set_form([("article_id", "1"), ("archived", "true")])
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -229,6 +229,48 @@ async fn do_archive(pool: SqlitePool) {
 
     // Entry 1 should no longer appear, only entries 3 and 5 remain
     assert_eq!(article_titles.len(), 2);
+    assert!(article_titles.iter().any(|t| t == "title3"));
+    assert!(article_titles.iter().any(|t| t == "title5"));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_unarchive(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    // Unarchive entry 2 (currently archived)
+    let req = test::TestRequest::post()
+        .uri("/do_archive")
+        .cookie(cookie.clone())
+        .set_form([("article_id", "2"), ("archived", "false")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
+
+    // Verify main page now shows the unarchived article
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let article_titles = helpers::find_article_titles(content);
+
+    // Entry 2 should now appear alongside entries 1, 3, and 5
+    assert_eq!(article_titles.len(), 4);
+    assert!(article_titles.iter().any(|t| t == "title1"));
+    assert!(article_titles.iter().any(|t| t == "title2"));
     assert!(article_titles.iter().any(|t| t == "title3"));
     assert!(article_titles.iter().any(|t| t == "title5"));
 }
