@@ -26,10 +26,13 @@ pub fn routes(cfg: &mut ServiceConfig) {
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
-    match app
-        .handlebars
-        .render("index", &Page { nav_partial: None, main_partial: "login".to_string() })
-    {
+    match app.handlebars.render(
+        "index",
+        &Page {
+            nav_partial: None,
+            main_partial: "login".to_string(),
+        },
+    ) {
         Ok(rendered) => HttpResponse::Ok()
             .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
             .body(rendered),
@@ -41,43 +44,59 @@ async fn index(
     session: Session,
     app: web::Data<AppState>,
     tctx: web::ReqData<TransactionContext<'_>>,
-) -> actix_web::Result<impl Responder> {
+) -> actix_web::Result<HttpResponse> {
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
-        let mut tx = tctx.tx()?;
-
-        let params = EntriesCriteria {
+        main(
+            app,
+            tctx,
             user_id,
-            archive: Some(false),
-            sort: Some(entries::SortColumn::Updated),
-            order: Some(SortOrder::Desc),
-            ..Default::default()
-        };
-
-        // TODO must load only metadata
-        let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut tx, &params)
-            .await?
-            .into_iter()
-            .map(|e| e.0.into())
-            .collect();
-
-        let context = ArticlesContext {
-            page: Page { nav_partial: Some("navigation".to_string()), main_partial: "main".to_string() },
-            articles: articles_metadata,
-            counters: ArticleCounters::load(&mut tx, user_id).await?,
-        };
-
-        let rendered = app
-            .handlebars
-            .render("index", &context)
-            .map_err(ErrorInternalServerError)?;
-        Ok(HttpResponse::Ok()
-            .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
-            .body(rendered))
+            EntriesCriteria {
+                user_id,
+                archive: Some(false),
+                sort: Some(entries::SortColumn::Updated),
+                order: Some(SortOrder::Desc),
+                ..Default::default()
+            },
+        )
+        .await
     } else {
         Ok(HttpResponse::Found()
             .append_header(("Location", "/login"))
             .finish())
     }
+}
+
+async fn main(
+    app: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+    user_id: Id,
+    entries_filter: EntriesCriteria,
+) -> actix_web::Result<HttpResponse> {
+    let mut tx = tctx.tx()?;
+
+    // TODO must load only metadata
+    let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut tx, &entries_filter)
+        .await?
+        .into_iter()
+        .map(|e| e.0.into())
+        .collect();
+
+    let context = ArticlesContext {
+        page: Page {
+            nav_partial: Some("navigation".to_string()),
+            main_partial: "main".to_string(),
+        },
+        articles: articles_metadata,
+        counters: ArticleCounters::load(&mut tx, user_id).await?,
+    };
+
+    let rendered = app
+        .handlebars
+        .render("index", &context)
+        .map_err(ErrorInternalServerError)?;
+    Ok(HttpResponse::Ok()
+        .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+        .body(rendered))
 }
 
 #[derive(Deserialize)]

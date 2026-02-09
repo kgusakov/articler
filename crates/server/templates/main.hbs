@@ -3,23 +3,23 @@
     <!-- Sidebar -->
     <aside class="w-full lg:w-[348px] lg:pr-8 space-y-1 flex lg:block gap-2 overflow-x-auto lg:overflow-visible">
         <!-- Unread (active) -->
-        <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 bg-surface rounded text-left">
+        <a href="/unread" class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 bg-surface rounded text-left">
             <img src="/static/images/MarkUnRead.svg" />
             <span class="hidden lg:inline flex-1 font-medium">Unread</span>
             <span class="hidden lg:inline text-xs text-muted">{{unread_counter}}</span>
-        </button>
+        </a>
         <!-- All -->
-        <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
+        <a href="/all" class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
             <img src="/static/images/All.svg" />
             <span class="hidden lg:inline flex-1">All</span>
             <span class="hidden lg:inline text-xs text-muted">{{all_counter}}</span>
-        </button>
+        </a>
         <!-- Starred -->
-        <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
+        <a href="/favourite" class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
             <img src="/static/images/FavoriteOff.svg" />
             <span class="hidden lg:inline flex-1">Starred</span>
             <span class="hidden lg:inline text-xs text-muted">{{starred_counter}}</span>
-        </button>
+        </a>
         <!-- Archive -->
         <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
             <img src="/static/images/Archived.svg" />
