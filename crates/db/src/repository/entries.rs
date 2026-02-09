@@ -194,7 +194,7 @@ pub async fn count(
     }
 
     // TODO implement detail filtering
-    if params.detail != Some(Detail::Full) {
+    if params.detail == Some(Detail::Metadata) {
         return Err(DbErrorType::RepositoryError(
             "Detail metadata mode is not supported yet".into(),
         )

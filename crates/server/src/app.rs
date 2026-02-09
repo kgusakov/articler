@@ -8,7 +8,7 @@ use actix_web::{
     web,
 };
 use actix_web_static_files::ResourceFiles;
-use handlebars::{DirectorySourceOptionsBuilder, Handlebars};
+use handlebars::Handlebars;
 use sqlx::{Pool, Sqlite};
 
 use crate::{middleware::wrap_with_tx, scraper::Scraper, token_storage::TokenStorage};
@@ -42,25 +42,26 @@ pub fn app(
         .wrap(from_fn(wrap_with_tx))
         .configure(crate::rest::oauth::routes)
         .configure(crate::rest::wallabag::routes)
-        .configure(|cfg| crate::web::routes(cfg, cookie_key.clone()))
         .service(ResourceFiles::new("/static", generated))
+        .configure(|cfg| crate::web::routes(cfg, cookie_key.clone()))
 }
 
 // TODO rethink 'static hardcode
+// TODO manual file registration is a bad way
 pub fn init_handlebars() -> Handlebars<'static> {
     let mut handlebars = Handlebars::new();
     handlebars
-        .register_templates_directory(
-            "./templates",
-            DirectorySourceOptionsBuilder::default()
-                .tpl_extension(".html")
-                .hidden(false)
-                .temporary(false)
-                .build()
-                .unwrap(),
-        )
+        .register_template_string("index", include_str!("../templates/index.hbs"))
         .unwrap();
-
+    handlebars
+        .register_partial("login", include_str!("../templates/login.hbs"))
+        .unwrap();
+    handlebars
+        .register_partial("navigation", include_str!("../templates/navigation.hbs"))
+        .unwrap();
+    handlebars
+        .register_partial("main", include_str!("../templates/main.hbs"))
+        .unwrap();
     handlebars
 }
 

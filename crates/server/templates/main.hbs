@@ -1,0 +1,75 @@
+<!-- Main -->
+<main class="flex flex-col lg:flex-row px-4 md:px-8 lg:px-[120px] pt-6 lg:pt-[76px] pb-8 lg:pb-12 gap-6 lg:gap-0">
+    <!-- Sidebar -->
+    <aside class="w-full lg:w-[348px] lg:pr-8 space-y-1 flex lg:block gap-2 overflow-x-auto lg:overflow-visible">
+        <!-- Unread (active) -->
+        <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 bg-surface rounded text-left">
+            <img src="/static/images/MarkUnRead.svg" />
+            <span class="hidden lg:inline flex-1 font-medium">Unread</span>
+            <span class="hidden lg:inline text-xs text-muted">{{unread_counter}}</span>
+        </button>
+        <!-- All -->
+        <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
+            <img src="/static/images/All.svg" />
+            <span class="hidden lg:inline flex-1">All</span>
+            <span class="hidden lg:inline text-xs text-muted">{{all_counter}}</span>
+        </button>
+        <!-- Starred -->
+        <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
+            <img src="/static/images/FavoriteOff.svg" />
+            <span class="hidden lg:inline flex-1">Starred</span>
+            <span class="hidden lg:inline text-xs text-muted">{{starred_counter}}</span>
+        </button>
+        <!-- Archive -->
+        <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
+            <img src="/static/images/Archived.svg" />
+            <span class="hidden lg:inline flex-1">Archived</span>
+            <span class="hidden lg:inline text-xs text-muted">{{archived_counter}}</span>
+        </button>
+        <!-- Tags -->
+        <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
+            <!-- TODO replace tagged svg by normal variant -->
+            <img class="w-5 h-5" src="/static/images/Tagged.svg" />
+            <span class="hidden lg:inline flex-1">Tags</span>
+        </button>
+    </aside>
+
+    <!-- Content -->
+    <section class="flex-1">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8">
+            {{#each articles}}
+            <article class="group cursor-pointer">
+                <div
+                    class="aspect-[347/200] rounded overflow-hidden bg-gradient-to-br from-blue-600 to-purple-700 mb-4 relative">
+                    {{#if image_url}}
+                    <img src="{{image_url}}" alt="{{title}}" class="w-full h-full object-cover">
+                    {{/if}}
+                    <div class="absolute bottom-0 right-0 flex items-center gap-5 pl-5 pr-4 py-2.5 rounded-tl-lg"
+                        style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
+                        <button class="hover:scale-110 transition-transform" title="Favourite">
+                            <img src="/static/images/FavoriteOn.svg" alt="Favourite" />
+                        </button>
+                        <button class="hover:scale-110 transition-transform" title="Mark as read">
+                            <img src="/static/images/MarkRead.svg" alt="Mark as read" />
+                        </button>
+                        <button class="hover:scale-110 transition-transform" title="Delete">
+                            <img src="/static/images/Delete.svg" alt="Delete" />
+                        </button>
+                    </div>
+                </div>
+                <h3 class="font-medium leading-snug mb-2 group-hover:text-secondary">{{title}}</h3>
+                <div class="flex items-center gap-2 text-xs text-muted">
+                    <span>{{domain}}</span>
+                    <span>·</span>
+                    <span>{{reading_time}} min read</span>
+                </div>
+            </article>
+            {{/each}}
+        </div>
+    </section>
+</main>
+<!-- DO NOT REMOVE THIS. Needed for wallabag android app autorization -->
+<div style="display:none">
+    <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
+    <a href="/logout"><i class="material-icons">input</i> Logout</a>
+</div>

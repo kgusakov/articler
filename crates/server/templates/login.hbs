@@ -1,0 +1,63 @@
+<main class="flex-1 flex items-center justify-center px-4 py-12">
+    <div class="w-full max-w-[360px]">
+        <h1 class="text-2xl font-semibold mb-8 text-center">Sign in</h1>
+
+        <form action="/do_login" method="post" class="space-y-5" id="main-form">
+            <div>
+                <label for="login" class="block text-sm font-medium mb-1.5">Login</label>
+                <input type="text" id="main-login" name="_username" autocomplete="username" required
+                    class="w-full h-11 px-3 rounded border border-border bg-white text-primary placeholder:text-muted text-sm outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition"
+                    placeholder="Enter your login" />
+            </div>
+
+            <div>
+                <label for="password" class="block text-sm font-medium mb-1.5">Password</label>
+                <input type="password" id="main-password" name="_password" autocomplete="current-password" required
+                    class="w-full h-11 px-3 rounded border border-border bg-white text-primary placeholder:text-muted text-sm outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition"
+                    placeholder="Enter your password" />
+            </div>
+
+            <button type="submit"
+                class="w-full h-11 bg-primary text-white text-sm font-medium rounded hover:bg-secondary transition">
+                Login
+            </button>
+        </form>
+    </div>
+</main>
+
+<!-- DO NOT REMOVE THIS. Needed for wallabag android app autorization -->
+<div class="card sw" style="display:none">
+    <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
+    <form action="/login_check" method="post" name="loginform">
+        <div class="card-content">
+            <div class="row">
+
+                <div class="input-field col s12">
+                    <label for="username" class="">Username</label>
+                    <input type="text" id="username" name="_username" value="" autofocus="">
+                </div>
+
+                <div class="input-field col s12">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="_password">
+                </div>
+
+                <div class="input-field col s12">
+                    <input type="checkbox" id="remember_me" name="_remember_me" checked="">
+                    <label for="remember_me">Keep me logged in</label>
+                </div>
+
+            </div>
+        </div>
+        <div class="card-action center">
+            <input type="hidden" name="_csrf_token" value="fUYkqRJIgF0uxA6GUEk9ZrwnUEnuvQEUxiPPls1CDOc">
+            <button class="btn waves-effect waves-light" type="submit" name="send">
+                Log in
+                <i class="material-icons right">send</i>
+            </button>
+        </div>
+        <div class="card-action center">
+            <a href="/resetting/request">Forgot your password?</a>
+        </div>
+    </form>
+</div>

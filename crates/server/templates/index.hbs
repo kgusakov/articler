@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Articler</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#191D24',
+            secondary: '#384252',
+            muted: '#6C727F',
+            border: '#E0E4EA',
+            surface: '#F1F3F6'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+
+<body class="bg-white text-primary">
+  <!-- Header -->
+  <header class="h-[72px] px-4 md:px-8 lg:px-[120px] flex items-center justify-between border-b border-surface">
+    <div class="flex items-center gap-3">
+      <img src="/static/images/Logo.svg" />
+    </div>
+
+    {{#if nav_partial}}
+    {{> (lookup this 'nav_partial') }}
+    {{/if}}
+  </header>
+
+  {{> (lookup this 'main_partial') }}
+</body>
+
+</html>
