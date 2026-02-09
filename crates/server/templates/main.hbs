@@ -49,9 +49,12 @@
                         <button class="hover:scale-110 transition-transform" title="Favourite">
                             <img src="/static/images/FavoriteOn.svg" alt="Favourite" />
                         </button>
-                        <button class="hover:scale-110 transition-transform" title="Mark as read">
-                            <img src="/static/images/MarkRead.svg" alt="Mark as read" />
-                        </button>
+                        <form method="post" action="/do_archive" class="flex items-center">
+                            <input type="hidden" name="article_id" value="{{id}}" />
+                            <button type="submit" class="hover:scale-110 transition-transform" title="Mark as read">
+                                <img src="/static/images/MarkRead.svg" alt="Mark as read" />
+                            </button>
+                        </form>
                         <button class="hover:scale-110 transition-transform" title="Delete">
                             <img src="/static/images/Delete.svg" alt="Delete" />
                         </button>

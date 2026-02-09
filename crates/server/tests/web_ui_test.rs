@@ -179,6 +179,13 @@ async fn main_page(pool: SqlitePool) {
     assert!(article_titles.iter().any(|t| t == "title1"));
     assert!(article_titles.iter().any(|t| t == "title3"));
     assert!(article_titles.iter().any(|t| t == "title5"));
+
+    // Each article must have an archive form with the correct article_id
+    let archive_forms = helpers::find_archive_forms(content);
+    assert_eq!(archive_forms.len(), 3);
+    assert!(archive_forms.contains(&"1".to_string()));
+    assert!(archive_forms.contains(&"3".to_string()));
+    assert!(archive_forms.contains(&"5".to_string()));
 }
 
 #[sqlx::test(
@@ -198,7 +205,7 @@ async fn do_archive(pool: SqlitePool) {
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
     assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
 
     // Verify main page no longer shows the archived article
@@ -250,6 +257,23 @@ mod helpers {
         document
             .select(&Selector::parse("article h3").unwrap())
             .map(|el| el.text().collect::<String>())
+            .collect()
+    }
+
+    /// Returns the article_id values from all archive forms in the page.
+    pub fn find_archive_forms(content: &str) -> Vec<String> {
+        let document = Html::parse_document(content);
+        let form_sel = Selector::parse(r#"form[action="/do_archive"]"#).unwrap();
+        let input_sel = Selector::parse(r#"input[name="article_id"]"#).unwrap();
+
+        document
+            .select(&form_sel)
+            .filter_map(|form| {
+                form.select(&input_sel)
+                    .next()
+                    .and_then(|input| input.value().attr("value"))
+                    .map(|v| v.to_string())
+            })
             .collect()
     }
 }

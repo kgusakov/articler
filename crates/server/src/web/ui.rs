@@ -56,6 +56,7 @@ async fn index(
         let articles_metadata: Vec<ArticleMetadata> = unread_articles
             .into_iter()
             .map(|e| ArticleMetadata {
+                id: e.0.id,
                 title: e.0.title,
                 image_url: e.0.preview_picture,
                 domain: e.0.domain_name,
@@ -165,7 +166,7 @@ async fn do_archive(
         .unwrap_or("/")
         .to_string();
 
-    Ok(Redirect::to(referer))
+    Ok(Redirect::to(referer).see_other())
 }
 
 #[derive(Deserialize)]
@@ -205,6 +206,7 @@ struct Page {
 
 #[derive(Serialize)]
 struct ArticleMetadata {
+    id: repository::Id,
     title: String,
     image_url: Option<String>,
     domain: String,
