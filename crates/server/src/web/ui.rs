@@ -25,7 +25,8 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/favourite", get().to(favourite))
         .route("/archive", get().to(archive))
         .route("/do_login", post().to(do_login))
-        .route("/do_archive", post().to(do_archive));
+        .route("/do_archive", post().to(do_archive))
+        .route("/do_favourite", post().to(do_favourite));
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
@@ -219,6 +220,44 @@ async fn do_archive(
 }
 
 #[derive(Deserialize)]
+struct FavouriteForm {
+    article_id: repository::Id,
+}
+
+async fn do_favourite(
+    session: Session,
+    req: HttpRequest,
+    form: web::Form<FavouriteForm>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+) -> actix_web::Result<impl Responder> {
+    let mut tx = tctx.tx()?;
+
+    let user_id = session
+        .get("user_id")
+        .map_err(ErrorInternalServerError)?
+        .ok_or(ErrorForbidden(""))?;
+
+    let now = Utc::now().timestamp();
+
+    let update = UpdateEntry {
+        is_starred: Some(Some(true)),
+        starred_at: Some(Some(now)),
+        ..Default::default()
+    };
+
+    entries::update_by_id(&mut tx, user_id, form.into_inner().article_id, update).await?;
+
+    let referer = req
+        .headers()
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("/")
+        .to_string();
+
+    Ok(Redirect::to(referer).see_other())
+}
+
+#[derive(Deserialize)]
 pub(in crate::web) struct LoginForm {
     #[serde(rename(deserialize = "_username"))]
     username: String,
@@ -261,6 +300,7 @@ struct ArticleMetadata {
     domain: String,
     reading_time: i32,
     is_archived: bool,
+    is_starred: bool,
 }
 
 impl From<EntryRow> for ArticleMetadata {
@@ -272,6 +312,7 @@ impl From<EntryRow> for ArticleMetadata {
             domain: entry.domain_name,
             reading_time: entry.reading_time,
             is_archived: entry.is_archived,
+            is_starred: entry.is_starred,
         }
     }
 }

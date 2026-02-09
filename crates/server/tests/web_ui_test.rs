@@ -328,6 +328,111 @@ async fn archive_page(pool: SqlitePool) {
     assert!(archive_icons.iter().all(|src| src == "/static/images/MarkRead.svg"));
 }
 
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn index_page_favourite_icons(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let icons = helpers::find_favourite_icons_by_article(content);
+    assert_eq!(icons.len(), 3);
+
+    // Entry 1: not starred → FavoriteOff
+    assert!(icons.contains(&("1".to_string(), "/static/images/FavoriteOff.svg".to_string())));
+    // Entry 3: starred → FavoriteOn
+    assert!(icons.contains(&("3".to_string(), "/static/images/FavoriteOn.svg".to_string())));
+    // Entry 5: not starred → FavoriteOff
+    assert!(icons.contains(&("5".to_string(), "/static/images/FavoriteOff.svg".to_string())));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn favourite_page_favourite_icons(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/favourite")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let icons = helpers::find_favourite_icons_by_article(content);
+    assert_eq!(icons.len(), 3);
+
+    // All starred articles must show FavoriteOn icon
+    assert!(icons.iter().all(|(_, src)| src == "/static/images/FavoriteOn.svg"));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_favourite(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    // Star entry 1 (currently unstarred)
+    let req = test::TestRequest::post()
+        .uri("/do_favourite")
+        .cookie(cookie.clone())
+        .set_form([("article_id", "1")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
+
+    // Verify entry 1 now appears on the favourite page
+    let req = test::TestRequest::get()
+        .uri("/favourite")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let article_titles = helpers::find_article_titles(content);
+    assert_eq!(article_titles.len(), 4);
+    assert!(article_titles.iter().any(|t| t == "title1"));
+
+    // Verify entry 1 now shows FavoriteOn icon on the index page
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let icons = helpers::find_favourite_icons_by_article(content);
+    assert!(icons.contains(&("1".to_string(), "/static/images/FavoriteOn.svg".to_string())));
+}
+
 async fn login(
     username: &str,
     password: &str,
@@ -390,6 +495,31 @@ mod helpers {
                     .next()
                     .and_then(|input| input.value().attr("value"))
                     .map(|v| v.to_string())
+            })
+            .collect()
+    }
+
+    /// Returns (article_id, icon_src) pairs from all favourite forms in the page.
+    pub fn find_favourite_icons_by_article(content: &str) -> Vec<(String, String)> {
+        let document = Html::parse_document(content);
+        let form_sel = Selector::parse(r#"form[action="/do_favourite"]"#).unwrap();
+        let input_sel = Selector::parse(r#"input[name="article_id"]"#).unwrap();
+        let img_sel = Selector::parse("button img").unwrap();
+
+        document
+            .select(&form_sel)
+            .filter_map(|form| {
+                let article_id = form
+                    .select(&input_sel)
+                    .next()
+                    .and_then(|input| input.value().attr("value"))
+                    .map(|v| v.to_string())?;
+                let icon_src = form
+                    .select(&img_sel)
+                    .next()
+                    .and_then(|img| img.value().attr("src"))
+                    .map(|v| v.to_string())?;
+                Some((article_id, icon_src))
             })
             .collect()
     }

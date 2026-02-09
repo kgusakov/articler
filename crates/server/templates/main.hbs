@@ -49,9 +49,18 @@
                     {{/if}}
                     <div class="absolute bottom-0 right-0 flex items-center gap-5 pl-5 pr-4 py-2.5 rounded-tl-lg"
                         style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
-                        <button class="hover:scale-110 transition-transform" title="Favourite">
-                            <img src="/static/images/FavoriteOn.svg" alt="Favourite" />
-                        </button>
+                        <form method="post" action="/do_favourite" class="flex items-center">
+                            <input type="hidden" name="article_id" value="{{id}}" />
+                            {{#if is_starred}}
+                            <button type="submit" class="hover:scale-110 transition-transform" title="Unstar">
+                                <img src="/static/images/FavoriteOn.svg" alt="Unstar" />
+                            </button>
+                            {{else}}
+                            <button type="submit" class="hover:scale-110 transition-transform" title="Star">
+                                <img src="/static/images/FavoriteOff.svg" alt="Star" />
+                            </button>
+                            {{/if}}
+                        </form>
                         <form method="post" action="/do_archive" class="flex items-center">
                             <input type="hidden" name="article_id" value="{{id}}" />
                             {{#if is_archived}}
