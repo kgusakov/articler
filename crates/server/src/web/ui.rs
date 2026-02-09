@@ -40,6 +40,7 @@ async fn index(
 
         let params = EntriesCriteria {
             user_id,
+            archive: Some(false),
             sort: Some(entries::SortColumn::Updated),
             order: Some(SortOrder::Desc),
             ..Default::default()
