@@ -21,6 +21,7 @@ use crate::{app::AppState, auth::find_user, middleware::TransactionContext};
 pub fn routes(cfg: &mut ServiceConfig) {
     cfg.route("/login", get().to(login))
         .route("/", get().to(index))
+        .route("/all", get().to(all))
         .route("/do_login", post().to(do_login))
         .route("/do_archive", post().to(do_archive));
 }
@@ -53,6 +54,31 @@ async fn index(
             EntriesCriteria {
                 user_id,
                 archive: Some(false),
+                sort: Some(entries::SortColumn::Updated),
+                order: Some(SortOrder::Desc),
+                ..Default::default()
+            },
+        )
+        .await
+    } else {
+        Ok(HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish())
+    }
+}
+
+async fn all(
+    session: Session,
+    app: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+) -> actix_web::Result<HttpResponse> {
+    if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
+        main(
+            app,
+            tctx,
+            user_id,
+            EntriesCriteria {
+                user_id,
                 sort: Some(entries::SortColumn::Updated),
                 order: Some(SortOrder::Desc),
                 ..Default::default()

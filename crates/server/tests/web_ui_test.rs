@@ -156,7 +156,7 @@ async fn do_login_with_incorrect_credentials(pool: SqlitePool) {
     migrations = "../../migrations",
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
-async fn main_page(pool: SqlitePool) {
+async fn index_page(pool: SqlitePool) {
     let app = init_ui_app(pool).await;
 
     let cookie = login("wallabag", "wallabag", &app).await;
@@ -226,6 +226,38 @@ async fn do_archive(pool: SqlitePool) {
     assert_eq!(article_titles.len(), 2);
     assert!(article_titles.iter().any(|t| t == "title3"));
     assert!(article_titles.iter().any(|t| t == "title5"));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn all_page(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/all")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let article_titles = helpers::find_article_titles(content);
+
+    // All 6 entries should appear (no archive filter)
+    assert_eq!(article_titles.len(), 6);
+    assert!(article_titles.iter().any(|t| t == "title1"));
+    assert!(article_titles.iter().any(|t| t == "title2"));
+    assert!(article_titles.iter().any(|t| t == "title3"));
+    assert!(article_titles.iter().any(|t| t == "title4"));
+    assert!(article_titles.iter().any(|t| t == "title5"));
+    assert!(article_titles.iter().any(|t| t == "title6"));
 }
 
 async fn login(
