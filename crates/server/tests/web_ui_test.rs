@@ -1,7 +1,12 @@
 use actix_http::{Request, StatusCode};
 use actix_service::Service;
 use actix_web::{
-    Error, body::MessageBody, cookie::Key, dev::ServiceResponse, http::header, test, web,
+    Error,
+    body::MessageBody,
+    cookie::{Cookie, Key},
+    dev::ServiceResponse,
+    http::header,
+    test, web,
 };
 use scraper::{Html, Selector};
 use server::{
@@ -145,4 +150,58 @@ async fn do_login_with_incorrect_credentials(pool: SqlitePool) {
     assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
 
     assert!(resp.response().cookies().peekable().peek().is_none());
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn main_page(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let document = Html::parse_document(content);
+    let article_titles: Vec<String> = document
+        .select(&Selector::parse("article h3").unwrap())
+        .map(|el| el.text().collect::<String>())
+        .collect();
+
+    // Exactly 3 unread (not archived) articles from fixtures: entries 1, 3, and 5
+    assert_eq!(article_titles.len(), 3);
+    assert!(article_titles.iter().any(|t| t == "title1"));
+    assert!(article_titles.iter().any(|t| t == "title3"));
+    assert!(article_titles.iter().any(|t| t == "title5"));
+}
+
+async fn login(
+    username: &str,
+    password: &str,
+    app: impl Service<Request, Response = ServiceResponse<impl MessageBody>, Error = Error>,
+) -> Cookie<'static> {
+    let req = test::TestRequest::post()
+        .uri("/do_login")
+        .set_form([("_username", username), ("_password", password)])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::FOUND);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
+
+    resp.response()
+        .cookies()
+        .find(|c| c.name() == "id")
+        .unwrap()
+        .into_owned()
 }
