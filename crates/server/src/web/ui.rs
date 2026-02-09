@@ -44,6 +44,7 @@ async fn index(
             order: Some(SortOrder::Desc),
             ..Default::default()
         };
+        // TODO must load only metadata
         let unread_articles = entries::find_all(&mut tx, &params).await?;
 
         let articles_metadata: Vec<ArticleMetadata> = unread_articles
