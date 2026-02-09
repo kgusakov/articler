@@ -7,9 +7,12 @@ use actix_web::{
     web::{self, Redirect, ServiceConfig, get, post},
 };
 use chrono::Utc;
-use db::repository::{
-    self,
-    entries::{self, EntriesCriteria, SortOrder, UpdateEntry},
+use db::{
+    ArticlerResult,
+    repository::{
+        self, Db, Id,
+        entries::{self, EntriesCriteria, EntryRow, SortOrder, UpdateEntry},
+    },
 };
 use serde::{Deserialize, Serialize};
 
@@ -23,11 +26,10 @@ pub fn routes(cfg: &mut ServiceConfig) {
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
-    let page = Page {
-        nav_partial: None,
-        main_partial: "login".to_string(),
-    };
-    match app.handlebars.render("index", &page) {
+    match app
+        .handlebars
+        .render("index", &Page { nav_partial: None, main_partial: "login".to_string() })
+    {
         Ok(rendered) => HttpResponse::Ok()
             .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
             .body(rendered),
@@ -50,70 +52,18 @@ async fn index(
             order: Some(SortOrder::Desc),
             ..Default::default()
         };
+
         // TODO must load only metadata
-        let unread_articles = entries::find_all(&mut tx, &params).await?;
-
-        let articles_metadata: Vec<ArticleMetadata> = unread_articles
+        let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut tx, &params)
+            .await?
             .into_iter()
-            .map(|e| ArticleMetadata {
-                id: e.0.id,
-                title: e.0.title,
-                image_url: e.0.preview_picture,
-                domain: e.0.domain_name,
-                reading_time: e.0.reading_time,
-            })
+            .map(|e| e.0.into())
             .collect();
-        let page = Page {
-            nav_partial: Some("navigation".to_string()),
-            main_partial: "main".to_string(),
-        };
-
-        let unread_counter = entries::count(
-            &mut tx,
-            &EntriesCriteria {
-                user_id,
-                archive: Some(false),
-                ..Default::default()
-            },
-        )
-        .await?;
-
-        let all_counter = entries::count(
-            &mut tx,
-            &EntriesCriteria {
-                user_id,
-                ..Default::default()
-            },
-        )
-        .await?;
-
-        let starred_counter = entries::count(
-            &mut tx,
-            &EntriesCriteria {
-                user_id,
-                starred: Some(true),
-                ..Default::default()
-            },
-        )
-        .await?;
-
-        let archived_counter = entries::count(
-            &mut tx,
-            &EntriesCriteria {
-                user_id,
-                archive: Some(true),
-                ..Default::default()
-            },
-        )
-        .await?;
 
         let context = ArticlesContext {
-            page,
+            page: Page { nav_partial: Some("navigation".to_string()), main_partial: "main".to_string() },
             articles: articles_metadata,
-            unread_counter,
-            all_counter,
-            starred_counter,
-            archived_counter,
+            counters: ArticleCounters::load(&mut tx, user_id).await?,
         };
 
         let rendered = app
@@ -213,13 +163,73 @@ struct ArticleMetadata {
     reading_time: i32,
 }
 
+impl From<EntryRow> for ArticleMetadata {
+    fn from(entry: EntryRow) -> Self {
+        Self {
+            id: entry.id,
+            title: entry.title,
+            image_url: entry.preview_picture,
+            domain: entry.domain_name,
+            reading_time: entry.reading_time,
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct ArticlesContext {
     #[serde(flatten)]
     page: Page,
     articles: Vec<ArticleMetadata>,
+    #[serde(flatten)]
+    counters: ArticleCounters,
+}
+
+#[derive(Serialize)]
+struct ArticleCounters {
     unread_counter: i64,
     all_counter: i64,
     starred_counter: i64,
     archived_counter: i64,
+}
+
+impl ArticleCounters {
+    async fn load(tx: &mut sqlx::Transaction<'_, Db>, user_id: Id) -> ArticlerResult<Self> {
+        Ok(Self {
+            unread_counter: entries::count(
+                tx,
+                &EntriesCriteria {
+                    user_id,
+                    archive: Some(false),
+                    ..Default::default()
+                },
+            )
+            .await?,
+            all_counter: entries::count(
+                tx,
+                &EntriesCriteria {
+                    user_id,
+                    ..Default::default()
+                },
+            )
+            .await?,
+            starred_counter: entries::count(
+                tx,
+                &EntriesCriteria {
+                    user_id,
+                    starred: Some(true),
+                    ..Default::default()
+                },
+            )
+            .await?,
+            archived_counter: entries::count(
+                tx,
+                &EntriesCriteria {
+                    user_id,
+                    archive: Some(true),
+                    ..Default::default()
+                },
+            )
+            .await?,
+        })
+    }
 }
