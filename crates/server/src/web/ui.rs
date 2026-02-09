@@ -6,7 +6,7 @@ use actix_web::{
     mime,
     web::{self, ServiceConfig, get, post},
 };
-use db::repository::entries::{self, EntriesCriteria};
+use db::repository::entries::{self, EntriesCriteria, SortOrder};
 use serde::{Deserialize, Serialize};
 
 use crate::{app::AppState, auth::find_user, middleware::TransactionContext};
@@ -40,6 +40,8 @@ async fn index(
 
         let params = EntriesCriteria {
             user_id,
+            sort: Some(entries::SortColumn::Updated),
+            order: Some(SortOrder::Desc),
             ..Default::default()
         };
         let unread_articles = entries::find_all(&mut tx, &params).await?;
