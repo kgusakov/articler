@@ -27,7 +27,8 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/article/{id}", get().to(article))
         .route("/do_login", post().to(do_login))
         .route("/do_archive", post().to(do_archive))
-        .route("/do_favourite", post().to(do_favourite));
+        .route("/do_favourite", post().to(do_favourite))
+        .route("/do_delete", post().to(do_delete));
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
@@ -228,6 +229,11 @@ async fn main(
 }
 
 #[derive(Deserialize)]
+struct DeleteForm {
+    article_id: repository::Id,
+}
+
+#[derive(Deserialize)]
 struct ArchiveForm {
     article_id: repository::Id,
     archived: bool,
@@ -314,7 +320,34 @@ async fn do_favourite(
     Ok(Redirect::to(referer).see_other())
 }
 
-#[derive(Deserialize)]
+async fn do_delete(
+    session: Session,
+    req: HttpRequest,
+    form: web::Form<DeleteForm>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+) -> actix_web::Result<impl Responder> {
+    let mut tx = tctx.tx()?;
+
+    let user_id = session
+        .get("user_id")
+        .map_err(ErrorInternalServerError)?
+        .ok_or(ErrorForbidden(""))?;
+
+    let form = form.into_inner();
+
+    entries::delete_by_id(&mut tx, user_id, form.article_id).await?;
+
+    let referer = req
+        .headers()
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("/")
+        .to_string();
+
+    Ok(Redirect::to(referer).see_other())
+}
+
+#[derive(Serialize, Deserialize)]
 pub(in crate::web) struct LoginForm {
     #[serde(rename(deserialize = "_username"))]
     username: String,

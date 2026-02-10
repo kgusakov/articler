@@ -749,6 +749,41 @@ async fn article_page_archived_starred(pool: SqlitePool) {
     assert_eq!(archive_icon, "/static/images/MarkRead.svg");
 }
 
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_delete(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/article/1")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let req = test::TestRequest::post()
+        .uri("/do_delete")
+        .cookie(cookie.clone())
+        .set_form([("article_id", "1")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
+
+    let req = test::TestRequest::get()
+        .uri("/article/1")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
 async fn login(
     username: &str,
     password: &str,
