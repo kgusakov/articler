@@ -190,7 +190,11 @@ async fn index_page(pool: SqlitePool) {
     // Unarchived articles must show MarkUnRead icon
     let archive_icons = helpers::find_archive_icons(content);
     assert_eq!(archive_icons.len(), 3);
-    assert!(archive_icons.iter().all(|src| src == "/static/images/MarkUnRead.svg"));
+    assert!(
+        archive_icons
+            .iter()
+            .all(|src| src == "/static/images/MarkUnRead.svg")
+    );
 }
 
 #[sqlx::test(
@@ -367,7 +371,11 @@ async fn archive_page(pool: SqlitePool) {
     // Archived articles must show MarkRead icon
     let archive_icons = helpers::find_archive_icons(content);
     assert_eq!(archive_icons.len(), 3);
-    assert!(archive_icons.iter().all(|src| src == "/static/images/MarkRead.svg"));
+    assert!(
+        archive_icons
+            .iter()
+            .all(|src| src == "/static/images/MarkRead.svg")
+    );
 }
 
 #[sqlx::test(
@@ -393,11 +401,17 @@ async fn index_page_favourite_icons(pool: SqlitePool) {
     assert_eq!(icons.len(), 3);
 
     // Entry 1: not starred → FavoriteOff
-    assert!(icons.contains(&("1".to_string(), "/static/images/FavoriteOff.svg".to_string())));
+    assert!(icons.contains(&(
+        "1".to_string(),
+        "/static/images/FavoriteOff.svg".to_string()
+    )));
     // Entry 3: starred → FavoriteOn
     assert!(icons.contains(&("3".to_string(), "/static/images/FavoriteOn.svg".to_string())));
     // Entry 5: not starred → FavoriteOff
-    assert!(icons.contains(&("5".to_string(), "/static/images/FavoriteOff.svg".to_string())));
+    assert!(icons.contains(&(
+        "5".to_string(),
+        "/static/images/FavoriteOff.svg".to_string()
+    )));
 }
 
 #[sqlx::test(
@@ -423,7 +437,11 @@ async fn favourite_page_favourite_icons(pool: SqlitePool) {
     assert_eq!(icons.len(), 3);
 
     // All starred articles must show FavoriteOn icon
-    assert!(icons.iter().all(|(_, src)| src == "/static/images/FavoriteOn.svg"));
+    assert!(
+        icons
+            .iter()
+            .all(|(_, src)| src == "/static/images/FavoriteOn.svg")
+    );
 }
 
 #[sqlx::test(
@@ -521,7 +539,71 @@ async fn do_unfavourite(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let icons = helpers::find_favourite_icons_by_article(content);
-    assert!(icons.contains(&("3".to_string(), "/static/images/FavoriteOff.svg".to_string())));
+    assert!(icons.contains(&(
+        "3".to_string(),
+        "/static/images/FavoriteOff.svg".to_string()
+    )));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn active_category_highlighting(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    // Test unread page (/)
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    let active_category = helpers::find_active_category(content);
+    assert_eq!(active_category, Some("unread".to_string()));
+
+    // Test all page (/all)
+    let req = test::TestRequest::get()
+        .uri("/all")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    let active_category = helpers::find_active_category(content);
+    assert_eq!(active_category, Some("all".to_string()));
+
+    // Test favourite page (/favourite)
+    let req = test::TestRequest::get()
+        .uri("/favourite")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    let active_category = helpers::find_active_category(content);
+    assert_eq!(active_category, Some("favourite".to_string()));
+
+    // Test archive page (/archive)
+    let req = test::TestRequest::get()
+        .uri("/archive")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    let active_category = helpers::find_active_category(content);
+    assert_eq!(active_category, Some("archived".to_string()));
 }
 
 async fn login(
@@ -613,5 +695,26 @@ mod helpers {
                 Some((article_id, icon_src))
             })
             .collect()
+    }
+
+    pub fn find_active_category(content: &str) -> Option<String> {
+        let document = Html::parse_document(content);
+        let sidebar_sel = Selector::parse("aside a").unwrap();
+
+        for link in document.select(&sidebar_sel) {
+            let class_attr = link.value().attr("class")?;
+            if class_attr.contains("bg-surface") && !class_attr.contains("hover:bg-surface") {
+                let href = link.value().attr("href")?;
+                let category = match href {
+                    "/" => "unread",
+                    "/all" => "all",
+                    "/favourite" => "favourite",
+                    "/archive" => "archived",
+                    _ => continue,
+                };
+                return Some(category.to_string());
+            }
+        }
+        None
     }
 }
