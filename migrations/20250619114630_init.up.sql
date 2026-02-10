@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     created_at INTEGER NOT NULL, -- Unix timestamp
     updated_at INTEGER NOT NULL, -- Unix timestamp
-    CONSTRAINT unique_username UNIQUE (username)
+    CONSTRAINT unique_username UNIQUE (username),
+    CONSTRAINT check_users_updated_at CHECK (updated_at >= created_at)
 );
 
 CREATE TABLE IF NOT EXISTS entries (
@@ -35,6 +36,7 @@ CREATE TABLE IF NOT EXISTS entries (
     published_by TEXT,
     is_public BOOLEAN,
     uid TEXT,
+    CONSTRAINT check_entries_updated_at CHECK (updated_at >= created_at),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
@@ -62,7 +64,8 @@ CREATE TABLE IF NOT EXISTS annotations (
     created_at INTEGER NOT NULL, -- Unix timestamp
     updated_at INTEGER NOT NULL, -- Unix timestamp
     quote TEXT NOT NULL,
-    FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE
+    FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE,
+    CONSTRAINT check_annotations_updated_at CHECK (updated_at >= created_at)
 );
 
 CREATE TABLE IF NOT EXISTS annotation_ranges (
