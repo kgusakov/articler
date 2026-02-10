@@ -1,5 +1,6 @@
 use std::{fmt::Display, ops::DerefMut};
 
+use chrono::Utc;
 use indexmap::IndexMap;
 use sqlx::{
     Database, Encode, FromRow, QueryBuilder, Row, Type, query_builder::Separated, sqlite::SqliteRow,
@@ -530,7 +531,7 @@ pub struct CreateEntry {
 // Some(Some(v)) - update to v
 type UpdateField<T> = Option<Option<T>>;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct UpdateEntry {
     pub title: UpdateField<String>,
     pub content: UpdateField<String>,
@@ -547,6 +548,28 @@ pub struct UpdateEntry {
     pub published_by: UpdateField<String>,
     pub is_public: UpdateField<bool>,
     pub uid: UpdateField<String>,
+}
+
+impl Default for UpdateEntry {
+    fn default() -> Self {
+        Self {
+            title: Default::default(),
+            content: Default::default(),
+            is_archived: Default::default(),
+            archived_at: Default::default(),
+            is_starred: Default::default(),
+            starred_at: Default::default(),
+            updated_at: Utc::now().timestamp(),
+            language: Default::default(),
+            reading_time: Default::default(),
+            preview_picture: Default::default(),
+            origin_url: Default::default(),
+            published_at: Default::default(),
+            published_by: Default::default(),
+            is_public: Default::default(),
+            uid: Default::default(),
+        }
+    }
 }
 
 pub enum SortColumn {
@@ -693,5 +716,48 @@ mod tests {
         // Verify entry 2 still exists (wasn't affected)
         let entry_2 = find_by_id(&mut tx, 1, 2).await.unwrap();
         assert!(entry_2.is_some(), "Entry 2 should still exist");
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_update_entry_with_invalid_updated_at(pool: SqlitePool) {
+        let mut tx = pool.begin().await.unwrap();
+
+        // Try to update with updated_at = 0 (less than created_at)
+        let update = UpdateEntry {
+            title: None,
+            content: None,
+            is_archived: Some(Some(true)),
+            archived_at: Some(Some(1701787200)),
+            is_starred: None,
+            starred_at: None,
+            updated_at: 0, // Invalid: 0 < 1701428400
+            language: None,
+            reading_time: None,
+            preview_picture: None,
+            origin_url: None,
+            published_at: None,
+            published_by: None,
+            is_public: None,
+            uid: None,
+        };
+
+        let result = update_by_id(&mut tx, 1, 1, update).await;
+
+        // Should fail due to CHECK constraint
+        assert!(
+            result.is_err(),
+            "Update should fail when updated_at < created_at"
+        );
+
+        // Verify the error is related to constraint violation
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("CHECK") || err_msg.contains("constraint"),
+            "Error should mention constraint violation, got: {}",
+            err_msg
+        );
     }
 }
