@@ -195,6 +195,13 @@ async fn index_page(pool: SqlitePool) {
             .iter()
             .all(|src| src == "/static/images/MarkUnRead.svg")
     );
+
+    // Each article must have a delete form with the correct article_id
+    let delete_forms = helpers::find_delete_forms(content);
+    assert_eq!(delete_forms.len(), 3);
+    assert!(delete_forms.contains(&"1".to_string()));
+    assert!(delete_forms.contains(&"3".to_string()));
+    assert!(delete_forms.contains(&"5".to_string()));
 }
 
 #[sqlx::test(
@@ -700,6 +707,15 @@ async fn article_page_unarchived_unstarred(pool: SqlitePool) {
         .next()
         .unwrap();
     assert_eq!(archive_icon, "/static/images/MarkUnRead.svg");
+
+    // Delete form present with correct article_id and back_location
+    let delete_forms = helpers::find_delete_forms(content);
+    assert_eq!(delete_forms.len(), 1);
+    assert_eq!(delete_forms[0], "1");
+    assert_eq!(
+        helpers::find_delete_back_location(content),
+        Some("/".to_string())
+    );
 }
 
 #[sqlx::test(
@@ -747,6 +763,15 @@ async fn article_page_archived_starred(pool: SqlitePool) {
         .next()
         .unwrap();
     assert_eq!(archive_icon, "/static/images/MarkRead.svg");
+
+    // Delete form present with correct article_id and back_location
+    let delete_forms = helpers::find_delete_forms(content);
+    assert_eq!(delete_forms.len(), 1);
+    assert_eq!(delete_forms[0], "4");
+    assert_eq!(
+        helpers::find_delete_back_location(content),
+        Some("/".to_string())
+    );
 }
 
 #[sqlx::test(
@@ -848,6 +873,40 @@ mod helpers {
                     .map(|v| v.to_string())
             })
             .collect()
+    }
+
+    /// Returns the article_id values from all delete forms in the page.
+    pub fn find_delete_forms(content: &str) -> Vec<String> {
+        let document = Html::parse_document(content);
+        let form_sel = Selector::parse(r#"form[action="/do_delete"]"#).unwrap();
+        let input_sel = Selector::parse(r#"input[name="article_id"]"#).unwrap();
+
+        document
+            .select(&form_sel)
+            .filter_map(|form| {
+                form.select(&input_sel)
+                    .next()
+                    .and_then(|input| input.value().attr("value"))
+                    .map(|v| v.to_string())
+            })
+            .collect()
+    }
+
+    /// Returns the back_location value from the delete form, if present.
+    pub fn find_delete_back_location(content: &str) -> Option<String> {
+        let document = Html::parse_document(content);
+        let form_sel = Selector::parse(r#"form[action="/do_delete"]"#).unwrap();
+        let input_sel = Selector::parse(r#"input[name="back_location"]"#).unwrap();
+
+        document
+            .select(&form_sel)
+            .next()
+            .and_then(|form| {
+                form.select(&input_sel)
+                    .next()
+                    .and_then(|input| input.value().attr("value"))
+                    .map(|v| v.to_string())
+            })
     }
 
     /// Returns (article_id, icon_src) pairs from all favourite forms in the page.

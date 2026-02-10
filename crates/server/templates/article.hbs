@@ -1,7 +1,8 @@
 <main class="max-w-3xl mx-auto px-4 md:px-8 pt-6 lg:pt-[76px] pb-8 lg:pb-12">
     <!-- Top bar -->
     <div class="flex items-center justify-between mb-8">
-        <a href="javascript:history.back()" class="flex items-center gap-2 text-sm text-muted hover:text-primary transition-colors">
+        <a href="javascript:history.back()"
+            class="flex items-center gap-2 text-sm text-muted hover:text-primary transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
@@ -10,8 +11,7 @@
         <div class="flex items-center gap-4">
             <form method="post" action="/do_favourite" class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
-                <input type="hidden" name="starred"
-                    value="{{#unless is_starred}}true{{else}}false{{/unless}}" />
+                <input type="hidden" name="starred" value="{{#unless is_starred}}true{{else}}false{{/unless}}" />
                 {{#if is_starred}}
                 <button type="submit" class="hover:scale-110 transition-transform" title="Unstar">
                     <img src="/static/images/FavoriteOn.svg" alt="Unstar" />
@@ -24,8 +24,7 @@
             </form>
             <form method="post" action="/do_archive" class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
-                <input type="hidden" name="archived"
-                    value="{{#unless is_archived}}true{{else}}false{{/unless}}" />
+                <input type="hidden" name="archived" value="{{#unless is_archived}}true{{else}}false{{/unless}}" />
                 {{#if is_archived}}
                 <button type="submit" class="hover:scale-110 transition-transform" title="Mark as unread">
                     <img src="/static/images/MarkRead.svg" alt="Mark as unread" />
@@ -35,6 +34,13 @@
                     <img src="/static/images/MarkUnRead.svg" alt="Mark as read" />
                 </button>
                 {{/if}}
+            </form>
+            <form method="post" action="/do_delete" class="flex items-center">
+                <input type="hidden" name="article_id" value="{{id}}" />
+                <input type="hidden" name="back_location" value="/" />
+                <button type="submit" class="hover:scale-110" title="Delete">
+                    <img src="/static/images/Delete.svg" alt="Delete" />
+                </button>
             </form>
         </div>
     </div>

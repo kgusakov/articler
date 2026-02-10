@@ -80,9 +80,12 @@
                             </button>
                             {{/if}}
                         </form>
-                        <button class="hover:scale-110 transition-transform" title="Delete">
-                            <img src="/static/images/Delete.svg" alt="Delete" />
-                        </button>
+                        <form method="post" action="/do_delete" class="flex items-center">
+                            <input type="hidden" name="article_id" value="{{id}}" />
+                            <button class="hover:scale-110 transition-transform" title="Delete">
+                                <img src="/static/images/Delete.svg" alt="Delete" />
+                            </button>
+                        </form>
                     </div>
                 </div>
                 <a href="/article/{{id}}" class="block">

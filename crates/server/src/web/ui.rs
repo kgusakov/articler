@@ -231,6 +231,7 @@ async fn main(
 #[derive(Deserialize)]
 struct DeleteForm {
     article_id: repository::Id,
+    back_location: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -337,12 +338,13 @@ async fn do_delete(
 
     entries::delete_by_id(&mut tx, user_id, form.article_id).await?;
 
-    let referer = req
-        .headers()
-        .get(header::REFERER)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("/")
-        .to_string();
+    let referer = form.back_location.unwrap_or(
+        req.headers()
+            .get(header::REFERER)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("/")
+            .to_string(),
+    );
 
     Ok(Redirect::to(referer).see_other())
 }
