@@ -3,28 +3,29 @@
     <!-- Sidebar -->
     <aside class="w-full lg:w-[348px] lg:pr-8 space-y-1 flex lg:block gap-2 overflow-x-auto lg:overflow-visible">
         <!-- Unread (active) -->
-        <a href="/" class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 bg-surface rounded text-left">
+        <a href="/"
+            class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 {{#if (eq active_category 'unread')}}bg-surface{{else}}hover:bg-surface{{/if}} rounded text-left">
             <img src="/static/images/MarkUnRead.svg" />
             <span class="hidden lg:inline flex-1 font-medium">Unread</span>
             <span class="hidden lg:inline text-xs text-muted">{{unread_counter}}</span>
         </a>
         <!-- All -->
         <a href="/all"
-            class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
+            class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left {{#if (eq active_category 'all')}}bg-surface{{else}}hover:bg-surface{{/if}}">
             <img src="/static/images/All.svg" />
             <span class="hidden lg:inline flex-1">All</span>
             <span class="hidden lg:inline text-xs text-muted">{{all_counter}}</span>
         </a>
         <!-- Starred -->
         <a href="/favourite"
-            class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
+            class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left {{#if (eq active_category 'favourite')}}bg-surface{{else}}hover:bg-surface{{/if}}">
             <img src="/static/images/FavoriteOff.svg" />
             <span class="hidden lg:inline flex-1">Starred</span>
             <span class="hidden lg:inline text-xs text-muted">{{starred_counter}}</span>
         </a>
         <!-- Archive -->
         <a href="/archive"
-            class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
+            class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left {{#if (eq active_category 'archived')}}bg-surface{{else}}hover:bg-surface{{/if}}">
             <img src="/static/images/Archived.svg" />
             <span class="hidden lg:inline flex-1">Archived</span>
             <span class="hidden lg:inline text-xs text-muted">{{archived_counter}}</span>
@@ -51,7 +52,8 @@
                         style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
                         <form method="post" action="/do_favourite" class="flex items-center">
                             <input type="hidden" name="article_id" value="{{id}}" />
-                            <input type="hidden" name="starred" value="{{#unless is_starred}}true{{else}}false{{/unless}}" />
+                            <input type="hidden" name="starred"
+                                value="{{#unless is_starred}}true{{else}}false{{/unless}}" />
                             {{#if is_starred}}
                             <button type="submit" class="hover:scale-110 transition-transform" title="Unstar">
                                 <img src="/static/images/FavoriteOn.svg" alt="Unstar" />
@@ -64,7 +66,8 @@
                         </form>
                         <form method="post" action="/do_archive" class="flex items-center">
                             <input type="hidden" name="article_id" value="{{id}}" />
-                            <input type="hidden" name="archived" value="{{#unless is_archived}}true{{else}}false{{/unless}}" />
+                            <input type="hidden" name="archived"
+                                value="{{#unless is_archived}}true{{else}}false{{/unless}}" />
                             {{#if is_archived}}
                             <button type="submit" class="hover:scale-110 transition-transform" title="Mark as unread">
                                 <img src="/static/images/MarkRead.svg" alt="Mark as unread" />

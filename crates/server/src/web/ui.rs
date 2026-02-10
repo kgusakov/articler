@@ -61,6 +61,7 @@ async fn index(
                 order: Some(SortOrder::Desc),
                 ..Default::default()
             },
+            Category::Unread,
         )
         .await
     } else {
@@ -86,6 +87,7 @@ async fn all(
                 order: Some(SortOrder::Desc),
                 ..Default::default()
             },
+            Category::All,
         )
         .await
     } else {
@@ -112,6 +114,7 @@ async fn favourite(
                 order: Some(SortOrder::Desc),
                 ..Default::default()
             },
+            Category::Favourite,
         )
         .await
     } else {
@@ -138,6 +141,7 @@ async fn archive(
                 order: Some(SortOrder::Desc),
                 ..Default::default()
             },
+            Category::Archived,
         )
         .await
     } else {
@@ -152,6 +156,7 @@ async fn main(
     tctx: web::ReqData<TransactionContext<'_>>,
     user_id: Id,
     entries_filter: EntriesCriteria,
+    active_category: Category,
 ) -> actix_web::Result<HttpResponse> {
     let mut tx = tctx.tx()?;
 
@@ -169,6 +174,7 @@ async fn main(
         },
         articles: articles_metadata,
         counters: ArticleCounters::load(&mut tx, user_id).await?,
+        active_category,
     };
 
     let rendered = app
@@ -334,6 +340,16 @@ struct ArticlesContext {
     articles: Vec<ArticleMetadata>,
     #[serde(flatten)]
     counters: ArticleCounters,
+    active_category: Category,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Category {
+    All,
+    Unread,
+    Favourite,
+    Archived,
 }
 
 #[derive(Serialize)]
