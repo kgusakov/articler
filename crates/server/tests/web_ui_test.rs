@@ -201,6 +201,33 @@ async fn index_page(pool: SqlitePool) {
     migrations = "../../migrations",
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
+async fn article_links_on_index_page(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let links = helpers::find_article_links(content);
+    // Index shows unread entries 1, 3, 5
+    assert_eq!(links.len(), 3);
+    assert!(links.contains(&"/article/1".to_string()));
+    assert!(links.contains(&"/article/3".to_string()));
+    assert!(links.contains(&"/article/5".to_string()));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
 async fn do_archive(pool: SqlitePool) {
     let app = init_ui_app(pool).await;
 
@@ -606,6 +633,122 @@ async fn active_category_highlighting(pool: SqlitePool) {
     assert_eq!(active_category, Some("archived".to_string()));
 }
 
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn article_page_not_found(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/article/999")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn article_page_unarchived_unstarred(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    // Entry 1: not archived, not starred
+    let req = test::TestRequest::get()
+        .uri("/article/1")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    // Title
+    assert_eq!(
+        helpers::find_article_title(content),
+        Some("title1".to_string())
+    );
+
+    // Content
+    assert!(content.contains("content1"));
+
+    // Domain link to original URL
+    let (domain_text, domain_href) = helpers::find_article_domain_link(content).unwrap();
+    assert_eq!(domain_text, "a.com");
+    assert_eq!(domain_href, "https://a.com/1");
+
+    // Reading time
+    assert!(content.contains("8 min read"));
+
+    // Unstarred → FavoriteOff icon
+    let (_, fav_icon) = helpers::find_favourite_icons_by_article(content)
+        .into_iter()
+        .next()
+        .unwrap();
+    assert_eq!(fav_icon, "/static/images/FavoriteOff.svg");
+
+    // Unarchived → MarkUnRead icon
+    let archive_icon = helpers::find_archive_icons(content)
+        .into_iter()
+        .next()
+        .unwrap();
+    assert_eq!(archive_icon, "/static/images/MarkUnRead.svg");
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn article_page_archived_starred(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    // Entry 4: archived, starred
+    let req = test::TestRequest::get()
+        .uri("/article/4")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    assert_eq!(
+        helpers::find_article_title(content),
+        Some("title4".to_string())
+    );
+    assert!(content.contains("content4"));
+
+    let (domain_text, domain_href) = helpers::find_article_domain_link(content).unwrap();
+    assert_eq!(domain_text, "d.com");
+    assert_eq!(domain_href, "https://d.com/4");
+
+    assert!(content.contains("15 min read"));
+
+    // Starred → FavoriteOn icon
+    let (_, fav_icon) = helpers::find_favourite_icons_by_article(content)
+        .into_iter()
+        .next()
+        .unwrap();
+    assert_eq!(fav_icon, "/static/images/FavoriteOn.svg");
+
+    // Archived → MarkRead icon
+    let archive_icon = helpers::find_archive_icons(content)
+        .into_iter()
+        .next()
+        .unwrap();
+    assert_eq!(archive_icon, "/static/images/MarkRead.svg");
+}
+
 async fn login(
     username: &str,
     password: &str,
@@ -695,6 +838,38 @@ mod helpers {
                 Some((article_id, icon_src))
             })
             .collect()
+    }
+
+    /// Returns deduplicated article page hrefs (e.g. "/article/1") from the listing page.
+    pub fn find_article_links(content: &str) -> Vec<String> {
+        let document = Html::parse_document(content);
+        let sel = Selector::parse(r#"a[href^="/article/"]"#).unwrap();
+        let mut seen = std::collections::HashSet::new();
+        document
+            .select(&sel)
+            .filter_map(|el| el.value().attr("href").map(|v| v.to_string()))
+            .filter(|href| seen.insert(href.clone()))
+            .collect()
+    }
+
+    /// Returns the article title from the h1 element on the article detail page.
+    pub fn find_article_title(content: &str) -> Option<String> {
+        let document = Html::parse_document(content);
+        document
+            .select(&Selector::parse("h1").unwrap())
+            .next()
+            .map(|el| el.text().collect::<String>())
+    }
+
+    /// Returns (domain_text, href) from the domain link on the article detail page.
+    pub fn find_article_domain_link(content: &str) -> Option<(String, String)> {
+        let document = Html::parse_document(content);
+        let link = document
+            .select(&Selector::parse(r#"a[target="_blank"]"#).unwrap())
+            .next()?;
+        let href = link.value().attr("href")?.to_string();
+        let text = link.text().collect::<String>();
+        Some((text, href))
     }
 
     pub fn find_active_category(content: &str) -> Option<String> {

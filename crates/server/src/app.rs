@@ -63,6 +63,9 @@ pub fn init_handlebars() -> Handlebars<'static> {
         .register_partial("main", include_str!("../templates/main.hbs"))
         .unwrap();
     handlebars
+        .register_partial("article", include_str!("../templates/article.hbs"))
+        .unwrap();
+    handlebars
 }
 
 pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::Result<Server> {

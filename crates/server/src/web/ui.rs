@@ -1,7 +1,7 @@
 use actix_session::Session;
 use actix_web::{
     HttpRequest, HttpResponse, Responder,
-    error::{ErrorForbidden, ErrorInternalServerError},
+    error::{ErrorForbidden, ErrorInternalServerError, ErrorNotFound},
     http::header,
     mime,
     web::{self, Redirect, ServiceConfig, get, post},
@@ -24,6 +24,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/all", get().to(all))
         .route("/favourite", get().to(favourite))
         .route("/archive", get().to(archive))
+        .route("/article/{id}", get().to(article))
         .route("/do_login", post().to(do_login))
         .route("/do_archive", post().to(do_archive))
         .route("/do_favourite", post().to(do_favourite));
@@ -43,12 +44,52 @@ async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
         Err(e) => HttpResponse::from_error(ErrorInternalServerError(e)),
     }
 }
+async fn article(
+    session: Session,
+    app: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+    id: web::Path<Id>,
+) -> actix_web::Result<HttpResponse> {
+    if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
+        let mut tx = tctx.tx()?;
+        if let Some((article, _)) = entries::find_by_id(&mut tx, user_id, id.into_inner()).await? {
+            let article_page = ArticlePageData {
+                id: article.id,
+                title: article.title,
+                content: article.content,
+                domain: article.domain_name,
+                url: article.url,
+                reading_time: article.reading_time,
+                is_archived: article.is_archived,
+                is_starred: article.is_starred,
+                page: Page {
+                    nav_partial: Some("navigation".to_string()),
+                    main_partial: "article".to_string(),
+                },
+            };
+            match app.handlebars.render("index", &article_page) {
+                Ok(rendered) => Ok(HttpResponse::Ok()
+                    .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+                    .body(rendered)),
+                Err(e) => Err(ErrorInternalServerError(e)),
+            }
+        } else {
+            // TODO make normal 404 screen
+            Err(ErrorNotFound("Article not found"))
+        }
+    } else {
+        Ok(HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish())
+    }
+}
 
 async fn index(
     session: Session,
     app: web::Data<AppState>,
     tctx: web::ReqData<TransactionContext<'_>>,
 ) -> actix_web::Result<HttpResponse> {
+    // TODO check if user still exsists
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
         main(
             app,
@@ -300,6 +341,20 @@ pub(in crate::web) async fn do_login(
     HttpResponse::Found()
         .append_header(("Location", "/"))
         .finish()
+}
+
+#[derive(Serialize)]
+struct ArticlePageData {
+    id: Id,
+    title: String,
+    content: String,
+    domain: String,
+    url: String,
+    reading_time: i32,
+    is_archived: bool,
+    is_starred: bool,
+    #[serde(flatten)]
+    page: Page,
 }
 
 #[derive(Serialize)]
