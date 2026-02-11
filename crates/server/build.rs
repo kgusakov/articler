@@ -11,9 +11,11 @@ fn main() -> std::io::Result<()> {
     if let Ok(flag) = env::var(TAILWIND_REBUILD_VAR)
         && flag == "1"
     {
-        let tailwind_bin = env::var(TAILWIND_BIN_VAR).expect(&format!(
-            "With enabled {TAILWIND_REBUILD_VAR} you must set {TAILWIND_BIN_VAR} env variable"
-        ));
+        let tailwind_bin = env::var(TAILWIND_BIN_VAR).unwrap_or_else(|_| {
+            panic!(
+                "With enabled {TAILWIND_REBUILD_VAR} you must set {TAILWIND_BIN_VAR} env variable"
+            )
+        });
 
         let output = Command::new(tailwind_bin)
             .args(["-i", "tailwind/input.css", "-o", "static/css/main.css"])
