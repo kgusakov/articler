@@ -1,0 +1,11 @@
+@import "tailwindcss" source(none);
+@plugin "@tailwindcss/typography";
+@source "../templates/";
+
+@theme {
+    --color-primary: #191D24;
+    --color-secondary: #384252;
+    --color-muted: #6C727F;
+    --color-border: #E0E4EA;
+    --color-surface: #F1F3F6;
+}
