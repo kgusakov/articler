@@ -1,0 +1,4 @@
+target/
+.*
+*.code-workspace
+crates/server/static/css
