@@ -11,7 +11,7 @@ jobs:
 
       - name: Build release binary
         run: |
-          cargo build --release
+          TAILWIND_REBUILD=1 TAILWIND_BIN="tailwindcss" cargo build --release
 
       - name: Build Alpine package
         working-directory: ./dist/alpine

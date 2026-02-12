@@ -17,4 +17,4 @@ jobs:
       - name: Run cargo clippy
         run: cargo clippy --all-targets -- -D warnings
       - name: Run cargo test
-        run: RUST_LOG=actix_web=debug,sqlx=debug cargo test
+        run: TAILWIND_REBUILD=1 TAILWIND_BIN="tailwindcss" RUST_LOG=actix_web=debug,sqlx=debug cargo test
