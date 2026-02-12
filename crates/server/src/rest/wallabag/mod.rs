@@ -21,122 +21,121 @@ const VERSION: &str = "2.6.12";
 pub fn routes(cfg: &mut ServiceConfig) {
     let oauth = HttpAuthentication::with_fn(super::oauth::auth_extractor);
 
-    cfg.route("/api/version.json", get().to(version))
-        .route("/api/version", get().to(version));
-
-    cfg.route(
-        "/api/version.json",
-        web::route().guard(guard::Options()).to(version),
-    )
-    .route(
-        "/api/version",
-        web::route().guard(guard::Options()).to(version),
-    );
-
+    // TODO Tooooo long already - refactoring needed
     cfg.service(
         web::scope("/api")
-            .wrap(oauth)
+            .route("/version.json", get().to(version))
+            .route("/version", get().to(version))
             .route(
-                "/entries.json",
-                web::route()
-                    .guard(guard::Post())
-                    .guard(guard::Header(
-                        "content-type",
-                        "application/x-www-form-urlencoded",
-                    ))
-                    .to(post_entries),
+                "/version.json",
+                web::route().guard(guard::Options()).to(version),
             )
-            .route(
-                "/entries.json",
-                web::route()
-                    .guard(guard::Post())
-                    .guard(guard::Header("content-type", "application/json"))
-                    .to(post_entries_json),
-            )
-            .route(
-                "/entries",
-                web::route()
-                    .guard(guard::Post())
-                    .guard(guard::Header(
-                        "content-type",
-                        "application/x-www-form-urlencoded",
-                    ))
-                    .to(post_entries),
-            )
-            .route(
-                "/entries",
-                web::route()
-                    .guard(guard::Post())
-                    .guard(guard::Header("content-type", "application/json"))
-                    .to(post_entries_json),
-            )
-            .route("/entries.json", get().to(entries))
-            .route("/entries", get().to(entries))
+            .route("/version", web::route().guard(guard::Options()).to(version))
             .service(
-                web::scope("/entries")
-                    .route("/exists.json", get().to(exists))
-                    .route("/exists", get().to(exists))
-                    .route("/{entry_id}.json", delete().to(delete_entry))
-                    .route("/{entry_id}", delete().to(delete_entry))
+                web::scope("")
+                    .wrap(oauth)
                     .route(
-                        "/{entry_id}.json",
+                        "/entries.json",
                         web::route()
-                            .guard(guard::Patch())
+                            .guard(guard::Post())
                             .guard(guard::Header(
                                 "content-type",
                                 "application/x-www-form-urlencoded",
                             ))
-                            .to(patch_entry_form),
+                            .to(post_entries),
                     )
                     .route(
-                        "/{entry_id}.json",
+                        "/entries.json",
                         web::route()
-                            .guard(guard::Patch())
+                            .guard(guard::Post())
                             .guard(guard::Header("content-type", "application/json"))
-                            .to(patch_entry_json),
+                            .to(post_entries_json),
                     )
                     .route(
-                        "/{entry_id}",
+                        "/entries",
                         web::route()
-                            .guard(guard::Patch())
+                            .guard(guard::Post())
                             .guard(guard::Header(
                                 "content-type",
                                 "application/x-www-form-urlencoded",
                             ))
-                            .to(patch_entry_form),
+                            .to(post_entries),
                     )
                     .route(
-                        "/{entry_id}",
+                        "/entries",
                         web::route()
-                            .guard(guard::Patch())
+                            .guard(guard::Post())
                             .guard(guard::Header("content-type", "application/json"))
-                            .to(patch_entry_json),
+                            .to(post_entries_json),
                     )
-                    .route("/{entry_id}/tags", get().to(get_tags_by_entry))
-                    .route("/{entry_id}/tags.json", post().to(post_entry_tags))
-                    .route("/{entry_id}/tags", post().to(post_entry_tags))
-                    .route(
-                        "/{entry_id}/tags/{tag_id}.json",
-                        delete().to(delete_tag_from_entry),
+                    .route("/entries.json", get().to(entries))
+                    .route("/entries", get().to(entries))
+                    .service(
+                        web::scope("/entries")
+                            .route("/exists.json", get().to(exists))
+                            .route("/exists", get().to(exists))
+                            .route("/{entry_id}.json", delete().to(delete_entry))
+                            .route("/{entry_id}", delete().to(delete_entry))
+                            .route(
+                                "/{entry_id}.json",
+                                web::route()
+                                    .guard(guard::Patch())
+                                    .guard(guard::Header(
+                                        "content-type",
+                                        "application/x-www-form-urlencoded",
+                                    ))
+                                    .to(patch_entry_form),
+                            )
+                            .route(
+                                "/{entry_id}.json",
+                                web::route()
+                                    .guard(guard::Patch())
+                                    .guard(guard::Header("content-type", "application/json"))
+                                    .to(patch_entry_json),
+                            )
+                            .route(
+                                "/{entry_id}",
+                                web::route()
+                                    .guard(guard::Patch())
+                                    .guard(guard::Header(
+                                        "content-type",
+                                        "application/x-www-form-urlencoded",
+                                    ))
+                                    .to(patch_entry_form),
+                            )
+                            .route(
+                                "/{entry_id}",
+                                web::route()
+                                    .guard(guard::Patch())
+                                    .guard(guard::Header("content-type", "application/json"))
+                                    .to(patch_entry_json),
+                            )
+                            .route("/{entry_id}/tags", get().to(get_tags_by_entry))
+                            .route("/{entry_id}/tags.json", post().to(post_entry_tags))
+                            .route("/{entry_id}/tags", post().to(post_entry_tags))
+                            .route(
+                                "/{entry_id}/tags/{tag_id}.json",
+                                delete().to(delete_tag_from_entry),
+                            )
+                            .route(
+                                "/{entry_id}/tags/{tag_id}",
+                                delete().to(delete_tag_from_entry),
+                            ),
                     )
-                    .route(
-                        "/{entry_id}/tags/{tag_id}",
-                        delete().to(delete_tag_from_entry),
+                    .route("/tags.json", get().to(get_tags))
+                    .route("/tags", get().to(get_tags))
+                    .service(
+                        web::scope("/tags")
+                            .route("/label.json", delete().to(delete_tags_by_label))
+                            .route("/label", delete().to(delete_tags_by_label))
+                            .route("/{tag_id}.json", delete().to(delete_tag_by_id))
+                            .route("/{tag_id}", delete().to(delete_tag_by_id)),
+                    )
+                    .service(
+                        web::scope("/tag")
+                            .route("/label.json", delete().to(delete_tag_by_label))
+                            .route("/label", delete().to(delete_tag_by_label)),
                     ),
-            )
-            .route("/tags.json", get().to(get_tags))
-            .route("/tags", get().to(get_tags))
-            .service(
-                web::scope("/tags")
-                    .route("/label.json", delete().to(delete_tags_by_label))
-                    .route("/label", delete().to(delete_tags_by_label))
-                    .route("/{tag_id}.json", delete().to(delete_tag_by_id))
-                    .route("/{tag_id}", delete().to(delete_tag_by_id)),
-            )
-            .service(
-                web::scope("/tag")
-                    .route("/label.json", delete().to(delete_tag_by_label))
-                    .route("/label", delete().to(delete_tag_by_label)),
             ),
     );
 }
