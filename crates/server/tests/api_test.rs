@@ -1,6 +1,6 @@
 use std::sync::Once;
 
-use actix_http::{Request, header};
+use actix_http::{Request, StatusCode, header};
 use actix_web::{
     Error,
     body::MessageBody,
@@ -136,12 +136,31 @@ async fn test_options_version_json(pool: SqlitePool) {
 
     let req = test::TestRequest::default()
         .method(actix_http::Method::OPTIONS)
+        .append_header((header::ACCESS_CONTROL_REQUEST_METHOD, "GET"))
         .uri("/api/version.json")
         .to_request();
 
-    let resp: Value = test::call_and_read_body_json(&app, req).await;
+    let resp = test::call_service(&app, req).await;
 
-    assert_eq!("2.6.12", resp.as_str().unwrap());
+    assert_eq!(StatusCode::OK, resp.status());
+
+    let mut sorted_result: Vec<&str> = resp
+        .headers()
+        .get(header::ACCESS_CONTROL_ALLOW_METHODS)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .split(",")
+        .map(|s| s.trim())
+        .collect();
+
+    sorted_result.sort();
+
+    assert!(
+        ["GET", "POST", "PATCH"]
+            .iter()
+            .all(|m| sorted_result.contains(m))
+    );
 }
 
 #[sqlx::test(migrations = "../../migrations")]
@@ -150,12 +169,31 @@ async fn test_options_version(pool: SqlitePool) {
 
     let req = test::TestRequest::default()
         .method(actix_http::Method::OPTIONS)
+        .append_header((header::ACCESS_CONTROL_REQUEST_METHOD, "GET"))
         .uri("/api/version")
         .to_request();
 
-    let resp: Value = test::call_and_read_body_json(&app, req).await;
+    let resp = test::call_service(&app, req).await;
 
-    assert_eq!("2.6.12", resp.as_str().unwrap());
+    assert_eq!(StatusCode::OK, resp.status());
+
+    let mut sorted_result: Vec<&str> = resp
+        .headers()
+        .get(header::ACCESS_CONTROL_ALLOW_METHODS)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .split(",")
+        .map(|s| s.trim())
+        .collect();
+
+    sorted_result.sort();
+
+    assert!(
+        ["GET", "POST", "PATCH"]
+            .iter()
+            .all(|m| sorted_result.contains(m))
+    );
 }
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]

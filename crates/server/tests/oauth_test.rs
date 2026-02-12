@@ -1,6 +1,6 @@
 use std::sync::Once;
 
-use actix_http::Request;
+use actix_http::{Request, StatusCode, header};
 use actix_web::{
     Error,
     body::MessageBody,
@@ -582,5 +582,38 @@ async fn test_oauth_refresh_missing_refresh_token(pool: SqlitePool) {
         body.get("error_description").unwrap().as_str().unwrap(),
         "No \"refresh_token\" parameter found",
         "Should have correct error_description"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_options_oauth_token(pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    let req = test::TestRequest::default()
+        .method(actix_http::Method::OPTIONS)
+        .append_header((header::ACCESS_CONTROL_REQUEST_METHOD, "POST"))
+        .uri("/oauth/v2/token")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(StatusCode::OK, resp.status());
+
+    let mut sorted_result: Vec<&str> = resp
+        .headers()
+        .get(header::ACCESS_CONTROL_ALLOW_METHODS)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .split(",")
+        .map(|s| s.trim())
+        .collect();
+
+    sorted_result.sort();
+
+    assert!(
+        ["GET", "POST", "PATCH"]
+            .iter()
+            .all(|m| sorted_result.contains(m))
     );
 }

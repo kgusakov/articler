@@ -1,3 +1,4 @@
+use actix_cors::Cors;
 use actix_web::{
     Error, HttpMessage,
     dev::ServiceRequest,
@@ -16,8 +17,12 @@ static BEARER: &str = "bearer";
 type Id = i64;
 
 pub fn routes(cfg: &mut ServiceConfig) {
+    // TODO permissive cors is a security issue - must be fixed
+    let cors = Cors::permissive();
+
     cfg.service(
         web::scope("/oauth/v2/token")
+            .wrap(cors)
             .route(
                 "",
                 web::route()
@@ -32,23 +37,6 @@ pub fn routes(cfg: &mut ServiceConfig) {
                 "",
                 web::route()
                     .guard(guard::Post())
-                    .guard(guard::Header("content-type", "application/json"))
-                    .to(post_token_json),
-            )
-            .route(
-                "",
-                web::route()
-                    .guard(guard::Options())
-                    .guard(guard::Header(
-                        "content-type",
-                        "application/x-www-form-urlencoded",
-                    ))
-                    .to(post_token),
-            )
-            .route(
-                "",
-                web::route()
-                    .guard(guard::Options())
                     .guard(guard::Header("content-type", "application/json"))
                     .to(post_token_json),
             ),

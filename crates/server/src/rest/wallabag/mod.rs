@@ -3,6 +3,7 @@ mod tags;
 
 use super::oauth::UserInfo;
 use crate::rest::wallabag::entries::exists;
+use actix_cors::Cors;
 use actix_utils::future::{Ready, ready};
 use actix_web::web::{ServiceConfig, delete, get, post};
 use actix_web::{
@@ -21,16 +22,14 @@ const VERSION: &str = "2.6.12";
 pub fn routes(cfg: &mut ServiceConfig) {
     let oauth = HttpAuthentication::with_fn(super::oauth::auth_extractor);
 
+    // TODO permissive cors is a security issue - must be fixed
+    let cors = Cors::permissive();
+
     // TODO Tooooo long already - refactoring needed
     cfg.service(
         web::scope("/api")
-            .route("/version.json", get().to(version))
-            .route("/version", get().to(version))
-            .route(
-                "/version.json",
-                web::route().guard(guard::Options()).to(version),
-            )
-            .route("/version", web::route().guard(guard::Options()).to(version))
+            .wrap(cors)
+            .service(web::resource(["version", "version.json"]).route(get().to(version)))
             .service(
                 web::scope("")
                     .wrap(oauth)
