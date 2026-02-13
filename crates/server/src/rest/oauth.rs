@@ -1,10 +1,9 @@
 use actix_cors::Cors;
 use actix_web::{
-    Error, HttpMessage,
+    Either, Error, HttpMessage,
     dev::ServiceRequest,
     error::{self, ErrorBadRequest, ErrorInternalServerError},
-    guard,
-    web::{self, Json, ServiceConfig},
+    web::{self, Json, ServiceConfig, post},
 };
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use serde::{Deserialize, Serialize};
@@ -23,55 +22,24 @@ pub fn routes(cfg: &mut ServiceConfig) {
     cfg.service(
         web::scope("/oauth/v2/token")
             .wrap(cors)
-            .route(
-                "",
-                web::route()
-                    .guard(guard::Post())
-                    .guard(guard::Header(
-                        "content-type",
-                        "application/x-www-form-urlencoded",
-                    ))
-                    .to(post_token),
-            )
-            .route(
-                "",
-                web::route()
-                    .guard(guard::Post())
-                    .guard(guard::Header("content-type", "application/json"))
-                    .to(post_token_json),
-            ),
+            .route("", post().to(post_token)),
     );
-}
-
-async fn post_token_json(
-    tctx: web::ReqData<TransactionContext<'_>>,
-    data: web::Data<AppState>,
-    request: web::Json<GetToken>,
-) -> actix_web::Result<Json<Token>> {
-    create_token(tctx, data, request.into_inner()).await
 }
 
 async fn post_token(
     tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
-    request: web::Form<GetToken>,
-) -> actix_web::Result<Json<Token>> {
-    create_token(tctx, data, request.into_inner()).await
-}
-
-async fn create_token(
-    tctx: web::ReqData<TransactionContext<'_>>,
-    data: web::Data<AppState>,
-    r: GetToken,
+    request: Either<web::Form<GetToken>, web::Json<GetToken>>,
 ) -> actix_web::Result<Json<Token>> {
     let mut tx = tctx.tx()?;
-    match r.grant_type {
+    let request = request.into_inner();
+    match request.grant_type {
         Some(gt) if gt == "password" => {
-            if let Some(username) = r.username
-                && let Some(password) = r.password
+            if let Some(username) = request.username
+                && let Some(password) = request.password
             {
-                if let Some(client_id) = r.client_id {
-                    if let Some(client_secret) = r.client_secret {
+                if let Some(client_id) = request.client_id {
+                    if let Some(client_secret) = request.client_secret {
                         if let Some(user_row) = find_user(&mut tx, &username, &password).await? {
                             if let Some(client_row) = clients::find_by_user_id_client_id_and_secret(
                                 &mut tx,
@@ -125,13 +93,13 @@ async fn create_token(
             }
         }
         Some(gt) if gt == "refresh_token" => {
-            if let Some(client_id) = r.client_id {
-                if let Some(client_secret) = r.client_secret {
+            if let Some(client_id) = request.client_id {
+                if let Some(client_secret) = request.client_secret {
                     if clients::find_by_client_id_and_secret(&mut tx, &client_id, &client_secret)
                         .await?
                         .is_some()
                     {
-                        if let Some(refresh_token) = r.refresh_token {
+                        if let Some(refresh_token) = request.refresh_token {
                             if let Some(new_token) =
                                 data.token_storage.refresh(&mut tx, &refresh_token).await?
                             {
