@@ -1,5 +1,4 @@
 // This tests checks if Android wallabag app can login correctly
-
 use std::sync::Once;
 
 use actix_http::Request;
@@ -117,28 +116,40 @@ async fn android_app_login_flow(pool: SqlitePool) {
     let resp_body = test::call_and_read_body(&app, req).await;
     let developer_html = std::str::from_utf8(&resp_body).unwrap();
 
-    // Check CLIENT_PATTERN with groups for:
-    // 1. Client name: "Android app - #1"
-    // 2. Client ID: android_client_id
-    // 3. Client secret: android_client_secret
-    // 4-5. Additional fields (redirect URIs, grant types)
-    // Note: (?s) enables DOTALL mode where . matches newlines
     let client_pattern = Regex::new(
         r#"(?s)<div class="collapsible-header">([^<]+?)</div>.*?<strong><code>([^<]+?)</code></strong>.*?<strong><code>([^<]+?)</code></strong>.*?<strong><code>([^<]+?)</code></strong>.*?<strong><code>([^<]+?)</code></strong>.*?/developer/client/delete/"#,
     )
     .unwrap();
 
-    let captures = client_pattern
-        .captures(developer_html)
-        .unwrap_or_else(|| panic!("Client pattern not found in: {}", developer_html));
+    let mut clients = vec![];
+    for (_, [name, id, secret, _, grant_permissions]) in client_pattern
+        .captures_iter(developer_html)
+        .map(|c| c.extract())
+    {
+        clients.push((name, id, secret, grant_permissions));
+    }
 
-    // Verify captured groups
-    assert_eq!(captures.get(1).unwrap().as_str(), "Android app - #1");
-    assert_eq!(captures.get(2).unwrap().as_str(), "android_client_id");
-    assert_eq!(captures.get(3).unwrap().as_str(), "android_client_secret");
-    assert_eq!(captures.get(4).unwrap().as_str(), "[null]");
     assert_eq!(
-        captures.get(5).unwrap().as_str(),
-        r#"["token","authorization_code","password","refresh_token"]"#
+        clients,
+        vec![
+            (
+                "Client 1 - #0",
+                "client_1",
+                "secret_1",
+                "[\"token\",\"authorization_code\",\"password\",\"refresh_token\"]"
+            ),
+            (
+                "Client 2 - #1",
+                "client_2",
+                "secret_2",
+                "[\"token\",\"authorization_code\",\"password\",\"refresh_token\"]"
+            ),
+            (
+                "Android app - #2",
+                "android_client_id",
+                "android_client_secret",
+                "[\"token\",\"authorization_code\",\"password\",\"refresh_token\"]"
+            )
+        ]
     );
 }

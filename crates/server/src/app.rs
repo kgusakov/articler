@@ -54,6 +54,12 @@ pub fn init_handlebars() -> Handlebars<'static> {
         .register_template_string("index", include_str!("../templates/index.hbs"))
         .unwrap();
     handlebars
+        .register_template_string(
+            "fake_development",
+            include_str!("../templates/fake_development.hbs"),
+        )
+        .unwrap();
+    handlebars
         .register_partial("login", include_str!("../templates/login.hbs"))
         .unwrap();
     handlebars

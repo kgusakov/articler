@@ -1,0 +1,50 @@
+<html>
+
+<body>
+    <ul class="collapsible" data-collapsible="expandable" display:none>
+        {{#each clients}}
+        <li>
+            <!-- TODO make the index 1-based - looks like handlebar helper neded -->
+            <div class="collapsible-header">{{client_name}} - #{{@index}}</div>
+            <div class="collapsible-body">
+                <table class="striped">
+                    <tbody>
+                        <tr>
+                            <td>Client ID</td>
+                            <td>
+                                <strong><code>{{client_id}}</code></strong>
+                                <button class="btn">Copy</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Client secret</td>
+                            <td>
+                                <strong><code>{{client_secret}}</code></strong>
+                                <button class="btn">Copy</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Redirect URIs</td>
+                            <td><strong><code>[null]</code></strong></td>
+                        </tr>
+                        <tr>
+                            <td>Grant type allowed</td>
+                            <td><strong><code>["token","authorization_code","password","refresh_token"]</code></strong>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <form action="/developer/client/delete/{{id}}" method="post" name="delete-client">
+                    <input type="hidden" name="token" value="">
+
+                    <button class="waves-effect waves-light btn red" type="submit">Remove the client
+                        {{client_name}}</button>
+                </form>
+            </div>
+        </li>
+        {{/each}}
+    </ul>
+</body>
+
+</html>
