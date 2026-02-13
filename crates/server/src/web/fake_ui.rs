@@ -9,17 +9,12 @@ use actix_web::{
 use serde::Serialize;
 
 use crate::{app::AppState, middleware::TransactionContext, web::ui::do_login};
-use db::{
-    ArticlerError,
-    repository::{
-        Id,
-        clients::{self, ClientRow},
-    },
+use db::repository::{
+    Id,
+    clients::{self, ClientRow},
 };
 
-const ANDROID_APP_NAME: &str = "Android app";
-
-// The whole file is just a fake pages to support the way of authorization, which Android app is using
+// The whole file is just a fake pages to support the way of authorization, which Android app and browser extensions are using
 
 pub fn routes(cfg: &mut ServiceConfig) {
     cfg.route("/login_check", post().to(do_login))
