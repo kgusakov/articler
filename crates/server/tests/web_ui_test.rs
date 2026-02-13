@@ -14,7 +14,7 @@ use server::{
     scraper::Scraper,
 };
 use sqlx::SqlitePool;
-use std::sync::Once;
+use std::{collections::HashSet, sync::Once};
 
 static INIT: Once = Once::new();
 
@@ -172,20 +172,16 @@ async fn index_page(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
 
-    let article_titles: Vec<String> = helpers::find_article_titles(content);
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
 
     // Exactly 3 unread (not archived) articles from fixtures: entries 1, 3, and 5
-    assert_eq!(article_titles.len(), 3);
-    assert!(article_titles.iter().any(|t| t == "title1"));
-    assert!(article_titles.iter().any(|t| t == "title3"));
-    assert!(article_titles.iter().any(|t| t == "title5"));
+    assert_eq!(titles_set, HashSet::from(["title1", "title3", "title5"]));
 
     // Each article must have an archive form with the correct article_id
-    let archive_forms = helpers::find_archive_forms(content);
-    assert_eq!(archive_forms.len(), 3);
-    assert!(archive_forms.contains(&"1".to_string()));
-    assert!(archive_forms.contains(&"3".to_string()));
-    assert!(archive_forms.contains(&"5".to_string()));
+    let forms = helpers::find_archive_forms(content);
+    let forms_set: HashSet<&str> = forms.iter().map(|s| s.as_str()).collect();
+    assert_eq!(forms_set, HashSet::from(["1", "3", "5"]));
 
     // Unarchived articles must show MarkUnRead icon
     let archive_icons = helpers::find_archive_icons(content);
@@ -197,11 +193,9 @@ async fn index_page(pool: SqlitePool) {
     );
 
     // Each article must have a delete form with the correct article_id
-    let delete_forms = helpers::find_delete_forms(content);
-    assert_eq!(delete_forms.len(), 3);
-    assert!(delete_forms.contains(&"1".to_string()));
-    assert!(delete_forms.contains(&"3".to_string()));
-    assert!(delete_forms.contains(&"5".to_string()));
+    let del_forms = helpers::find_delete_forms(content);
+    let delete_forms: HashSet<&str> = del_forms.iter().map(|s| s.as_str()).collect();
+    assert_eq!(delete_forms, HashSet::from(["1", "3", "5"]));
 }
 
 #[sqlx::test(
@@ -224,11 +218,12 @@ async fn article_links_on_index_page(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let links = helpers::find_article_links(content);
+    let links_set: HashSet<&str> = links.iter().map(|s| s.as_str()).collect();
     // Index shows unread entries 1, 3, 5
-    assert_eq!(links.len(), 3);
-    assert!(links.contains(&"/article/1".to_string()));
-    assert!(links.contains(&"/article/3".to_string()));
-    assert!(links.contains(&"/article/5".to_string()));
+    assert_eq!(
+        links_set,
+        HashSet::from(["/article/1", "/article/3", "/article/5"])
+    );
 }
 
 #[sqlx::test(
@@ -263,12 +258,11 @@ async fn do_archive(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
 
-    let article_titles = helpers::find_article_titles(content);
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
 
     // Entry 1 should no longer appear, only entries 3 and 5 remain
-    assert_eq!(article_titles.len(), 2);
-    assert!(article_titles.iter().any(|t| t == "title3"));
-    assert!(article_titles.iter().any(|t| t == "title5"));
+    assert_eq!(titles_set, HashSet::from(["title3", "title5"]));
 }
 
 #[sqlx::test(
@@ -303,14 +297,14 @@ async fn do_unarchive(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
 
-    let article_titles = helpers::find_article_titles(content);
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
 
     // Entry 2 should now appear alongside entries 1, 3, and 5
-    assert_eq!(article_titles.len(), 4);
-    assert!(article_titles.iter().any(|t| t == "title1"));
-    assert!(article_titles.iter().any(|t| t == "title2"));
-    assert!(article_titles.iter().any(|t| t == "title3"));
-    assert!(article_titles.iter().any(|t| t == "title5"));
+    assert_eq!(
+        titles_set,
+        HashSet::from(["title1", "title2", "title3", "title5"])
+    );
 }
 
 #[sqlx::test(
@@ -333,16 +327,14 @@ async fn all_page(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
 
-    let article_titles = helpers::find_article_titles(content);
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
 
     // All 6 entries should appear (no archive filter)
-    assert_eq!(article_titles.len(), 6);
-    assert!(article_titles.iter().any(|t| t == "title1"));
-    assert!(article_titles.iter().any(|t| t == "title2"));
-    assert!(article_titles.iter().any(|t| t == "title3"));
-    assert!(article_titles.iter().any(|t| t == "title4"));
-    assert!(article_titles.iter().any(|t| t == "title5"));
-    assert!(article_titles.iter().any(|t| t == "title6"));
+    assert_eq!(
+        titles_set,
+        HashSet::from(["title1", "title2", "title3", "title4", "title5", "title6"])
+    );
 }
 
 #[sqlx::test(
@@ -365,13 +357,11 @@ async fn favourite_page(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
 
-    let article_titles = helpers::find_article_titles(content);
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
 
     // Entries 3, 4, and 6 are starred
-    assert_eq!(article_titles.len(), 3);
-    assert!(article_titles.iter().any(|t| t == "title3"));
-    assert!(article_titles.iter().any(|t| t == "title4"));
-    assert!(article_titles.iter().any(|t| t == "title6"));
+    assert_eq!(titles_set, HashSet::from(["title3", "title4", "title6"]));
 }
 
 #[sqlx::test(
@@ -394,13 +384,11 @@ async fn archive_page(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
 
-    let article_titles = helpers::find_article_titles(content);
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
 
     // Entries 2, 4, and 6 are archived
-    assert_eq!(article_titles.len(), 3);
-    assert!(article_titles.iter().any(|t| t == "title2"));
-    assert!(article_titles.iter().any(|t| t == "title4"));
-    assert!(article_titles.iter().any(|t| t == "title6"));
+    assert_eq!(titles_set, HashSet::from(["title2", "title4", "title6"]));
 
     // Archived articles must show MarkRead icon
     let archive_icons = helpers::find_archive_icons(content);
@@ -431,21 +419,23 @@ async fn index_page_favourite_icons(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
 
-    let icons = helpers::find_favourite_icons_by_article(content);
-    assert_eq!(icons.len(), 3);
+    let fav_icons = helpers::find_favourite_icons_by_article(content);
+    let icons: HashSet<(&str, &str)> = fav_icons
+        .iter()
+        .map(|(id, src)| (id.as_str(), src.as_str()))
+        .collect();
 
     // Entry 1: not starred → FavoriteOff
-    assert!(icons.contains(&(
-        "1".to_string(),
-        "/static/images/FavoriteOff.svg".to_string()
-    )));
     // Entry 3: starred → FavoriteOn
-    assert!(icons.contains(&("3".to_string(), "/static/images/FavoriteOn.svg".to_string())));
     // Entry 5: not starred → FavoriteOff
-    assert!(icons.contains(&(
-        "5".to_string(),
-        "/static/images/FavoriteOff.svg".to_string()
-    )));
+    assert_eq!(
+        icons,
+        HashSet::from([
+            ("1", "/static/images/FavoriteOff.svg"),
+            ("3", "/static/images/FavoriteOn.svg"),
+            ("5", "/static/images/FavoriteOff.svg")
+        ])
+    );
 }
 
 #[sqlx::test(
@@ -509,9 +499,12 @@ async fn do_favourite(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
 
-    let article_titles = helpers::find_article_titles(content);
-    assert_eq!(article_titles.len(), 4);
-    assert!(article_titles.iter().any(|t| t == "title1"));
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
+    assert_eq!(
+        titles_set,
+        HashSet::from(["title1", "title3", "title4", "title6"])
+    );
 
     // Verify entry 1 now shows FavoriteOn icon on the index page
     let req = test::TestRequest::get()
@@ -523,8 +516,12 @@ async fn do_favourite(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
 
-    let icons = helpers::find_favourite_icons_by_article(content);
-    assert!(icons.contains(&("1".to_string(), "/static/images/FavoriteOn.svg".to_string())));
+    let fav_icons = helpers::find_favourite_icons_by_article(content);
+    let icons: HashSet<(&str, &str)> = fav_icons
+        .iter()
+        .map(|(id, src)| (id.as_str(), src.as_str()))
+        .collect();
+    assert!(icons.contains(&("1", "/static/images/FavoriteOn.svg")));
 }
 
 #[sqlx::test(
@@ -558,9 +555,9 @@ async fn do_unfavourite(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
 
-    let article_titles = helpers::find_article_titles(content);
-    assert_eq!(article_titles.len(), 2);
-    assert!(!article_titles.iter().any(|t| t == "title3"));
+    let titles = helpers::find_article_titles(content);
+    let article_titles: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
+    assert_eq!(article_titles, HashSet::from(["title4", "title6"]));
 
     // Verify entry 3 now shows FavoriteOff icon on the index page
     let req = test::TestRequest::get()
@@ -573,10 +570,11 @@ async fn do_unfavourite(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let icons = helpers::find_favourite_icons_by_article(content);
-    assert!(icons.contains(&(
-        "3".to_string(),
-        "/static/images/FavoriteOff.svg".to_string()
-    )));
+    let icons_set: HashSet<(&str, &str)> = icons
+        .iter()
+        .map(|(id, src)| (id.as_str(), src.as_str()))
+        .collect();
+    assert!(icons_set.contains(&("3", "/static/images/FavoriteOff.svg")));
 }
 
 #[sqlx::test(
@@ -684,6 +682,7 @@ async fn article_page_unarchived_unstarred(pool: SqlitePool) {
     );
 
     // Content
+    // TODO replace by actual html path searching
     assert!(content.contains("content1"));
 
     // Domain link to original URL
@@ -692,6 +691,7 @@ async fn article_page_unarchived_unstarred(pool: SqlitePool) {
     assert_eq!(domain_href, "https://a.com/1");
 
     // Reading time
+    // TODO replace by actual html path searching
     assert!(content.contains("8 min read"));
 
     // Unstarred → FavoriteOff icon
@@ -837,7 +837,7 @@ mod helpers {
         let document = Html::parse_document(content);
         document
             .select(&Selector::parse("article h3").unwrap())
-            .map(|el| el.text().collect::<String>())
+            .map(|el| el.inner_html())
             .collect()
     }
 
@@ -898,15 +898,12 @@ mod helpers {
         let form_sel = Selector::parse(r#"form[action="/do_delete"]"#).unwrap();
         let input_sel = Selector::parse(r#"input[name="back_location"]"#).unwrap();
 
-        document
-            .select(&form_sel)
-            .next()
-            .and_then(|form| {
-                form.select(&input_sel)
-                    .next()
-                    .and_then(|input| input.value().attr("value"))
-                    .map(|v| v.to_string())
-            })
+        document.select(&form_sel).next().and_then(|form| {
+            form.select(&input_sel)
+                .next()
+                .and_then(|input| input.value().attr("value"))
+                .map(|v| v.to_string())
+        })
     }
 
     /// Returns (article_id, icon_src) pairs from all favourite forms in the page.
