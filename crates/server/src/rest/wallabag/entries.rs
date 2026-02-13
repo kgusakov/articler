@@ -1,4 +1,5 @@
 use actix_web::{
+    Either,
     error::{ErrorInternalServerError, ErrorNotFound},
     web::{self, Json, Query},
 };
@@ -12,10 +13,10 @@ use thiserror::Error;
 use url::Url;
 
 use crate::{
-    rest::{oauth::UserInfo, wallabag::Id},
     app::AppState,
     middleware::TransactionContext,
     models::{Entry, Tag},
+    rest::{oauth::UserInfo, wallabag::Id},
     scraper::extract_title,
 };
 use db::repository::{entries, tags};
@@ -30,25 +31,7 @@ pub async fn exists() -> actix_web::Result<Json<Exists>> {
 pub async fn post_entries(
     tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
-    request: web::Form<AddEntry>,
-    user_info: UserInfo,
-) -> actix_web::Result<Json<AddEntryResponse>> {
-    do_post_entries(tctx, data, request.into_inner(), user_info).await
-}
-
-pub async fn post_entries_json(
-    tctx: web::ReqData<TransactionContext<'_>>,
-    data: web::Data<AppState>,
-    request: web::Json<AddEntry>,
-    user_info: UserInfo,
-) -> actix_web::Result<Json<AddEntryResponse>> {
-    do_post_entries(tctx, data, request.into_inner(), user_info).await
-}
-
-async fn do_post_entries(
-    tctx: web::ReqData<TransactionContext<'_>>,
-    data: web::Data<AppState>,
-    request: AddEntry,
+    request: Either<web::Json<AddEntry>, web::Form<AddEntry>>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<AddEntryResponse>> {
     // TODO
@@ -57,18 +40,20 @@ async fn do_post_entries(
     //    - if not - create new one
     //
     // In both case if title and/or content is not set - both will be retrieved from the internet again
+    let add_entry = request.into_inner();
+
     let (title, content, mime_type, published_at, language, preview_picture) =
-        if let (Some(t), Some(c)) = (request.title, request.content) {
+        if let (Some(t), Some(c)) = (add_entry.title, add_entry.content) {
             (
                 t,
                 c,
                 "".to_string(),
-                request.published_at,
-                request.language,
-                request.preview_picture,
+                add_entry.published_at,
+                add_entry.language,
+                add_entry.preview_picture,
             )
         } else {
-            match data.scraper.extract(&request.url).await {
+            match data.scraper.extract(&add_entry.url).await {
                 Ok(document) => (
                     document.title,
                     document.content_html,
@@ -78,10 +63,10 @@ async fn do_post_entries(
                     document.image_url,
                 ),
                 Err(err) => {
-                    error!("Error while parsing url {}: {:?}", request.url, err);
+                    error!("Error while parsing url {}: {:?}", add_entry.url, err);
                     (
                         // TODO abstraction is leaking here - we need to generalize handling of parsing errors
-                        extract_title(&request.url).to_string(),
+                        extract_title(&add_entry.url).to_string(),
                         "".to_string(),
                         "".to_string(),
                         None,
@@ -95,21 +80,21 @@ async fn do_post_entries(
     // TODO must be calculated
     let reading_time = 0;
 
-    let domain_name = request.url.domain().or(request.url.host_str());
+    let domain_name = add_entry.url.domain().or(add_entry.url.host_str());
 
     let now = Utc::now().timestamp();
 
-    let archived = request.archive.unwrap_or(false);
-    let starred = request.starred.unwrap_or(false);
+    let archived = add_entry.archive.unwrap_or(false);
+    let starred = add_entry.starred.unwrap_or(false);
 
     // TODO can we remove all these ugly to_string?
     let create_entry = entries::CreateEntry {
         user_id: user_info.user_id,
         // TODO actually here we must have url without redirects already
-        url: request.url.to_string(),
-        hashed_url: hash_str(request.url.as_str()),
-        given_url: request.url.to_string(),
-        hashed_given_url: hash_str(request.url.as_str()),
+        url: add_entry.url.to_string(),
+        hashed_url: hash_str(add_entry.url.as_str()),
+        given_url: add_entry.url.to_string(),
+        hashed_given_url: hash_str(add_entry.url.as_str()),
         title,
         content,
         is_archived: archived,
@@ -123,11 +108,11 @@ async fn do_post_entries(
         reading_time,
         domain_name: domain_name.unwrap_or("").to_string(),
         preview_picture: preview_picture.map(|u| u.to_string()),
-        origin_url: request.origin_url.map(|u| u.to_string()),
+        origin_url: add_entry.origin_url.map(|u| u.to_string()),
         published_at: published_at.map(|v| v.timestamp()),
-        published_by: request.authors.map(|a| a.join(",")),
-        is_public: request.public,
-        uid: request.public.filter(|p| *p).map(|_b| generate_uid()),
+        published_by: add_entry.authors.map(|a| a.join(",")),
+        is_public: add_entry.public,
+        uid: add_entry.public.filter(|p| *p).map(|_b| generate_uid()),
     };
 
     let tag_to_create_tag = |label: String| -> tags::CreateTag {
@@ -138,7 +123,7 @@ async fn do_post_entries(
         }
     };
 
-    let create_tags = request
+    let create_tags = add_entry
         .tags
         .map(|_tags| {
             _tags
@@ -322,6 +307,7 @@ pub async fn delete_entry(
     }
 }
 
+// TODO implement Either based version for Json input data also
 pub async fn post_entry_tags(
     tctx: web::ReqData<TransactionContext<'_>>,
     entry_id: web::Path<Id>,
@@ -362,30 +348,13 @@ pub async fn post_entry_tags(
     }
 }
 
-pub async fn patch_entry_json(
+pub async fn patch_entry(
     tctx: web::ReqData<TransactionContext<'_>>,
     entry_id: web::Path<i64>,
-    request: web::Json<UpdateEntry>,
+    request: Either<web::Json<UpdateEntry>, web::Form<UpdateEntry>>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Entry>> {
-    do_patch_entry(tctx, entry_id, request.into_inner(), user_info).await
-}
-
-pub async fn patch_entry_form(
-    tctx: web::ReqData<TransactionContext<'_>>,
-    entry_id: web::Path<i64>,
-    request: web::Form<UpdateEntry>,
-    user_info: UserInfo,
-) -> actix_web::Result<Json<Entry>> {
-    do_patch_entry(tctx, entry_id, request.into_inner(), user_info).await
-}
-
-async fn do_patch_entry(
-    tctx: web::ReqData<TransactionContext<'_>>,
-    entry_id: web::Path<i64>,
-    request: UpdateEntry,
-    user_info: UserInfo,
-) -> actix_web::Result<Json<Entry>> {
+    let request = request.into_inner();
     let entry_id = entry_id.into_inner();
 
     let now = Utc::now().timestamp();

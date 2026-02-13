@@ -949,6 +949,27 @@ async fn get_tags_for_nonexistent_entry(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
+async fn get_tags_for_entry_with_tags_json(pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    let req = test::TestRequest::get()
+        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
+        .uri("/api/entries/2/tags.json")
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let expected =
+        serde_json::from_str::<Value>(include_str!("json/get_tags_for_entry_with_tags.json"))
+            .unwrap();
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    assert_json_include!(
+        actual: result,
+        expected: expected
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
 async fn test_get_all_tags(pool: SqlitePool) {
     let app = init_app(pool).await;
 

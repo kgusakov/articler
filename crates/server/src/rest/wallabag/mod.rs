@@ -5,12 +5,12 @@ use super::oauth::UserInfo;
 use crate::rest::wallabag::entries::exists;
 use actix_cors::Cors;
 use actix_utils::future::{Ready, ready};
-use actix_web::web::{ServiceConfig, delete, get, post};
+use actix_web::FromRequest;
+use actix_web::web::{ServiceConfig, delete, get, patch, post};
 use actix_web::{
     Error, HttpMessage,
     web::{self, Json},
 };
-use actix_web::{FromRequest, guard};
 use actix_web_httpauth::middleware::HttpAuthentication;
 use entries::*;
 use tags::*;
@@ -33,107 +33,51 @@ pub fn routes(cfg: &mut ServiceConfig) {
             .service(
                 web::scope("")
                     .wrap(oauth)
-                    .route(
-                        "/entries.json",
-                        web::route()
-                            .guard(guard::Post())
-                            .guard(guard::Header(
-                                "content-type",
-                                "application/x-www-form-urlencoded",
-                            ))
-                            .to(post_entries),
+                    .service(
+                        web::resource(["/entries", "/entries.json"])
+                            .route(get().to(entries))
+                            .route(post().to(post_entries)),
                     )
-                    .route(
-                        "/entries.json",
-                        web::route()
-                            .guard(guard::Post())
-                            .guard(guard::Header("content-type", "application/json"))
-                            .to(post_entries_json),
-                    )
-                    .route(
-                        "/entries",
-                        web::route()
-                            .guard(guard::Post())
-                            .guard(guard::Header(
-                                "content-type",
-                                "application/x-www-form-urlencoded",
-                            ))
-                            .to(post_entries),
-                    )
-                    .route(
-                        "/entries",
-                        web::route()
-                            .guard(guard::Post())
-                            .guard(guard::Header("content-type", "application/json"))
-                            .to(post_entries_json),
-                    )
-                    .route("/entries.json", get().to(entries))
-                    .route("/entries", get().to(entries))
                     .service(
                         web::scope("/entries")
-                            .route("/exists.json", get().to(exists))
-                            .route("/exists", get().to(exists))
-                            .route("/{entry_id}.json", delete().to(delete_entry))
-                            .route("/{entry_id}", delete().to(delete_entry))
-                            .route(
-                                "/{entry_id}.json",
-                                web::route()
-                                    .guard(guard::Patch())
-                                    .guard(guard::Header(
-                                        "content-type",
-                                        "application/x-www-form-urlencoded",
-                                    ))
-                                    .to(patch_entry_form),
+                            .service(
+                                web::resource(["/exists.json", "/exists"]).route(get().to(exists)),
                             )
-                            .route(
-                                "/{entry_id}.json",
-                                web::route()
-                                    .guard(guard::Patch())
-                                    .guard(guard::Header("content-type", "application/json"))
-                                    .to(patch_entry_json),
+                            .service(
+                                web::resource(["/{entry_id}.json", "/{entry_id}"])
+                                    .route(delete().to(delete_entry))
+                                    .route(patch().to(patch_entry)),
                             )
-                            .route(
-                                "/{entry_id}",
-                                web::route()
-                                    .guard(guard::Patch())
-                                    .guard(guard::Header(
-                                        "content-type",
-                                        "application/x-www-form-urlencoded",
-                                    ))
-                                    .to(patch_entry_form),
+                            .service(
+                                web::resource(["/{entry_id}/tags.json", "/{entry_id}/tags"])
+                                    .route(get().to(get_tags_by_entry))
+                                    .route(post().to(post_entry_tags)),
                             )
-                            .route(
-                                "/{entry_id}",
-                                web::route()
-                                    .guard(guard::Patch())
-                                    .guard(guard::Header("content-type", "application/json"))
-                                    .to(patch_entry_json),
-                            )
-                            .route("/{entry_id}/tags", get().to(get_tags_by_entry))
-                            .route("/{entry_id}/tags.json", post().to(post_entry_tags))
-                            .route("/{entry_id}/tags", post().to(post_entry_tags))
-                            .route(
-                                "/{entry_id}/tags/{tag_id}.json",
-                                delete().to(delete_tag_from_entry),
-                            )
-                            .route(
-                                "/{entry_id}/tags/{tag_id}",
-                                delete().to(delete_tag_from_entry),
+                            .service(
+                                web::resource([
+                                    "/{entry_id}/tags/{tag_id}.json",
+                                    "/{entry_id}/tags/{tag_id}",
+                                ])
+                                .route(delete().to(delete_tag_from_entry)),
                             ),
                     )
-                    .route("/tags.json", get().to(get_tags))
-                    .route("/tags", get().to(get_tags))
+                    .service(web::resource(["/tags.json", "/tags"]).route(get().to(get_tags)))
                     .service(
                         web::scope("/tags")
-                            .route("/label.json", delete().to(delete_tags_by_label))
-                            .route("/label", delete().to(delete_tags_by_label))
-                            .route("/{tag_id}.json", delete().to(delete_tag_by_id))
-                            .route("/{tag_id}", delete().to(delete_tag_by_id)),
+                            .service(
+                                web::resource(["/label.json", "label"])
+                                    .route(delete().to(delete_tags_by_label)),
+                            )
+                            .service(
+                                web::resource(["/{tag_id}.json", "tag_id"])
+                                    .route(delete().to(delete_tag_by_id)),
+                            ),
                     )
                     .service(
-                        web::scope("/tag")
-                            .route("/label.json", delete().to(delete_tag_by_label))
-                            .route("/label", delete().to(delete_tag_by_label)),
+                        web::scope("/tag").service(
+                            web::resource(["label.json", "label"])
+                                .route(delete().to(delete_tag_by_label)),
+                        ),
                     ),
             ),
     );
