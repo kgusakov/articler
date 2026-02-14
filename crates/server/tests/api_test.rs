@@ -1,4 +1,4 @@
-use std::{fmt::format, sync::Once};
+use std::sync::Once;
 
 use actix_http::{Request, StatusCode, header};
 use actix_web::{
