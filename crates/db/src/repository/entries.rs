@@ -440,7 +440,7 @@ fn push_bind_or_default<'qb, 'args, DB, T>(
     };
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct EntryRow {
     pub id: Id,
     pub user_id: Id,
@@ -759,5 +759,267 @@ mod tests {
             "Error should mention constraint violation, got: {}",
             err_msg
         );
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_find_by_id(pool: SqlitePool) {
+        let mut tx = pool.begin().await.unwrap();
+
+        // Find entry without tags (entry 1)
+        let (entry, tags) = find_by_id(&mut tx, 1, 1).await.unwrap().unwrap();
+        assert_eq!(
+            entry,
+            EntryRow {
+                id: 1,
+                user_id: 1,
+                url: "https://a.com/1".to_string(),
+                hashed_url: Some("hash1".to_string()),
+                given_url: Some("https://a.com/g1".to_string()),
+                hashed_given_url: Some("ghash1".to_string()),
+                title: "title1".to_string(),
+                content: "content1".to_string(),
+                is_archived: false,
+                archived_at: None,
+                is_starred: false,
+                starred_at: None,
+                created_at: 1701428400,
+                updated_at: 1702220700,
+                mimetype: Some("text/html".to_string()),
+                language: Some("en".to_string()),
+                reading_time: 8,
+                domain_name: "a.com".to_string(),
+                preview_picture: Some("https://a.com/pic1.jpg".to_string()),
+                origin_url: Some("https://a.com/o1".to_string()),
+                published_at: Some(1701424800),
+                published_by: Some("author1".to_string()),
+                is_public: Some(false),
+                uid: None,
+            }
+        );
+        assert!(tags.is_empty(), "Entry 1 should have no tags");
+
+        // Find entry with tags (entry 2 has tag_id 1 and 2)
+        let (entry, tags) = find_by_id(&mut tx, 1, 2).await.unwrap().unwrap();
+        assert_eq!(entry.id, 2);
+        assert_eq!(
+            tags,
+            vec![
+                crate::repository::tags::TagRow {
+                    id: 1,
+                    user_id: 1,
+                    label: "label1".to_string(),
+                    slug: "slug1".to_string(),
+                },
+                crate::repository::tags::TagRow {
+                    id: 2,
+                    user_id: 1,
+                    label: "label2".to_string(),
+                    slug: "slug2".to_string(),
+                },
+            ]
+        );
+
+        // Non-existent entry
+        let result = find_by_id(&mut tx, 1, 999).await.unwrap();
+        assert!(result.is_none(), "Entry 999 should not exist");
+
+        // Wrong user_id
+        let result = find_by_id(&mut tx, 999, 1).await.unwrap();
+        assert!(result.is_none(), "Entry 1 should not be found for user 999");
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_update_by_id(pool: SqlitePool) {
+        let mut tx = pool.begin().await.unwrap();
+
+        // Update multiple fields on entry 1
+        let updated = update_by_id(
+            &mut tx,
+            1,
+            1,
+            UpdateEntry {
+                title: Some(Some("new title".to_string())),
+                content: Some(Some("new content".to_string())),
+                is_archived: Some(Some(true)),
+                archived_at: Some(Some(1702000000)),
+                is_starred: Some(Some(true)),
+                starred_at: Some(Some(1702000001)),
+                updated_at: 1702300000,
+                language: Some(Some("fr".to_string())),
+                reading_time: Some(Some(42)),
+                preview_picture: Some(Some("https://new.pic/img.jpg".to_string())),
+                origin_url: Some(Some("https://new.origin".to_string())),
+                published_at: Some(Some(1702000002)),
+                published_by: Some(Some("new author".to_string())),
+                is_public: Some(Some(true)),
+                uid: Some(Some("new-uid".to_string())),
+            },
+        )
+        .await
+        .unwrap();
+        assert!(updated);
+
+        let (entry, _) = find_by_id(&mut tx, 1, 1).await.unwrap().unwrap();
+        assert_eq!(
+            entry,
+            EntryRow {
+                id: 1,
+                user_id: 1,
+                url: "https://a.com/1".to_string(),
+                hashed_url: Some("hash1".to_string()),
+                given_url: Some("https://a.com/g1".to_string()),
+                hashed_given_url: Some("ghash1".to_string()),
+                title: "new title".to_string(),
+                content: "new content".to_string(),
+                is_archived: true,
+                archived_at: Some(1702000000),
+                is_starred: true,
+                starred_at: Some(1702000001),
+                created_at: 1701428400,
+                updated_at: 1702300000,
+                mimetype: Some("text/html".to_string()),
+                language: Some("fr".to_string()),
+                reading_time: 42,
+                domain_name: "a.com".to_string(),
+                preview_picture: Some("https://new.pic/img.jpg".to_string()),
+                origin_url: Some("https://new.origin".to_string()),
+                published_at: Some(1702000002),
+                published_by: Some("new author".to_string()),
+                is_public: Some(true),
+                uid: Some("new-uid".to_string()),
+            }
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_update_by_id_partial(pool: SqlitePool) {
+        let mut tx = pool.begin().await.unwrap();
+
+        // Only update title, leave everything else untouched
+        let updated = update_by_id(
+            &mut tx,
+            1,
+            1,
+            UpdateEntry {
+                title: Some(Some("only title changed".to_string())),
+                updated_at: 1702300000,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(updated);
+
+        let (entry, _) = find_by_id(&mut tx, 1, 1).await.unwrap().unwrap();
+        assert_eq!(
+            entry,
+            EntryRow {
+                id: 1,
+                user_id: 1,
+                url: "https://a.com/1".to_string(),
+                hashed_url: Some("hash1".to_string()),
+                given_url: Some("https://a.com/g1".to_string()),
+                hashed_given_url: Some("ghash1".to_string()),
+                title: "only title changed".to_string(),
+                content: "content1".to_string(),
+                is_archived: false,
+                archived_at: None,
+                is_starred: false,
+                starred_at: None,
+                created_at: 1701428400,
+                updated_at: 1702300000,
+                mimetype: Some("text/html".to_string()),
+                language: Some("en".to_string()),
+                reading_time: 8,
+                domain_name: "a.com".to_string(),
+                preview_picture: Some("https://a.com/pic1.jpg".to_string()),
+                origin_url: Some("https://a.com/o1".to_string()),
+                published_at: Some(1701424800),
+                published_by: Some("author1".to_string()),
+                is_public: Some(false),
+                uid: None,
+            }
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_update_by_id_set_to_null(pool: SqlitePool) {
+        let mut tx = pool.begin().await.unwrap();
+
+        // Use Some(None) to set nullable fields to NULL
+        let updated = update_by_id(
+            &mut tx,
+            1,
+            1,
+            UpdateEntry {
+                language: Some(None),
+                preview_picture: Some(None),
+                origin_url: Some(None),
+                published_at: Some(None),
+                published_by: Some(None),
+                updated_at: 1702300000,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(updated);
+
+        let (entry, _) = find_by_id(&mut tx, 1, 1).await.unwrap().unwrap();
+        assert_eq!(entry.language, None);
+        assert_eq!(entry.preview_picture, None);
+        assert_eq!(entry.origin_url, None);
+        assert_eq!(entry.published_at, None);
+        assert_eq!(entry.published_by, None);
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_update_by_id_nonexistent(pool: SqlitePool) {
+        let mut tx = pool.begin().await.unwrap();
+
+        // Non-existent entry
+        let updated = update_by_id(
+            &mut tx,
+            1,
+            999,
+            UpdateEntry {
+                title: Some(Some("nope".to_string())),
+                updated_at: 1702300000,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(!updated, "Should return false for non-existent entry");
+
+        // Wrong user_id
+        let updated = update_by_id(
+            &mut tx,
+            999,
+            1,
+            UpdateEntry {
+                title: Some(Some("nope".to_string())),
+                updated_at: 1702300000,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(!updated, "Should return false for wrong user_id");
     }
 }

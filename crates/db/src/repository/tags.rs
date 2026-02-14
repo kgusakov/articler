@@ -183,7 +183,7 @@ pub async fn delete_by_id(
     .await?)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct TagRow {
     pub id: Id,
     pub user_id: Id,
