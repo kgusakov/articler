@@ -8,7 +8,7 @@ use actix_web::{
     web,
 };
 use actix_web_static_files::ResourceFiles;
-use handlebars::Handlebars;
+use handlebars::{Handlebars, TemplateError};
 use sqlx::{Pool, Sqlite};
 
 use crate::{middleware::wrap_with_tx, scraper::Scraper, token_storage::TokenStorage};
@@ -19,6 +19,17 @@ pub struct AppState {
     pub token_storage: TokenStorage,
     pub scraper: Scraper,
     pub handlebars: Handlebars<'static>,
+}
+
+impl AppState {
+    pub fn new(pool: Pool<Sqlite>, scraper: Scraper, handlebars: Handlebars<'static>) -> Self {
+        Self {
+            pool,
+            token_storage: TokenStorage::default(),
+            scraper,
+            handlebars,
+        }
+    }
 }
 
 include!(concat!(env!("OUT_DIR"), "/generated.rs"));
@@ -48,30 +59,18 @@ pub fn app(
 
 // TODO rethink 'static hardcode
 // TODO manual file registration is a bad way
-pub fn init_handlebars() -> Handlebars<'static> {
+pub fn init_handlebars() -> Result<Handlebars<'static>, TemplateError> {
     let mut handlebars = Handlebars::new();
-    handlebars
-        .register_template_string("index", include_str!("../templates/index.hbs"))
-        .unwrap();
-    handlebars
-        .register_template_string(
-            "fake_development",
-            include_str!("../templates/fake_development.hbs"),
-        )
-        .unwrap();
-    handlebars
-        .register_partial("login", include_str!("../templates/login.hbs"))
-        .unwrap();
-    handlebars
-        .register_partial("navigation", include_str!("../templates/navigation.hbs"))
-        .unwrap();
-    handlebars
-        .register_partial("main", include_str!("../templates/main.hbs"))
-        .unwrap();
-    handlebars
-        .register_partial("article", include_str!("../templates/article.hbs"))
-        .unwrap();
-    handlebars
+    handlebars.register_template_string("index", include_str!("../templates/index.hbs"))?;
+    handlebars.register_template_string(
+        "fake_development",
+        include_str!("../templates/fake_development.hbs"),
+    )?;
+    handlebars.register_partial("login", include_str!("../templates/login.hbs"))?;
+    handlebars.register_partial("navigation", include_str!("../templates/navigation.hbs"))?;
+    handlebars.register_partial("main", include_str!("../templates/main.hbs"))?;
+    handlebars.register_partial("article", include_str!("../templates/article.hbs"))?;
+    Ok(handlebars)
 }
 
 pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::Result<Server> {
@@ -83,17 +82,4 @@ pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::
             .bind(format!("0.0.0.0:{}", port))?
             .run(),
     )
-}
-
-pub fn app_state_init(
-    pool: Pool<Sqlite>,
-    scraper: Scraper,
-    handlebars: Handlebars<'static>,
-) -> AppState {
-    AppState {
-        pool,
-        token_storage: TokenStorage::default(),
-        scraper,
-        handlebars,
-    }
 }

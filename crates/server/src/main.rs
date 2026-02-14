@@ -3,7 +3,7 @@ use std::env;
 use actix_web::cookie::Key;
 use result::ArticlerResult;
 use server::{
-    app::{app_state_init, http_server, init_handlebars},
+    app::{AppState, http_server, init_handlebars},
     scraper::Scraper,
 };
 use sqlx::sqlite::SqlitePoolOptions;
@@ -36,7 +36,11 @@ async fn main() -> ArticlerResult<()> {
 
     http_server(
         port,
-        app_state_init(pool.clone(), scraper, init_handlebars()),
+        AppState::new(
+            pool.clone(),
+            scraper,
+            init_handlebars().expect("Handlebars init was failed"),
+        ),
         Key::from(cookie_key.as_bytes()),
     )?
     .await?;

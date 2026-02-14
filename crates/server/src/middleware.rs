@@ -141,7 +141,7 @@ mod tests {
             pool: pool.clone(),
             token_storage: crate::token_storage::TokenStorage::default(),
             scraper: Scraper::new(None).unwrap(),
-            handlebars: init_handlebars(),
+            handlebars: init_handlebars().unwrap(),
         });
 
         test::init_service(
@@ -210,7 +210,7 @@ mod tests {
             pool: pool.clone(),
             token_storage: crate::token_storage::TokenStorage::default(),
             scraper: Scraper::new(None).unwrap(),
-            handlebars: init_handlebars(),
+            handlebars: init_handlebars().unwrap(),
         });
 
         let app = test::init_service(

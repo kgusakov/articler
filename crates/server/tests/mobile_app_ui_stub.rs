@@ -12,7 +12,7 @@ use actix_web::{
 };
 use regex::Regex;
 use server::{
-    app::{app, app_state_init, init_handlebars},
+    app::{AppState, app, init_handlebars},
     scraper::Scraper,
 };
 use sqlx::SqlitePool;
@@ -33,10 +33,10 @@ async fn init_ui_app(
     let cookie_key = Key::from(&[0u8; 64]);
 
     test::init_service(app(
-        web::Data::new(app_state_init(
+        web::Data::new(AppState::new(
             pool,
             Scraper::new(None).unwrap(),
-            init_handlebars(),
+            init_handlebars().unwrap(),
         )),
         cookie_key,
     ))
