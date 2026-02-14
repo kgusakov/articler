@@ -69,7 +69,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
                                     .route(delete().to(delete_tags_by_label)),
                             )
                             .service(
-                                web::resource(["/{tag_id}.json", "tag_id"])
+                                web::resource(["/{tag_id}.json", "{tag_id}"])
                                     .route(delete().to(delete_tag_by_id)),
                             ),
                     )

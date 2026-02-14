@@ -1,4 +1,4 @@
-use std::sync::Once;
+use std::{fmt::format, sync::Once};
 
 use actix_http::{Request, StatusCode, header};
 use actix_web::{
@@ -11,6 +11,8 @@ use actix_web::{
 };
 
 use chrono::{DateTime, Utc};
+use rstest::rstest;
+use rstest_reuse::apply;
 use serde_json::{Value, json};
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use sqlx::SqlitePool;
@@ -82,13 +84,37 @@ async fn auhorization_header(
     format!("Bearer {access_token}")
 }
 
+fn assert_json_date_between(
+    before: &DateTime<Utc>,
+    after: &DateTime<Utc>,
+    date_json_field: &str,
+    json: &Value,
+) {
+    if let Value::Object(m) = json {
+        let date_str = m.get(date_json_field).unwrap().as_str().unwrap();
+        let date = DateTime::parse_from_rfc3339(date_str)
+            .unwrap()
+            .with_timezone(&Utc);
+        assert!(date.timestamp() >= before.timestamp() && date.timestamp() <= after.timestamp());
+    } else {
+        panic!("{} is expected, but not found", date_json_field);
+    }
+}
+
+#[rstest_reuse::template]
+#[rstest]
+#[case::no_format("")]
+#[case::json_format(".json")]
+fn formats(#[case] f: &str) {}
+
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn get_entries_json(pool: SqlitePool) {
+async fn get_entries(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::default()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries.json")
+        .uri(&format!("/api/entries{f}"))
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -101,13 +127,14 @@ async fn get_entries_json(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn test_entries_exists(pool: SqlitePool) {
+async fn entries_exists(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::default()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/exists.json")
+        .uri(&format!("/api/entries/exists{f}"))
         .to_request();
 
     let resp: Value = test::call_and_read_body_json(&app, req).await;
@@ -117,12 +144,13 @@ async fn test_entries_exists(pool: SqlitePool) {
     assert_json_eq!(expected, resp);
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_get_version(pool: SqlitePool) {
+async fn get_version(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::default()
-        .uri("/api/version.json")
+        .uri(&format!("/api/version{f}"))
         .to_request();
 
     let resp: Value = test::call_and_read_body_json(&app, req).await;
@@ -130,14 +158,15 @@ async fn test_get_version(pool: SqlitePool) {
     assert_eq!("2.6.12", resp.as_str().unwrap());
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_options_version_json(pool: SqlitePool) {
+async fn options_version(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::default()
         .method(actix_http::Method::OPTIONS)
         .append_header((header::ACCESS_CONTROL_REQUEST_METHOD, "GET"))
-        .uri("/api/version.json")
+        .uri(&format!("/api/version{f}"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -160,58 +189,6 @@ async fn test_options_version_json(pool: SqlitePool) {
         ["GET", "POST", "PATCH"]
             .iter()
             .all(|m| sorted_result.contains(m))
-    );
-}
-
-#[sqlx::test(migrations = "../../migrations")]
-async fn test_options_version(pool: SqlitePool) {
-    let app = init_app(pool).await;
-
-    let req = test::TestRequest::default()
-        .method(actix_http::Method::OPTIONS)
-        .append_header((header::ACCESS_CONTROL_REQUEST_METHOD, "GET"))
-        .uri("/api/version")
-        .to_request();
-
-    let resp = test::call_service(&app, req).await;
-
-    assert_eq!(StatusCode::OK, resp.status());
-
-    let mut sorted_result: Vec<&str> = resp
-        .headers()
-        .get(header::ACCESS_CONTROL_ALLOW_METHODS)
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .split(",")
-        .map(|s| s.trim())
-        .collect();
-
-    sorted_result.sort();
-
-    assert!(
-        ["GET", "POST", "PATCH"]
-            .iter()
-            .all(|m| sorted_result.contains(m))
-    );
-}
-
-#[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn get_entries(pool: SqlitePool) {
-    let app = init_app(pool).await;
-
-    let req = test::TestRequest::default()
-        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries")
-        .to_request();
-
-    let resp = test::call_and_read_body(&app, req).await;
-
-    let expected: Value = serde_json::from_str(include_str!("json/entries.json")).unwrap();
-
-    assert_json_eq!(
-        expected,
-        serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
     );
 }
 
@@ -332,15 +309,16 @@ async fn get_entries_public(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn test_post_entries_form_data(pool: SqlitePool) {
+async fn post_entries_form_data(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let payload = "url=https://example.com/article&archive=1&starred=1&tags=label 1,label 2&title=New title&content=New content&language=ru&published_at=2023-12-01T11:00:00Z&preview_picture=https://example.com/pic.jpg&authors=author1,author2&public=1&origin_url=https://example.com/origin/url";
 
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries")
+        .uri(&format!("/api/entries{f}"))
         .set_payload(payload)
         .insert_header(("content-type", "application/x-www-form-urlencoded"))
         .to_request();
@@ -367,13 +345,14 @@ async fn test_post_entries_form_data(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn test_post_entries_json_data(pool: SqlitePool) {
+async fn post_entries_json_data(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries")
+        .uri(&format!("/api/entries{f}"))
         .set_json(json!({
             "url": "https://example.com/article",
             "archive": 1,
@@ -414,88 +393,7 @@ async fn test_post_entries_json_data(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn test_post_entries_json_format_form_data(pool: SqlitePool) {
-    let app = init_app(pool).await;
-
-    let payload = "url=https://example.com/article&archive=1&starred=1&tags=label 1,label 2&title=New title&content=New content&language=ru&published_at=2023-12-01T11:00:00Z&preview_picture=https://example.com/pic.jpg&authors=author1,author2&public=1&origin_url=https://example.com/origin/url";
-
-    let req = test::TestRequest::post()
-        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries.json")
-        .set_payload(payload)
-        .insert_header(("content-type", "application/x-www-form-urlencoded"))
-        .to_request();
-
-    let before_call_time = Utc::now();
-    let resp = test::call_and_read_body(&app, req).await;
-    let after_call_time = Utc::now();
-
-    let expected = serde_json::from_str::<Value>(include_str!("json/create_entry.json")).unwrap();
-
-    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
-
-    assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
-    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
-
-    assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
-    assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
-    assert_json_date_between(&before_call_time, &after_call_time, "starred_at", &result);
-    assert_json_date_between(&before_call_time, &after_call_time, "archived_at", &result);
-
-    assert_json_include!(
-        actual: result,
-        expected: expected
-    );
-}
-
-#[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn test_post_entries_json_format_json_data(pool: SqlitePool) {
-    let app = init_app(pool).await;
-
-    let req = test::TestRequest::post()
-        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries.json")
-        .set_json(json!({
-            "url": "https://example.com/article",
-            "archive": 1,
-            "starred": 1,
-            "tags": "label 1,label 2",
-            "title": "New title",
-            "content": "New content",
-            "language": "ru",
-            "published_at": "2023-12-01T11:00:00Z",
-            "preview_picture": "https://example.com/pic.jpg",
-            "authors": "author1,author2",
-            "public": 1,
-            "origin_url": "https://example.com/origin/url"
-        }))
-        .insert_header(("content-type", "application/json"))
-        .to_request();
-
-    let before_call_time = Utc::now();
-    let resp = test::call_and_read_body(&app, req).await;
-    let after_call_time = Utc::now();
-
-    let expected = serde_json::from_str::<Value>(include_str!("json/create_entry.json")).unwrap();
-
-    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
-
-    assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
-    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
-
-    assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
-    assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
-    assert_json_date_between(&before_call_time, &after_call_time, "starred_at", &result);
-    assert_json_date_between(&before_call_time, &after_call_time, "archived_at", &result);
-
-    assert_json_include!(
-        actual: result,
-        expected: expected
-    );
-}
-
-#[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn test_post_entries_with_scraping_needed(pool: SqlitePool) {
+async fn post_entries_with_scraping_needed(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let mock_server = MockServer::start().await;
@@ -519,7 +417,7 @@ async fn test_post_entries_with_scraping_needed(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries.json")
+        .uri("/api/entries")
         .set_payload(payload)
         .insert_header(("content-type", "application/x-www-form-urlencoded"))
         .to_request();
@@ -563,7 +461,7 @@ async fn test_post_entries_with_scraping_needed(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn test_post_entries_with_scraping_error(pool: SqlitePool) {
+async fn post_entries_with_scraping_error(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let mock_server = MockServer::start().await;
@@ -586,7 +484,7 @@ async fn test_post_entries_with_scraping_error(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries.json")
+        .uri("/api/entries")
         .set_payload(payload)
         .insert_header(("content-type", "application/x-www-form-urlencoded"))
         .to_request();
@@ -629,30 +527,14 @@ async fn test_post_entries_with_scraping_error(pool: SqlitePool) {
     assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
 }
 
-fn assert_json_date_between(
-    before: &DateTime<Utc>,
-    after: &DateTime<Utc>,
-    date_json_field: &str,
-    json: &Value,
-) {
-    if let Value::Object(m) = json {
-        let date_str = m.get(date_json_field).unwrap().as_str().unwrap();
-        let date = DateTime::parse_from_rfc3339(date_str)
-            .unwrap()
-            .with_timezone(&Utc);
-        assert!(date.timestamp() >= before.timestamp() && date.timestamp() <= after.timestamp());
-    } else {
-        panic!("{} is expected, but not found", date_json_field);
-    }
-}
-
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn delete_entry_expect_id(pool: SqlitePool) {
+async fn delete_entry_expect_id(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool.clone()).await;
 
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/1.json?expect=id")
+        .uri(&format!("/api/entries/1{f}?expect=id"))
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -697,13 +579,14 @@ async fn delete_entry_expect_full(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn delete_entry_not_found(pool: SqlitePool) {
+async fn delete_entry_not_found(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/999.json?expect=id")
+        .uri(&format!("/api/entries/999{f}?expect=id"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -715,13 +598,14 @@ async fn delete_entry_not_found(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn patch_entry_basic_fields(pool: SqlitePool) {
+async fn patch_entry_with_some_fields(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/1.json")
+        .uri(&format!("/api/entries/1{f}"))
         .set_form([
             ("title", "Updated Title"),
             ("content", "Updated Content"),
@@ -752,7 +636,7 @@ async fn patch_entry_archive_and_star(pool: SqlitePool) {
     // Archive and star entry 1 (which is not archived and not starred)
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/1.json")
+        .uri("/api/entries/1")
         .set_form([("archive", "1"), ("starred", "1")])
         .to_request();
 
@@ -779,7 +663,7 @@ async fn patch_entry_unarchive_and_unstar(pool: SqlitePool) {
     // Unarchive and unstar entry 4 (which is archived and starred)
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/4.json")
+        .uri("/api/entries/4")
         .set_form([("archive", "0"), ("starred", "0")])
         .to_request();
 
@@ -800,7 +684,7 @@ async fn patch_entry_add_tags(pool: SqlitePool) {
     // Add tags to entry 1 (which has no tags)
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/1.json")
+        .uri("/api/entries/1")
         .set_form([("tags", "newtag1,newtag2")])
         .to_request();
 
@@ -821,7 +705,7 @@ async fn patch_entry_replace_tags(pool: SqlitePool) {
     // Replace tags on entry 2 (which has label1 and label2)
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/2.json")
+        .uri("/api/entries/2")
         .set_form([("tags", "label3,newtag")])
         .to_request();
 
@@ -842,7 +726,7 @@ async fn patch_entry_remove_all_tags(pool: SqlitePool) {
     // Remove all tags from entry 2 (which has label1 and label2)
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/2.json")
+        .uri("/api/entries/2")
         .set_form([("tags", "")])
         .to_request();
 
@@ -852,13 +736,14 @@ async fn patch_entry_remove_all_tags(pool: SqlitePool) {
     assert!(result.get("tags").unwrap().as_array().unwrap().is_empty());
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn patch_entry_not_found(pool: SqlitePool) {
+async fn patch_entry_not_found(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/999.json")
+        .uri(&format!("/api/entries/999{f}"))
         .set_form([("title", "Updated")])
         .to_request();
 
@@ -878,7 +763,7 @@ async fn patch_entry_make_public(pool: SqlitePool) {
     // Make entry 1 public (which is not public)
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/1.json")
+        .uri("/api/entries/1")
         .set_form([("public", "1")])
         .to_request();
 
@@ -889,13 +774,14 @@ async fn patch_entry_make_public(pool: SqlitePool) {
     assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn get_tags_for_entry_with_tags(pool: SqlitePool) {
+async fn get_tags_for_entry_with_tags(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::get()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/2/tags")
+        .uri(&format!("/api/entries/2/tags{f}"))
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -920,9 +806,7 @@ async fn get_tags_for_entry_without_tags(pool: SqlitePool) {
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
-    let expected =
-        serde_json::from_str::<Value>(include_str!("json/get_tags_for_entry_without_tags.json"))
-            .unwrap();
+    let expected = serde_json::from_str::<Value>("[]").unwrap();
 
     assert_json_eq!(
         expected,
@@ -930,13 +814,14 @@ async fn get_tags_for_entry_without_tags(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn get_tags_for_nonexistent_entry(pool: SqlitePool) {
+async fn get_tags_for_nonexistent_entry(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::get()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/999/tags")
+        .uri(&format!("/api/entries/999/tags{f}"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -948,34 +833,14 @@ async fn get_tags_for_nonexistent_entry(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn get_tags_for_entry_with_tags_json(pool: SqlitePool) {
+async fn get_all_tags(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::get()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/2/tags.json")
-        .to_request();
-
-    let resp = test::call_and_read_body(&app, req).await;
-    let expected =
-        serde_json::from_str::<Value>(include_str!("json/get_tags_for_entry_with_tags.json"))
-            .unwrap();
-    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
-
-    assert_json_include!(
-        actual: result,
-        expected: expected
-    );
-}
-
-#[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn test_get_all_tags(pool: SqlitePool) {
-    let app = init_app(pool).await;
-
-    let req = test::TestRequest::get()
-        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/tags")
+        .uri(&format!("/api/tags{f}"))
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -989,12 +854,12 @@ async fn test_get_all_tags(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users"))]
-async fn test_get_all_tags_empty(pool: SqlitePool) {
+async fn get_all_tags_empty(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::get()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/tags.json")
+        .uri("/api/tags")
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -1008,14 +873,15 @@ async fn test_get_all_tags_empty(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn delete_tag_from_entry_success(pool: SqlitePool) {
+async fn delete_tag_from_entry_success(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Delete tag_id=1 (label1) from entry 2
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/2/tags/1")
+        .uri(&format!("/api/entries/2/tags/1{f}"))
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -1053,14 +919,15 @@ async fn delete_nonexistent_tag_from_entry(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn delete_tag_from_nonexistent_entry(pool: SqlitePool) {
+async fn delete_tag_from_nonexistent_entry(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Try to delete tag from non-existent entry 999
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/999/tags/1")
+        .uri(&format!("/api/entries/999/tags/1{f}"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -1072,14 +939,15 @@ async fn delete_tag_from_nonexistent_entry(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn delete_tag_by_label_success(pool: SqlitePool) {
+async fn delete_tag_by_label_success(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Delete tag with label "label1"
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/tag/label.json?tag=label1")
+        .uri(&format!("/api/tag/label{f}?tag=label1"))
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -1094,14 +962,15 @@ async fn delete_tag_by_label_success(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn delete_nonexistent_tag_by_label(pool: SqlitePool) {
+async fn delete_nonexistent_tag_by_label(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Try to delete non-existent tag
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/tag/label.json?tag=nonexistent")
+        .uri(&format!("/api/tag/label{f}?tag=nonexistent"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -1200,14 +1069,15 @@ async fn delete_tags_by_label_empty(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn delete_tag_by_id_success(pool: SqlitePool) {
+async fn delete_tag_by_id_success(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Delete tag with id=1 (label1)
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/tags/1.json")
+        .uri(&format!("/api/tags/1{f}"))
         .to_request();
 
     let resp = test::call_and_read_body(&app, req).await;
@@ -1221,14 +1091,15 @@ async fn delete_tag_by_id_success(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn delete_tag_by_id_not_found(pool: SqlitePool) {
+async fn delete_tag_by_id_not_found(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Try to delete non-existent tag
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/tag/999.json")
+        .uri(&format!("/api/tag/999{f}"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -1236,14 +1107,15 @@ async fn delete_tag_by_id_not_found(pool: SqlitePool) {
     assert_eq!(resp.status(), 404, "Should return 404 for non-existent tag");
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn post_entry_tags_add(pool: SqlitePool) {
+async fn post_entry_tags_add(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Entry 1 initially has no tags, add label3 and label4
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/1/tags.json")
+        .uri(&format!("/api/entries/1/tags{f}"))
         .set_form([("tags", "label3,label4")])
         .to_request();
 
@@ -1258,14 +1130,15 @@ async fn post_entry_tags_add(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn post_entry_tags_replace(pool: SqlitePool) {
+async fn post_entry_tags_replace(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Entry 2 initially has label1 and label2, replace with label5 and label6
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/2/tags.json")
+        .uri(&format!("/api/entries/2/tags{f}"))
         .set_form([("tags", "label5,label6")])
         .to_request();
 
@@ -1287,7 +1160,7 @@ async fn post_entry_tags_remove_all(pool: SqlitePool) {
     // Entry 2 initially has label1 and label2, remove all by posting empty tags
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/2/tags.json")
+        .uri("/api/entries/2/tags")
         .set_form([("tags", "")])
         .to_request();
 
@@ -1303,14 +1176,15 @@ async fn post_entry_tags_remove_all(pool: SqlitePool) {
     );
 }
 
+#[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn post_entry_tags_not_found(pool: SqlitePool) {
+async fn post_entry_tags_not_found(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
     // Try to post tags to non-existent entry
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .uri("/api/entries/999/tags.json")
+        .uri(&format!("/api/entries/999/tags{f}"))
         .set_form([("tags", "label1,label2")])
         .to_request();
 
@@ -1324,14 +1198,14 @@ async fn post_entry_tags_not_found(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn test_auth_wrong_bearer(pool: SqlitePool) {
+async fn auth_wrong_bearer(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let access_token = "wrong_token";
 
     let req = test::TestRequest::default()
         .append_header((header::AUTHORIZATION, format!("Bearer {access_token}")))
-        .uri("/api/entries.json")
+        .uri("/api/entries")
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -1352,11 +1226,11 @@ async fn test_auth_wrong_bearer(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
-async fn test_auth_no_bearer(pool: SqlitePool) {
+async fn auth_no_bearer(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let req = test::TestRequest::default()
-        .uri("/api/entries.json")
+        .uri("/api/entries")
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -1377,7 +1251,7 @@ async fn test_auth_no_bearer(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries", "oauth"))]
-async fn test_auth_success(pool: SqlitePool) {
+async fn auth_success(pool: SqlitePool) {
     let app = init_app(pool).await;
 
     let access_token = {
@@ -1408,7 +1282,7 @@ async fn test_auth_success(pool: SqlitePool) {
 
     let req = test::TestRequest::default()
         .append_header((header::AUTHORIZATION, format!("Bearer {access_token}")))
-        .uri("/api/entries.json")
+        .uri("/api/entries")
         .to_request();
 
     let resp = test::call_service(&app, req).await;
