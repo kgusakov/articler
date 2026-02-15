@@ -235,8 +235,6 @@ async fn get_entries_with_pages(pool: SqlitePool) {
 async fn get_entries_page_out_of_range(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // With 6 entries and perPage=2, total pages = ceil(6/2) = 3
-    // Requesting page=10 should return 404
     let req = test::TestRequest::default()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries?page=10&perPage=2")
@@ -467,7 +465,6 @@ async fn post_entries_with_scraping_error(pool: SqlitePool) {
     let mock_server = MockServer::start().await;
     let base_server_uri = mock_server.uri();
 
-    // Return malformed HTML that will cause readability parser to fail
     let content = r#"
             <!DOCTYPE html><html><body><!-- This HTML is intentionally broken and incomplete to trigger parsing error
         "#;
@@ -495,34 +492,27 @@ async fn post_entries_with_scraping_error(pool: SqlitePool) {
 
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
-    // Verify that entry was created despite scraping error
     assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
 
-    // Verify URL fields are set correctly
     assert_eq!(url, result.get("url").unwrap().as_str().unwrap());
     assert_eq!(
         hash_str(&url),
         result.get("hashed_url").unwrap().as_str().unwrap()
     );
 
-    // Verify title is extracted from URL path (fallback behavior)
     assert_eq!(
         "parsing-error",
         result.get("title").unwrap().as_str().unwrap()
     );
 
-    // Verify content is empty (fallback behavior)
     assert_eq!("", result.get("content").unwrap().as_str().unwrap());
 
-    // Verify mime_type is empty (fallback behavior)
     assert_eq!("", result.get("mimetype").unwrap().as_str().unwrap());
 
-    // Verify optional fields are null (fallback behavior)
     assert!(result.get("published_at").unwrap().is_null());
     assert!(result.get("language").unwrap().is_null());
     assert!(result.get("preview_picture").unwrap().is_null());
 
-    // Verify timestamps are set
     assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
     assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
 }
@@ -660,7 +650,6 @@ async fn patch_entry_archive_and_star(pool: SqlitePool) {
 async fn patch_entry_unarchive_and_unstar(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Unarchive and unstar entry 4 (which is archived and starred)
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/4")
@@ -681,7 +670,6 @@ async fn patch_entry_unarchive_and_unstar(pool: SqlitePool) {
 async fn patch_entry_add_tags(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Add tags to entry 1 (which has no tags)
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/1")
@@ -702,7 +690,6 @@ async fn patch_entry_add_tags(pool: SqlitePool) {
 async fn patch_entry_replace_tags(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Replace tags on entry 2 (which has label1 and label2)
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/2")
@@ -723,7 +710,6 @@ async fn patch_entry_replace_tags(pool: SqlitePool) {
 async fn patch_entry_remove_all_tags(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Remove all tags from entry 2 (which has label1 and label2)
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/2")
@@ -760,7 +746,6 @@ async fn patch_entry_not_found(f: &str, #[ignore] pool: SqlitePool) {
 async fn patch_entry_make_public(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Make entry 1 public (which is not public)
     let req = test::TestRequest::patch()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/1")
@@ -878,7 +863,6 @@ async fn get_all_tags_empty(pool: SqlitePool) {
 async fn delete_tag_from_entry_success(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Delete tag_id=1 (label1) from entry 2
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri(&format!("/api/entries/2/tags/1{f}"))
@@ -900,7 +884,6 @@ async fn delete_tag_from_entry_success(f: &str, #[ignore] pool: SqlitePool) {
 async fn delete_nonexistent_tag_from_entry(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Try to delete non-existent tag_id=999 from entry 2
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/2/tags/999")
@@ -912,7 +895,6 @@ async fn delete_nonexistent_tag_from_entry(pool: SqlitePool) {
             .unwrap();
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
-    // Entry should be returned unchanged with both original tags
     assert_json_include!(
         actual: result,
         expected: expected
@@ -924,7 +906,6 @@ async fn delete_nonexistent_tag_from_entry(pool: SqlitePool) {
 async fn delete_tag_from_nonexistent_entry(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Try to delete tag from non-existent entry 999
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri(&format!("/api/entries/999/tags/1{f}"))
@@ -944,7 +925,6 @@ async fn delete_tag_from_nonexistent_entry(f: &str, #[ignore] pool: SqlitePool) 
 async fn delete_tag_by_label_success(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Delete tag with label "label1"
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri(&format!("/api/tag/label{f}?tag=label1"))
@@ -967,7 +947,6 @@ async fn delete_tag_by_label_success(f: &str, #[ignore] pool: SqlitePool) {
 async fn delete_nonexistent_tag_by_label(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Try to delete non-existent tag
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri(&format!("/api/tag/label{f}?tag=nonexistent"))
@@ -982,7 +961,6 @@ async fn delete_nonexistent_tag_by_label(f: &str, #[ignore] pool: SqlitePool) {
 async fn delete_tags_by_label_success(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Delete multiple tags with labels "label1", "label2", "label3"
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/tags/label.json?tags=label1,label2,label3")
@@ -1004,7 +982,6 @@ async fn delete_tags_by_label_success(pool: SqlitePool) {
 async fn delete_tags_by_label_partial(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Delete mix of existent and non-existent tags
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/tags/label.json?tags=label1,nonexistent,label2")
@@ -1013,7 +990,6 @@ async fn delete_tags_by_label_partial(pool: SqlitePool) {
     let resp = test::call_and_read_body(&app, req).await;
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
-    // Should return array with only the 2 existing tags
     let tags = result.as_array().unwrap();
     assert_eq!(tags.len(), 2, "Should return 2 deleted tags");
 
@@ -1029,7 +1005,6 @@ async fn delete_tags_by_label_partial(pool: SqlitePool) {
 async fn delete_tags_by_label_nonexistent(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Try to delete all non-existent tags
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/tags/label.json?tags=fake1,fake2,fake3")
@@ -1038,7 +1013,6 @@ async fn delete_tags_by_label_nonexistent(pool: SqlitePool) {
     let resp = test::call_and_read_body(&app, req).await;
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
-    // Should return empty array
     let tags = result.as_array().unwrap();
     assert_eq!(
         tags.len(),
@@ -1051,7 +1025,6 @@ async fn delete_tags_by_label_nonexistent(pool: SqlitePool) {
 async fn delete_tags_by_label_empty(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Try to delete with empty tags parameter
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/tags/label.json?tags=")
@@ -1060,7 +1033,6 @@ async fn delete_tags_by_label_empty(pool: SqlitePool) {
     let resp = test::call_and_read_body(&app, req).await;
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
-    // Should return empty array
     let tags = result.as_array().unwrap();
     assert_eq!(
         tags.len(),
@@ -1074,7 +1046,6 @@ async fn delete_tags_by_label_empty(pool: SqlitePool) {
 async fn delete_tag_by_id_success(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Delete tag with id=1 (label1)
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri(&format!("/api/tags/1{f}"))
@@ -1096,7 +1067,6 @@ async fn delete_tag_by_id_success(f: &str, #[ignore] pool: SqlitePool) {
 async fn delete_tag_by_id_not_found(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Try to delete non-existent tag
     let req = test::TestRequest::delete()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri(&format!("/api/tag/999{f}"))
@@ -1112,7 +1082,6 @@ async fn delete_tag_by_id_not_found(f: &str, #[ignore] pool: SqlitePool) {
 async fn post_entry_tags_add(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Entry 1 initially has no tags, add label3 and label4
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri(&format!("/api/entries/1/tags{f}"))
@@ -1135,7 +1104,6 @@ async fn post_entry_tags_add(f: &str, #[ignore] pool: SqlitePool) {
 async fn post_entry_tags_replace(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Entry 2 initially has label1 and label2, replace with label5 and label6
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri(&format!("/api/entries/2/tags{f}"))
@@ -1157,7 +1125,6 @@ async fn post_entry_tags_replace(f: &str, #[ignore] pool: SqlitePool) {
 async fn post_entry_tags_remove_all(pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Entry 2 initially has label1 and label2, remove all by posting empty tags
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries/2/tags")
@@ -1167,7 +1134,6 @@ async fn post_entry_tags_remove_all(pool: SqlitePool) {
     let resp = test::call_and_read_body(&app, req).await;
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
-    // Verify entry has no tags
     let tags = result["tags"].as_array().unwrap();
     assert_eq!(
         tags.len(),
@@ -1181,7 +1147,6 @@ async fn post_entry_tags_remove_all(pool: SqlitePool) {
 async fn post_entry_tags_not_found(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 
-    // Try to post tags to non-existent entry
     let req = test::TestRequest::post()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri(&format!("/api/entries/999/tags{f}"))

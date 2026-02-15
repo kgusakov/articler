@@ -30,7 +30,6 @@ fn main() -> std::io::Result<()> {
         }
     }
 
-    // Static resources
     let mut res = resource_dir("./static");
     res.with_generated_fn("static_resources");
     res.build()?;

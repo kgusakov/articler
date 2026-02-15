@@ -1,0 +1,92 @@
+<style>
+    code {
+        outline: none !important;
+    }
+
+    code::selection {
+        background-color: #bfdbfe;
+    }
+
+    #copyNotification {
+        transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    }
+
+    #copyNotification.show {
+        opacity: 1 !important;
+        transform: translateY(0) !important;
+    }
+</style>
+
+<script>
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            const notification = document.getElementById('copyNotification');
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 2000);
+        });
+    }
+</script>
+
+<div class="bg-white p-8">
+    <div class="max-w-2xl mx-auto">
+        <div class="flex items-center justify-between mb-8">
+            <h1 class="text-3xl font-light">OAuth Clients</h1>
+        </div>
+
+        <!-- Create Form -->
+        <form class="flex gap-3 mb-8 pb-8 border-b">
+            <input type="text" name="client_name" placeholder="Client name"
+                class="flex-1 px-4 py-2 border-b-2 border-gray-300 focus:border-blue-500 focus:outline-none">
+            <button type="submit"
+                class="px-6 py-2 border-2 border-black hover:bg-black hover:text-white transition-colors">
+                Create
+            </button>
+        </form>
+
+        <!-- Clients -->
+        <div class="space-y-1">
+            {{#each clients}}
+            <details class="group">
+                <summary class="px-4 py-3 cursor-pointer hover:bg-gray-100 flex justify-between items-center list-none">
+                    <span class="font-medium">{{client_name}}</span>
+                    <span class="text-gray-400 group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div class="px-4 py-4 bg-gray-50 grid gap-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs uppercase text-gray-500 w-24">Client ID</span>
+                        <code
+                            class="flex-1 text-sm bg-gray-100 px-2 py-1 border border-gray-300 text-gray-700 select-text ">{{client_id}}</code>
+                        <button onclick="copyToClipboard('{{client_id}}')"
+                            class="px-2 py-1 text-xs border border-gray-400 hover:bg-gray-200 transition-colors">
+                            Copy
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs uppercase text-gray-500 w-24">Secret</span>
+                        <code
+                            class="flex-1 text-sm bg-gray-100 px-2 py-1 border border-gray-300 text-gray-700 select-text ">{{client_secret}}</code>
+                        <button onclick="copyToClipboard('{{client_secret}}')"
+                            class="px-2 py-1 text-xs border border-gray-400 hover:bg-gray-200 transition-colors">
+                            Copy
+                        </button>
+                    </div>
+                    <div class="flex justify-end pt-2">
+                        <button
+                            class="px-4 py-1 border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white transition-colors text-sm">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </details>
+            {{/each}}
+        </div>
+    </div>
+
+    <!-- Copy Notification -->
+    <div id="copyNotification"
+        class="fixed bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 bg-black text-white text-sm rounded opacity-0 transform translate-y-2 pointer-events-none">
+        Copied
+    </div>
+</div>

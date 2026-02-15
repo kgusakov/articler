@@ -8,11 +8,12 @@ use actix_web::{
 };
 use serde::Serialize;
 
-use crate::{app::AppState, middleware::TransactionContext, web::ui::do_login};
-use db::repository::{
-    Id,
-    clients::{self, ClientRow},
+use crate::{
+    app::AppState,
+    middleware::TransactionContext,
+    web::{template_data::Client, ui::do_login},
 };
+use db::repository::clients::{self};
 
 // The whole file is just a fake pages to support the way of authorization, which Android app and browser extensions are using
 
@@ -61,23 +62,4 @@ async fn developer(
 #[derive(Serialize)]
 struct Clients {
     clients: Vec<Client>,
-}
-
-#[derive(Serialize)]
-struct Client {
-    id: Id,
-    client_id: String,
-    client_name: String,
-    client_secret: String,
-}
-
-impl From<ClientRow> for Client {
-    fn from(value: ClientRow) -> Self {
-        Client {
-            id: value.id,
-            client_id: value.client_id,
-            client_name: value.name,
-            client_secret: value.client_secret,
-        }
-    }
 }

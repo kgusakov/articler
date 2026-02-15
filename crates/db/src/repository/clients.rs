@@ -130,7 +130,6 @@ mod tests {
         let now = chrono::Utc::now().timestamp();
         let user_id = 1;
 
-        // Create a new client
         let client = create_client(
             &mut tx,
             user_id,
@@ -142,7 +141,6 @@ mod tests {
         .await
         .unwrap();
 
-        // Verify the created client has the correct fields
         let expected_client = ClientRow {
             id: client.id, // ID is auto-generated, so we use the returned value
             name: "Test Client".to_string(),
@@ -155,7 +153,6 @@ mod tests {
         assert!(client.id > 0, "Client should have a positive id");
         assert_eq!(client, expected_client);
 
-        // Verify client is in database by finding it
         let found_client = find_by_user_id_client_id_and_secret(
             &mut tx,
             user_id,
@@ -191,7 +188,6 @@ mod tests {
 
         assert_eq!(client, Some(expected_client));
 
-        // Test successful lookup for second client
         let client = find_by_user_id_client_id_and_secret(&mut tx, 1, "client_2", "secret_2")
             .await
             .unwrap();
@@ -207,7 +203,6 @@ mod tests {
 
         assert_eq!(client, Some(expected_client_2));
 
-        // Test failure with wrong client_secret
         let no_client =
             find_by_user_id_client_id_and_secret(&mut tx, 1, "client_1", "wrong_secret")
                 .await
@@ -215,7 +210,6 @@ mod tests {
 
         assert_eq!(no_client, None);
 
-        // Test failure with wrong client_id
         let no_client =
             find_by_user_id_client_id_and_secret(&mut tx, 1, "wrong_client", "secret_1")
                 .await
@@ -223,14 +217,12 @@ mod tests {
 
         assert_eq!(no_client, None);
 
-        // Test failure with wrong user_id
         let no_client = find_by_user_id_client_id_and_secret(&mut tx, 999, "client_1", "secret_1")
             .await
             .unwrap();
 
         assert_eq!(no_client, None);
 
-        // Test failure with all wrong parameters
         let mut tx = pool.begin().await.unwrap();
         let no_client =
             find_by_user_id_client_id_and_secret(&mut tx, 999, "wrong_client", "wrong_secret")
@@ -245,7 +237,6 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_client_name_and_user_id(pool: SqlitePool) {
-        // Test successful lookup with valid user_id and client name
         let mut tx = pool.begin().await.unwrap();
         let client = find_by_client_name_and_user_id(&mut tx, 1, "Android app")
             .await
@@ -262,21 +253,18 @@ mod tests {
 
         assert_eq!(client, Some(expected_client));
 
-        // Test failure with wrong user_id
         let no_client = find_by_client_name_and_user_id(&mut tx, 999, "Android app")
             .await
             .unwrap();
 
         assert_eq!(no_client, None);
 
-        // Test failure with wrong client name
         let no_client = find_by_client_name_and_user_id(&mut tx, 1, "Nonexistent App")
             .await
             .unwrap();
 
         assert_eq!(no_client, None);
 
-        // Test failure with both wrong parameters
         let no_client = find_by_client_name_and_user_id(&mut tx, 999, "Nonexistent App")
             .await
             .unwrap();
@@ -289,7 +277,6 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_find_by_user_id(pool: SqlitePool) {
-        // Test finding all clients for user 1 (should have 3 clients)
         let mut tx = pool.begin().await.unwrap();
         let mut clients = find_by_user_id(&mut tx, 1).await.unwrap();
         clients.sort_by_key(|c| c.id);
@@ -323,7 +310,6 @@ mod tests {
 
         assert_eq!(clients, expected_clients);
 
-        // Test finding all clients for user 2 (should have 1 client)
         let mut tx = pool.begin().await.unwrap();
         let clients = find_by_user_id(&mut tx, 2).await.unwrap();
 
@@ -344,7 +330,6 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_find_by_user_id_nonexistent_user(pool: SqlitePool) {
-        // Test finding clients for non-existent user (should return empty vector)
         let mut tx = pool.begin().await.unwrap();
         let clients = find_by_user_id(&mut tx, 999).await.unwrap();
 

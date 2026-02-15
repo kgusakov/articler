@@ -219,12 +219,10 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_by_label(pool: SqlitePool) {
-        // Verify initial 6 tags from fixtures
         let mut tx = pool.begin().await.unwrap();
         let initial_tags = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
 
-        // Delete "label1" by label
         let deleted_tag = delete_by_label(&mut tx, 1, "label1").await.unwrap();
         assert!(deleted_tag.is_some(), "Should return deleted tag");
         let deleted = deleted_tag.unwrap();
@@ -237,11 +235,9 @@ mod tests {
             "Deleted tag should have slug 'slug1'"
         );
 
-        // Verify only 5 tags remain
         let tags_after = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(tags_after.len(), 5, "Should have 5 tags after deletion");
 
-        // Verify CASCADE behavior: entry 2 should lose label1 but keep label2
         let entry_tags = find_by_entry_id(&mut tx, 1, 2).await.unwrap();
         assert_eq!(
             entry_tags.len(),
@@ -253,14 +249,12 @@ mod tests {
             "Entry 2 should only have label2"
         );
 
-        // Try deleting non-existent label
         let not_deleted = delete_by_label(&mut tx, 1, "nonexistent").await.unwrap();
         assert!(
             not_deleted.is_none(),
             "Should return None for non-existent label"
         );
 
-        // Verify count unchanged after failed deletion
         let final_tags = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(
             final_tags.len(),
@@ -274,12 +268,10 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_all_by_label(pool: SqlitePool) {
-        // Verify initial 6 tags from fixtures
         let mut tx = pool.begin().await.unwrap();
         let initial_tags = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
 
-        // Delete multiple tags: label1, label2, label3
         let labels_to_delete = vec![
             "label1".to_string(),
             "label2".to_string(),
@@ -289,27 +281,22 @@ mod tests {
             .await
             .unwrap();
 
-        // Verify 3 tags were deleted and returned
         assert_eq!(deleted_tags.len(), 3, "Should return 3 deleted tags");
 
-        // Verify the returned tags have correct labels
         let deleted_labels: Vec<String> = deleted_tags.iter().map(|t| t.label.clone()).collect();
         assert!(deleted_labels.contains(&"label1".to_string()));
         assert!(deleted_labels.contains(&"label2".to_string()));
         assert!(deleted_labels.contains(&"label3".to_string()));
 
-        // Verify only 3 tags remain in database
         let remaining_tags = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(remaining_tags.len(), 3, "Should have 3 tags after deletion");
 
-        // Verify remaining tags are label4, label5, label6
         let remaining_labels: Vec<String> =
             remaining_tags.iter().map(|t| t.label.clone()).collect();
         assert!(remaining_labels.contains(&"label4".to_string()));
         assert!(remaining_labels.contains(&"label5".to_string()));
         assert!(remaining_labels.contains(&"label6".to_string()));
 
-        // Verify CASCADE behavior: entry 2 should have no tags (had label1 and label2)
         let entry_tags = find_by_entry_id(&mut tx, 1, 2).await.unwrap();
         assert_eq!(
             entry_tags.len(),
@@ -317,7 +304,6 @@ mod tests {
             "Entry 2 should have no tags after cascade"
         );
 
-        // Test deleting with empty vector
         let empty_result = delete_all_by_label(&mut tx, 1, &[]).await.unwrap();
         assert_eq!(
             empty_result.len(),
@@ -325,7 +311,6 @@ mod tests {
             "Should return empty vector for empty input"
         );
 
-        // Test deleting mix of existent and non-existent labels
         let mixed_labels = vec![
             "label4".to_string(),
             "nonexistent".to_string(),
@@ -342,12 +327,10 @@ mod tests {
         assert!(mixed_deleted_labels.contains(&"label5".to_string()));
         assert!(!mixed_deleted_labels.contains(&"nonexistent".to_string()));
 
-        // Verify only 1 tag remains (label6)
         let final_tags = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(final_tags.len(), 1, "Should have 1 tag remaining");
         assert_eq!(final_tags[0].label, "label6");
 
-        // Test deleting all non-existent labels
         let nonexistent_labels = vec!["fake1".to_string(), "fake2".to_string()];
         let none_deleted = delete_all_by_label(&mut tx, 1, &nonexistent_labels)
             .await
@@ -358,7 +341,6 @@ mod tests {
             "Should return empty vector for non-existent labels"
         );
 
-        // Verify count unchanged
         let unchanged_tags = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(unchanged_tags.len(), 1, "Should still have 1 tag");
     }
@@ -368,19 +350,16 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_tag_delete_by_id(pool: SqlitePool) {
-        // Verify initial 6 tags from fixtures
         let mut tx = pool.begin().await.unwrap();
         let initial_tags = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
 
-        // Find tag with label "label1" to get its ID
         let tag_to_delete = initial_tags
             .iter()
             .find(|t| t.label == "label1")
             .expect("label1 should exist in fixtures");
         let tag_id = tag_to_delete.id;
 
-        // Delete tag by ID
         let deleted_tag = delete_by_id(&mut tx, 1, tag_id).await.unwrap();
         assert!(deleted_tag.is_some(), "Should return deleted tag");
         let deleted = deleted_tag.unwrap();
@@ -394,17 +373,14 @@ mod tests {
             "Deleted tag should have slug 'slug1'"
         );
 
-        // Verify only 5 tags remain
         let remaining_tags = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(remaining_tags.len(), 5, "Should have 5 tags after deletion");
 
-        // Verify the deleted tag is not in remaining tags
         assert!(
             !remaining_tags.iter().any(|t| t.id == tag_id),
             "Deleted tag should not be in remaining tags"
         );
 
-        // Verify CASCADE behavior: entry 2 should lose label1 but keep label2
         let entry_tags = find_by_entry_id(&mut tx, 1, 2).await.unwrap();
         assert_eq!(
             entry_tags.len(),
@@ -416,14 +392,12 @@ mod tests {
             "Entry 2 should only have label2"
         );
 
-        // Try deleting non-existent tag by ID
         let not_deleted = delete_by_id(&mut tx, 1, 999).await.unwrap();
         assert!(
             not_deleted.is_none(),
             "Should return None for non-existent ID"
         );
 
-        // Verify count unchanged after failed deletion
         let final_tags = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(
             final_tags.len(),

@@ -78,7 +78,6 @@ impl TokenStorage {
         user_id: Id,
         client_id: Id,
     ) -> ArticlerResult<NewToken> {
-        // It's ok to unwrap - poison should be propagated
         let mut inner = self.inner.lock().await;
         let access_token = generate_token();
         let refresh_token = generate_token();
@@ -111,7 +110,7 @@ impl TokenStorage {
     }
 
     pub async fn validate(&self, access_token: &str) -> ArticlerResult<Option<Claim>> {
-        // It's ok to unwrap - poison should be propagated
+        // It's ok to unwrap - poison hould be propagated
         let mut inner = self.inner.lock().await;
         // TODO gc on every validate is a bad pattern
         self.gc(&mut inner);
@@ -339,7 +338,6 @@ mod tests {
             "Original refresh token should be invalidated"
         );
 
-        // New refresh token should work
         let refreshed_with_new = storage
             .refresh(&mut tx, &new_token.refresh_token)
             .await
@@ -376,7 +374,6 @@ mod tests {
         let mut tx = pool.begin().await.unwrap();
         let token = storage.new_token(&mut tx, 1, 1).await.unwrap();
 
-        // Try to use access token as refresh token
         let result = storage.refresh(&mut tx, &token.access_token).await.unwrap();
 
         assert!(
@@ -501,22 +498,18 @@ mod tests {
         let mut tx = pool.begin().await.unwrap();
         let token = storage.new_token(&mut tx, 1, 1).await.unwrap();
 
-        // Token should be valid immediately
         let claim = storage.validate(&token.access_token).await.unwrap();
         assert!(claim.is_some(), "Token should be valid when just created");
 
-        // Move time forward past expiration (1 hour = 3600 seconds)
         current_time.store(1000 + EXPIRATION_TIME + 1, Relaxed);
 
-        // Token should now be expired and return None
         let claim = storage.validate(&token.access_token).await.unwrap();
         assert!(
             claim.is_none(),
             "Expired access token should return None on validation"
         );
 
-        // Token should be removed from storage (validating again still returns None)
-        current_time.store(1000, Relaxed); // Reset time
+        current_time.store(1000, Relaxed);
         let claim = storage.validate(&token.access_token).await.unwrap();
         assert!(
             claim.is_none(),
@@ -541,7 +534,6 @@ mod tests {
         let mut tx = pool.begin().await.unwrap();
         let token = storage.new_token(&mut tx, 1, 1).await.unwrap();
 
-        // Refresh should work immediately
         let new_token = storage
             .refresh(&mut tx, &token.refresh_token)
             .await
@@ -552,18 +544,15 @@ mod tests {
         );
         let new_token = new_token.unwrap();
 
-        // Move time forward past refresh token expiration (30 days)
         current_time.store(1000 + REFRESH_TOKEN_EXPIRATION_TIME + 1, Relaxed);
 
-        // Refresh should now fail and return None
         let result = storage
             .refresh(&mut tx, &new_token.refresh_token)
             .await
             .unwrap();
         assert!(result.is_none(), "Expired refresh token should return None");
 
-        // Token should be removed from storage (refreshing again still returns None)
-        current_time.store(1000, Relaxed); // Reset time
+        current_time.store(1000, Relaxed);
         let result = storage
             .refresh(&mut tx, &new_token.refresh_token)
             .await
@@ -589,10 +578,8 @@ mod tests {
         let mut tx = pool.begin().await.unwrap();
         let token = storage.new_token(&mut tx, 1, 1).await.unwrap();
 
-        // Move time forward but not past expiration
         current_time.store(1000 + EXPIRATION_TIME - 1, Relaxed);
 
-        // Token should still be valid
         let claim = storage.validate(&token.access_token).await.unwrap();
         assert!(
             claim.is_some(),
@@ -642,17 +629,14 @@ mod tests {
         let mut tx = pool.begin().await.unwrap();
         let token1 = storage.new_token(&mut tx, 1, 1).await.unwrap();
 
-        // Move time forward to expire first token
         current_time.store(1000 + EXPIRATION_TIME + 1, atomic::Ordering::Relaxed);
 
         let token2 = storage.new_token(&mut tx, 2, 4).await.unwrap();
 
-        // Validate token2 (which triggers GC)
         let claim2 = storage.validate(&token2.access_token).await.unwrap();
         assert!(claim2.is_some(), "Token2 should be valid");
 
-        // Token1 should be gone (removed by GC)
-        current_time.store(1000, atomic::Ordering::Relaxed); // Reset time to when token1 was valid
+        current_time.store(1000, atomic::Ordering::Relaxed);
         let claim1 = storage.validate(&token1.access_token).await.unwrap();
         assert!(claim1.is_none(), "Token1 should be removed by GC");
     }

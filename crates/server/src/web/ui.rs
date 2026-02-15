@@ -10,13 +10,15 @@ use chrono::Utc;
 use db::{
     ArticlerResult,
     repository::{
-        self, Db, Id,
+        self, Db, Id, clients,
         entries::{self, EntriesCriteria, EntryRow, SortOrder, UpdateEntry},
     },
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{app::AppState, auth::find_user, middleware::TransactionContext};
+use crate::{
+    app::AppState, auth::find_user, middleware::TransactionContext, web::template_data::Client,
+};
 
 pub fn routes(cfg: &mut ServiceConfig) {
     cfg.route("/login", get().to(login))
@@ -25,6 +27,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/favourite", get().to(favourite))
         .route("/archive", get().to(archive))
         .route("/article/{id}", get().to(article))
+        .route("/clients", get().to(clients))
         .route("/do_login", post().to(do_login))
         .route("/do_archive", post().to(do_archive))
         .route("/do_favourite", post().to(do_favourite))
@@ -45,6 +48,50 @@ async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
         Err(e) => HttpResponse::from_error(ErrorInternalServerError(e)),
     }
 }
+
+async fn clients(
+    session: Session,
+    app: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+) -> actix_web::Result<HttpResponse> {
+    if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
+        let mut tx = tctx.tx()?;
+
+        let clients = clients::find_by_user_id(&mut tx, user_id)
+            .await?
+            .into_iter()
+            .map(Client::from)
+            .collect();
+
+        match app.handlebars.render(
+            "index",
+            &Clients {
+                clients,
+                page: Page {
+                    nav_partial: Some("navigation".to_string()),
+                    main_partial: "clients".to_string(),
+                },
+            },
+        ) {
+            Ok(rendered) => Ok(HttpResponse::Ok()
+                .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+                .body(rendered)),
+            Err(e) => Err(ErrorInternalServerError(e)),
+        }
+    } else {
+        Ok(HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish())
+    }
+}
+
+#[derive(Serialize)]
+struct Clients {
+    #[serde(flatten)]
+    page: Page,
+    clients: Vec<Client>,
+}
+
 async fn article(
     session: Session,
     app: web::Data<AppState>,

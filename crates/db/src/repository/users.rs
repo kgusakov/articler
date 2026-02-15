@@ -93,7 +93,6 @@ mod tests {
         let now = chrono::Utc::now().timestamp();
         let password_hash = "$argon2id$v=19$m=19456,t=2,p=1$test$testhash";
 
-        // Create a new user
         let user = create_user(
             &mut tx,
             "testuser",
@@ -106,7 +105,6 @@ mod tests {
         .await
         .unwrap();
 
-        // Verify the created user has the correct fields
         assert_eq!(user.username, "testuser");
         assert_eq!(user.password_hash, password_hash);
         assert_eq!(user.name, "Test User");
@@ -115,7 +113,6 @@ mod tests {
         assert_eq!(user.updated_at, now);
         assert!(user.id > 0, "User should have a positive id");
 
-        // Verify we can find the user by username
         let found_user = find_by_username(&mut tx, "testuser").await.unwrap();
 
         assert!(found_user.is_some(), "Should find newly created user");
@@ -132,7 +129,6 @@ mod tests {
         let now = chrono::Utc::now().timestamp();
         let password_hash = "$argon2id$v=19$m=19456,t=2,p=1$test$testhash";
 
-        // Create the first user
         let first_user = create_user(
             &mut tx,
             "duplicateuser",
@@ -147,7 +143,6 @@ mod tests {
 
         assert_eq!(first_user.username, "duplicateuser");
 
-        // Try to create a second user with the same username
         let result = create_user(
             &mut tx,
             "duplicateuser",
@@ -159,7 +154,6 @@ mod tests {
         )
         .await;
 
-        // Should fail due to unique constraint on username
         assert!(
             result.is_err(),
             "Should fail when creating user with duplicate username"
@@ -173,7 +167,6 @@ mod tests {
     async fn test_find_by_username(pool: SqlitePool) {
         let mut tx = pool.begin().await.unwrap();
 
-        // Test finding an existing user from fixtures
         let user = find_by_username(&mut tx, "wallabag").await.unwrap();
 
         assert!(user.is_some(), "Should find existing user");
@@ -188,7 +181,6 @@ mod tests {
             "Password hash should match"
         );
 
-        // Test finding a non-existent user
         let no_user = find_by_username(&mut tx, "nonexistent").await.unwrap();
         assert!(no_user.is_none(), "Should not find non-existent user");
     }
@@ -198,7 +190,6 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_username_and_password(pool: SqlitePool) {
-        // Test successful lookup with correct credentials
         let mut tx = pool.begin().await.unwrap();
         let user =
             find_by_username_and_password(
@@ -221,7 +212,6 @@ mod tests {
             "Password hash should match"
         );
 
-        // Test failure with wrong password hash
         let no_user = find_by_username_and_password(&mut tx, "wallabag", "wrong_hash")
             .await
             .unwrap();
@@ -231,7 +221,6 @@ mod tests {
             "Should not find user with wrong password hash"
         );
 
-        // Test failure with non-existent username
         let no_user =
             find_by_username_and_password(
                 &mut tx,
@@ -246,7 +235,6 @@ mod tests {
             "Should not find user with non-existent username"
         );
 
-        // Test failure with both wrong username and password
         let no_user = find_by_username_and_password(&mut tx, "wrong_user", "wrong_hash")
             .await
             .unwrap();

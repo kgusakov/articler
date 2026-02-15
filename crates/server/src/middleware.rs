@@ -18,7 +18,6 @@ pub struct TransactionContext<'c> {
     tx: Rc<RefCell<Option<Transaction<'c, Db>>>>,
 }
 
-// Automatically derefs to `&mut Transaction`.
 pub struct TransactionHolder<'a, 'c> {
     tx: RefMut<'a, Option<Transaction<'c, Db>>>,
 }
@@ -38,7 +37,6 @@ impl<'a, 'c> DerefMut for TransactionHolder<'a, 'c> {
 }
 
 impl<'c> TransactionContext<'c> {
-    /// Gets mutable access to the transaction.
     pub fn tx(&self) -> Result<TransactionHolder<'_, 'c>, actix_web::Error> {
         let tx = self.tx.borrow_mut();
 
@@ -77,7 +75,6 @@ pub async fn wrap_with_tx(
             let status = response.status();
 
             if !(status.is_client_error() || status.is_server_error()) {
-                // Take the transaction out, dropping the RefMut before await
                 let tx_option = request_context.tx.borrow_mut().take();
                 if let Some(tx) = tx_option {
                     tx.commit().await.map_err(ErrorInternalServerError)?;
@@ -85,7 +82,6 @@ pub async fn wrap_with_tx(
                     return Err(ErrorInternalServerError("Transaction already consumed"));
                 }
             } else {
-                // Take the transaction out, dropping the RefMut before await
                 let tx_option = request_context.tx.borrow_mut().take();
                 if let Some(tx) = tx_option {
                     tx.rollback().await.map_err(ErrorInternalServerError)?;
@@ -97,7 +93,6 @@ pub async fn wrap_with_tx(
             Ok(response)
         }
         Err(e) => {
-            // Take the transaction out, dropping the RefMut before await
             let tx_option = request_context.tx.borrow_mut().take();
             if let Some(tx) = tx_option {
                 tx.rollback().await.map_err(ErrorInternalServerError)?;
@@ -161,7 +156,6 @@ mod tests {
 
         let now = chrono::Utc::now().timestamp();
 
-        // Insert a test user with all required fields
         sqlx::query(
             "INSERT INTO users (username, email, name, password_hash, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?)",
@@ -179,7 +173,6 @@ mod tests {
         Ok(HttpResponse::Created().body("User created"))
     }
 
-    // Test helper endpoint that fails
     async fn test_create_user_fail(
         tx: web::ReqData<TransactionContext<'_>>,
     ) -> actix_web::Result<HttpResponse> {
@@ -227,7 +220,6 @@ mod tests {
         let resp = test::call_service(&app, req).await;
         assert!(resp.status().is_success());
 
-        // Verify user was actually persisted
         let user = sqlx::query_as::<_, users::UserRow>("SELECT * FROM users WHERE username = ?")
             .bind("testuser")
             .fetch_optional(&pool)
@@ -245,13 +237,11 @@ mod tests {
     async fn test_transaction_rolls_back_on_error(pool: SqlitePool) {
         let app = init_app(pool.clone()).await;
 
-        // Make request that should fail
         let req = test::TestRequest::post().uri("/test-fail").to_request();
 
         let resp = test::call_service(&app, req).await;
         assert!(resp.status().is_server_error());
 
-        // Verify user was NOT persisted due to rollback
         let user = sqlx::query_as::<_, users::UserRow>("SELECT * FROM users WHERE username = ?")
             .bind("failuser")
             .fetch_optional(&pool)

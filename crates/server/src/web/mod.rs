@@ -2,6 +2,7 @@ use actix_session::{SessionMiddleware, storage::CookieSessionStore};
 use actix_web::{cookie::Key, web};
 
 pub mod fake_ui;
+pub mod template_data;
 pub mod ui;
 
 pub fn routes(cfg: &mut web::ServiceConfig, cookie_key: Key) {

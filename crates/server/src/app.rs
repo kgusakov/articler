@@ -70,6 +70,7 @@ pub fn init_handlebars() -> Result<Handlebars<'static>, TemplateError> {
     handlebars.register_partial("navigation", include_str!("../templates/navigation.hbs"))?;
     handlebars.register_partial("main", include_str!("../templates/main.hbs"))?;
     handlebars.register_partial("article", include_str!("../templates/article.hbs"))?;
+    handlebars.register_partial("clients", include_str!("../templates/clients.hbs"))?;
     Ok(handlebars)
 }
 
