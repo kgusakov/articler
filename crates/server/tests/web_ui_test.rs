@@ -822,6 +822,46 @@ async fn clients_page(pool: SqlitePool) {
     );
 }
 
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql")
+)]
+async fn logout_clears_session(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let req = test::TestRequest::get()
+        .uri("/logout")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/login");
+
+    let deletion_cookie = resp
+        .response()
+        .cookies()
+        .find(|c| c.name() == "id")
+        .expect("Logout should return a deletion cookie");
+
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(deletion_cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::FOUND);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/login");
+}
+
 async fn login(
     username: &str,
     password: &str,

@@ -21,6 +21,26 @@
   </header>
 
   {{> (lookup this 'main_partial') }}
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const profileButton = document.getElementById('profile-menu-button');
+      const profileMenu = document.getElementById('profile-menu');
+
+      if (profileButton && profileMenu) {
+        profileButton.addEventListener('click', function(e) {
+          e.stopPropagation();
+          profileMenu.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', function(e) {
+          if (!profileButton.contains(e.target) && !profileMenu.contains(e.target)) {
+            profileMenu.classList.add('hidden');
+          }
+        });
+      }
+    });
+  </script>
 </body>
 
 </html>

@@ -28,6 +28,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/archive", get().to(archive))
         .route("/article/{id}", get().to(article))
         .route("/clients", get().to(clients))
+        .route("/logout", get().to(logout))
         .route("/do_login", post().to(do_login))
         .route("/do_archive", post().to(do_archive))
         .route("/do_favourite", post().to(do_favourite))
@@ -83,6 +84,12 @@ async fn clients(
             .append_header(("Location", "/login"))
             .finish())
     }
+}
+
+async fn logout(session: Session) -> actix_web::Result<impl Responder> {
+    // TODO this approach purge cookie with CookieSessionStore only if the client correctly process the received answer
+    session.purge();
+    Ok(Redirect::to("/login").see_other())
 }
 
 #[derive(Serialize)]

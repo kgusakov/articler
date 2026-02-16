@@ -404,7 +404,6 @@ async fn test_oauth_refresh_token_grant_success(pool: SqlitePool) {
 
     let password = "test_password";
 
-    // First, get an initial token using password grant
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
         .set_form([
@@ -420,7 +419,6 @@ async fn test_oauth_refresh_token_grant_success(pool: SqlitePool) {
     let refresh_token = initial_resp.get("refresh_token").unwrap().as_str().unwrap();
     let initial_access_token = initial_resp.get("access_token").unwrap().as_str().unwrap();
 
-    // Now use the refresh token to get a new token
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
         .set_form([
@@ -461,7 +459,6 @@ async fn test_oauth_refresh_json_token_grant_success(pool: SqlitePool) {
 
     let password = "test_password";
 
-    // First, get an initial token using password grant
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
         .set_json(serde_json::json!({
@@ -477,7 +474,6 @@ async fn test_oauth_refresh_json_token_grant_success(pool: SqlitePool) {
     let refresh_token = initial_resp.get("refresh_token").unwrap().as_str().unwrap();
     let initial_access_token = initial_resp.get("access_token").unwrap().as_str().unwrap();
 
-    // Now use the refresh token to get a new token
     let req = test::TestRequest::post()
         .uri("/oauth/v2/token")
         .set_json(serde_json::json!({

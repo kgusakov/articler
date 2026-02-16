@@ -171,7 +171,6 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_user_id_client_id_and_secret(pool: SqlitePool) {
-        // Test successful lookup with correct credentials
         let mut tx = pool.begin().await.unwrap();
         let client = find_by_user_id_client_id_and_secret(&mut tx, 1, "client_1", "secret_1")
             .await

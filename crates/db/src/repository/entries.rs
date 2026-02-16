@@ -647,21 +647,18 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_tag_by_tag_id(pool: SqlitePool) {
-        // Entry 2 initially has 2 tags (label1/id=1, label2/id=2)
         let mut tx = pool.begin().await.unwrap();
         let tags_before = crate::repository::tags::find_by_entry_id(&mut tx, 1, 2)
             .await
             .unwrap();
         assert_eq!(tags_before.len(), 2, "Entry 2 should have 2 tags initially");
 
-        // Delete tag_id=1 from entry 2
         let deleted = delete_tag_by_tag_id(&mut tx, 1, 2, 1).await.unwrap();
         assert!(
             deleted,
             "Should successfully delete existing tag association"
         );
 
-        // Verify only 1 tag remains
         let tags_after = crate::repository::tags::find_by_entry_id(&mut tx, 1, 2)
             .await
             .unwrap();
@@ -672,14 +669,12 @@ mod tests {
         );
         assert_eq!(tags_after[0].id, 2, "Only label2 should remain");
 
-        // Try to delete same tag again - should return false
         let not_deleted = delete_tag_by_tag_id(&mut tx, 1, 2, 1).await.unwrap();
         assert!(
             !not_deleted,
             "Should return false for non-existent association"
         );
 
-        // Try to delete tag from non-existent entry
         let not_deleted = delete_tag_by_tag_id(&mut tx, 1, 999, 1).await.unwrap();
         assert!(!not_deleted, "Should return false for non-existent entry");
     }
@@ -689,31 +684,25 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_entry_delete_by_id(pool: SqlitePool) {
-        // Verify entry 1 exists
         let mut tx = pool.begin().await.unwrap();
         let entry_before = find_by_id(&mut tx, 1, 1).await.unwrap();
         assert!(entry_before.is_some(), "Entry 1 should exist");
 
-        // Delete entry 1
         let deleted = delete_by_id(&mut tx, 1, 1).await.unwrap();
         assert!(deleted, "Should return true when entry is deleted");
 
-        // Verify entry 1 no longer exists
         let entry_after = find_by_id(&mut tx, 1, 1).await.unwrap();
         assert!(
             entry_after.is_none(),
             "Entry 1 should not exist after deletion"
         );
 
-        // Try deleting the same entry again
         let not_deleted = delete_by_id(&mut tx, 1, 1).await.unwrap();
         assert!(!not_deleted, "Should return false when entry doesn't exist");
 
-        // Try deleting non-existent entry
         let not_deleted = delete_by_id(&mut tx, 1, 999).await.unwrap();
         assert!(!not_deleted, "Should return false for non-existent entry");
 
-        // Verify entry 2 still exists (wasn't affected)
         let entry_2 = find_by_id(&mut tx, 1, 2).await.unwrap();
         assert!(entry_2.is_some(), "Entry 2 should still exist");
     }
@@ -725,7 +714,6 @@ mod tests {
     async fn test_update_entry_with_invalid_updated_at(pool: SqlitePool) {
         let mut tx = pool.begin().await.unwrap();
 
-        // Try to update with updated_at = 0 (less than created_at)
         let update = UpdateEntry {
             title: None,
             content: None,
@@ -746,13 +734,11 @@ mod tests {
 
         let result = update_by_id(&mut tx, 1, 1, update).await;
 
-        // Should fail due to CHECK constraint
         assert!(
             result.is_err(),
             "Update should fail when updated_at < created_at"
         );
 
-        // Verify the error is related to constraint violation
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("CHECK") || err_msg.contains("constraint"),
@@ -768,7 +754,6 @@ mod tests {
     async fn test_find_by_id(pool: SqlitePool) {
         let mut tx = pool.begin().await.unwrap();
 
-        // Find entry without tags (entry 1)
         let (entry, tags) = find_by_id(&mut tx, 1, 1).await.unwrap().unwrap();
         assert_eq!(
             entry,
@@ -801,7 +786,6 @@ mod tests {
         );
         assert!(tags.is_empty(), "Entry 1 should have no tags");
 
-        // Find entry with tags (entry 2 has tag_id 1 and 2)
         let (entry, tags) = find_by_id(&mut tx, 1, 2).await.unwrap().unwrap();
         assert_eq!(entry.id, 2);
         assert_eq!(
@@ -822,11 +806,9 @@ mod tests {
             ]
         );
 
-        // Non-existent entry
         let result = find_by_id(&mut tx, 1, 999).await.unwrap();
         assert!(result.is_none(), "Entry 999 should not exist");
 
-        // Wrong user_id
         let result = find_by_id(&mut tx, 999, 1).await.unwrap();
         assert!(result.is_none(), "Entry 1 should not be found for user 999");
     }
@@ -838,7 +820,6 @@ mod tests {
     async fn test_update_by_id(pool: SqlitePool) {
         let mut tx = pool.begin().await.unwrap();
 
-        // Update multiple fields on entry 1
         let updated = update_by_id(
             &mut tx,
             1,
@@ -904,7 +885,6 @@ mod tests {
     async fn test_update_by_id_partial(pool: SqlitePool) {
         let mut tx = pool.begin().await.unwrap();
 
-        // Only update title, leave everything else untouched
         let updated = update_by_id(
             &mut tx,
             1,
@@ -958,7 +938,6 @@ mod tests {
     async fn test_update_by_id_set_to_null(pool: SqlitePool) {
         let mut tx = pool.begin().await.unwrap();
 
-        // Use Some(None) to set nullable fields to NULL
         let updated = update_by_id(
             &mut tx,
             1,
@@ -992,7 +971,6 @@ mod tests {
     async fn test_update_by_id_nonexistent(pool: SqlitePool) {
         let mut tx = pool.begin().await.unwrap();
 
-        // Non-existent entry
         let updated = update_by_id(
             &mut tx,
             1,
@@ -1007,7 +985,6 @@ mod tests {
         .unwrap();
         assert!(!updated, "Should return false for non-existent entry");
 
-        // Wrong user_id
         let updated = update_by_id(
             &mut tx,
             999,

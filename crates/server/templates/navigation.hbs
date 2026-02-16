@@ -10,8 +10,14 @@
         <button class="text-secondary hover:text-primary">
             <img src="/static/images/Settings.svg" />
         </button>
-        <button class="text-secondary hover:text-primary">
-            <img src="/static/images/Profile.svg" />
-        </button>
+        <div class="relative">
+            <button id="profile-menu-button" class="text-secondary hover:text-primary" title="Open user menu">
+                <img src="/static/images/Profile.svg" />
+            </button>
+            <div id="profile-menu" class="hidden absolute right-0 translate-y-2 bg-white border border-border rounded" style="min-width: 160px;">
+                <a href="/clients" class="block px-4 py-3 text-sm hover:bg-surface">Clients</a>
+                <a href="/logout" class="block px-4 py-3 text-sm hover:bg-surface">Logout</a>
+            </div>
+        </div>
     </div>
 </nav>
