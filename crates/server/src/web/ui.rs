@@ -10,10 +10,12 @@ use chrono::Utc;
 use db::{
     ArticlerResult,
     repository::{
-        self, Db, Id, clients,
+        self, Db, Id,
+        clients,
         entries::{self, EntriesCriteria, EntryRow, SortOrder, UpdateEntry},
     },
 };
+use helpers::{generate_client_id, generate_client_secret};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -28,6 +30,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/archive", get().to(archive))
         .route("/article/{id}", get().to(article))
         .route("/clients", get().to(clients))
+        .route("/do_create_client", post().to(do_create_client))
         .route("/logout", get().to(logout))
         .route("/do_login", post().to(do_login))
         .route("/do_archive", post().to(do_archive))
@@ -386,6 +389,7 @@ async fn do_delete(
     let user_id = session
         .get("user_id")
         .map_err(ErrorInternalServerError)?
+        // TODO fix error or redirect to login
         .ok_or(ErrorForbidden(""))?;
 
     let form = form.into_inner();
@@ -403,12 +407,52 @@ async fn do_delete(
     Ok(Redirect::to(referer).see_other())
 }
 
+async fn do_create_client(
+    session: Session,
+    req: HttpRequest,
+    form: web::Form<CreateClientForm>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+) -> actix_web::Result<impl Responder> {
+    let mut tx = tctx.tx()?;
+
+    let user_id = session
+        .get("user_id")
+        .map_err(ErrorInternalServerError)?
+        // TODO fix error or redirect to login
+        .ok_or(ErrorForbidden(""))?;
+
+    let now = chrono::Utc::now().timestamp();
+    let _ = clients::create_client(
+        &mut tx,
+        user_id,
+        &form.client_name,
+        &generate_client_id(),
+        &generate_client_secret(),
+        now,
+    )
+    .await?;
+
+    let referer = req
+        .headers()
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("/")
+        .to_string();
+
+    Ok(Redirect::to(referer).see_other())
+}
+
 #[derive(Serialize, Deserialize)]
 pub(in crate::web) struct LoginForm {
     #[serde(rename(deserialize = "_username"))]
     username: String,
     #[serde(rename(deserialize = "_password"))]
     password: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(in crate::web) struct CreateClientForm {
+    client_name: String,
 }
 
 pub(in crate::web) async fn do_login(

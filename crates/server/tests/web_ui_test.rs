@@ -862,6 +862,63 @@ async fn logout_clears_session(pool: SqlitePool) {
     assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/login");
 }
 
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql")
+)]
+async fn do_create_client(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/clients")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let clients_before = helpers::find_clients(content);
+    assert_eq!(clients_before.len(), 3);
+
+    let req = test::TestRequest::post()
+        .uri("/do_create_client")
+        .insert_header((header::REFERER, "/clients"))
+        .cookie(cookie.clone())
+        .set_form([("client_name", "New Test Client")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/clients");
+
+    let req = test::TestRequest::get()
+        .uri("/clients")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let clients_after = helpers::find_clients(content);
+    assert_eq!(clients_after.len(), 4);
+
+    let new_client = clients_after
+        .iter()
+        .find(|(name, _, _)| name == "New Test Client")
+        .expect("New client should be present");
+
+    assert_eq!(new_client.0, "New Test Client");
+    assert!(!new_client.1.is_empty(), "Client ID should not be empty");
+    assert!(!new_client.2.is_empty(), "Client secret should not be empty");
+}
+
 async fn login(
     username: &str,
     password: &str,
