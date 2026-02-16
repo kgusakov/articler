@@ -40,12 +40,11 @@ mod tests {
 
     use crate::ArticlerResult;
 
-    #[allow(dead_code)]
     fn io_err() -> std::io::Result<()> {
         Err(io::Error::from(io::ErrorKind::UnexpectedEof))
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn compile_test_question_mark() -> ArticlerResult<()> {
         io_err()?;
 

@@ -140,7 +140,7 @@ pub async fn post_entries(
     let tags = tag_rows.into_iter().map(Tag::from).collect();
 
     // TODO replace by real url
-    #[allow(clippy::redundant_closure)] // Or Location of error will be not correct
+    #[expect(clippy::redundant_closure)]
     let self_url = Url::parse("https://example.com").map_err(|e| Into::<ArticlerError>::into(e))?;
 
     Ok(web::Json(AddEntryResponse {
@@ -197,7 +197,7 @@ pub async fn entries(
     }
 
     // TODO implement actual urls generating
-    #[allow(clippy::redundant_closure)] // Or Location of error will be not correct
+    #[expect(clippy::redundant_closure)]
     let url = Url::parse("http://example.com").map_err(|e| Into::<ArticlerError>::into(e))?;
 
     Ok(web::Json(Entries {
