@@ -5,7 +5,6 @@ edition.workspace = true
 
 [dependencies]
 result.workspace = true
-helpers.workspace = true
 sqlx.workspace = true
 serde.workspace = true
 chrono.workspace = true

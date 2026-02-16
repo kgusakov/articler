@@ -12,12 +12,10 @@ result.workspace = true
 db.workspace = true
 helpers.workspace = true
 clap = { version = "4.5.57", features = ["derive"] }
-reqwest = { version = "0.13.1", features = ["blocking"] }
 chrono.workspace = true
 url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_with.workspace = true
 sqlx.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
