@@ -6,7 +6,7 @@ use result::ArticlerResult;
 
 use super::*;
 
-pub async fn create_client(
+pub async fn create(
     tx: &mut sqlx::Transaction<'_, Db>,
     user_id: Id,
     client_name: &str,
@@ -22,6 +22,22 @@ pub async fn create_client(
             .bind(created_at)
             .fetch_one(tx.deref_mut())
             .await?)
+}
+
+pub async fn delete_by_id(
+    tx: &mut sqlx::Transaction<'_, Db>,
+    user_id: Id,
+    id: Id,
+) -> ArticlerResult<bool> {
+    let result = sqlx::query(&format!(
+        "DELETE FROM {CLIENTS_TABLE} WHERE user_id = ? AND id = ?"
+    ))
+    .bind(user_id)
+    .bind(id)
+    .execute(tx.deref_mut())
+    .await?;
+
+    Ok(result.rows_affected() > 0)
 }
 
 pub async fn find_by_user_id_client_id_and_secret(
@@ -130,7 +146,7 @@ mod tests {
         let now = chrono::Utc::now().timestamp();
         let user_id = 1;
 
-        let client = create_client(
+        let client = create(
             &mut tx,
             user_id,
             "Test Client",
@@ -333,5 +349,40 @@ mod tests {
         let clients = find_by_user_id(&mut tx, 999).await.unwrap();
 
         assert_eq!(clients, Vec::<ClientRow>::new());
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql")
+    )]
+    async fn test_delete_by_id(pool: SqlitePool) {
+        let mut tx = pool.begin().await.unwrap();
+
+        let client_before = find_by_client_name_and_user_id(&mut tx, 1, "Client 1")
+            .await
+            .unwrap();
+        assert!(client_before.is_some(), "Client should exist before deletion");
+
+        let deleted = delete_by_id(&mut tx, 1, 1).await.unwrap();
+        assert!(deleted, "Delete should return true when client exists");
+
+        let client_after = find_by_client_name_and_user_id(&mut tx, 1, "Client 1")
+            .await
+            .unwrap();
+        assert_eq!(client_after, None, "Client should not exist after deletion");
+
+        let deleted_again = delete_by_id(&mut tx, 1, 1).await.unwrap();
+        assert!(!deleted_again, "Delete should return false when client doesn't exist");
+
+        let deleted_wrong_user = delete_by_id(&mut tx, 2, 2).await.unwrap();
+        assert!(!deleted_wrong_user, "Delete should return false when user_id doesn't match");
+
+        let client_2_still_exists = find_by_client_name_and_user_id(&mut tx, 1, "Client 2")
+            .await
+            .unwrap();
+        assert!(client_2_still_exists.is_some(), "Client 2 should still exist");
+
+        let deleted_nonexistent = delete_by_id(&mut tx, 1, 999).await.unwrap();
+        assert!(!deleted_nonexistent, "Delete should return false for nonexistent client");
     }
 }

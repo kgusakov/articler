@@ -10,8 +10,7 @@ use chrono::Utc;
 use db::{
     ArticlerResult,
     repository::{
-        self, Db, Id,
-        clients,
+        self, Db, Id, clients,
         entries::{self, EntriesCriteria, EntryRow, SortOrder, UpdateEntry},
     },
 };
@@ -31,6 +30,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/article/{id}", get().to(article))
         .route("/clients", get().to(clients))
         .route("/do_create_client", post().to(do_create_client))
+        .route("/do_client_delete", post().to(do_client_delete))
         .route("/logout", get().to(logout))
         .route("/do_login", post().to(do_login))
         .route("/do_archive", post().to(do_archive))
@@ -407,6 +407,34 @@ async fn do_delete(
     Ok(Redirect::to(referer).see_other())
 }
 
+async fn do_client_delete(
+    session: Session,
+    req: HttpRequest,
+    form: web::Form<ClientDeleteForm>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+) -> actix_web::Result<impl Responder> {
+    let mut tx = tctx.tx()?;
+
+    let user_id = session
+        .get("user_id")
+        .map_err(ErrorInternalServerError)?
+        // TODO fix error or redirect to login
+        .ok_or(ErrorForbidden(""))?;
+
+    let form = form.into_inner();
+
+    clients::delete_by_id(&mut tx, user_id, form.id).await?;
+
+    let referer = req
+        .headers()
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("/")
+        .to_string();
+
+    Ok(Redirect::to(referer).see_other())
+}
+
 async fn do_create_client(
     session: Session,
     req: HttpRequest,
@@ -422,7 +450,7 @@ async fn do_create_client(
         .ok_or(ErrorForbidden(""))?;
 
     let now = chrono::Utc::now().timestamp();
-    let _ = clients::create_client(
+    let _ = clients::create(
         &mut tx,
         user_id,
         &form.client_name,
@@ -450,9 +478,14 @@ pub(in crate::web) struct LoginForm {
     password: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub(in crate::web) struct CreateClientForm {
     client_name: String,
+}
+
+#[derive(Deserialize)]
+struct ClientDeleteForm {
+    id: Id,
 }
 
 pub(in crate::web) async fn do_login(

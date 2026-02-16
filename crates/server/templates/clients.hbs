@@ -72,12 +72,15 @@
                             Copy
                         </button>
                     </div>
-                    <div class="flex justify-end pt-2">
-                        <button
-                            class="px-4 py-1 border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white transition-colors text-sm">
-                            Delete
-                        </button>
-                    </div>
+                    <form method="post" action="/do_client_delete" class="flex items-center">
+                        <input type="hidden" name="id" value="{{id}}" />
+                        <div class="flex justify-end pt-2">
+                            <button type="submit"
+                                class="px-4 py-1 border-2 border-red-600 text-red-600 hover:bg-red-600 hover:text-white transition-colors text-sm">
+                                Delete
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </details>
             {{/each}}

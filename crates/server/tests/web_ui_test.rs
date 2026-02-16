@@ -919,6 +919,83 @@ async fn do_create_client(pool: SqlitePool) {
     assert!(!new_client.2.is_empty(), "Client secret should not be empty");
 }
 
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql")
+)]
+async fn do_client_delete(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/clients")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let clients_before = helpers::find_clients(content);
+    assert_eq!(clients_before.len(), 3);
+
+    let client_to_delete = clients_before
+        .iter()
+        .find(|(name, _, _)| name == "Client 1")
+        .expect("Client 1 should exist");
+    assert_eq!(client_to_delete.0, "Client 1");
+    assert_eq!(client_to_delete.1, "client_1");
+    assert_eq!(client_to_delete.2, "secret_1");
+
+    let delete_forms = helpers::find_client_delete_forms(content);
+    assert_eq!(delete_forms.len(), 3);
+    assert!(delete_forms.contains(&"1".to_string()));
+
+    let req = test::TestRequest::post()
+        .uri("/do_client_delete")
+        .insert_header((header::REFERER, "/clients"))
+        .cookie(cookie.clone())
+        .set_form([("id", "1")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/clients");
+
+    let req = test::TestRequest::get()
+        .uri("/clients")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let clients_after = helpers::find_clients(content);
+    assert_eq!(clients_after.len(), 2);
+
+    let deleted_client = clients_after
+        .iter()
+        .find(|(name, _, _)| name == "Client 1");
+    assert!(
+        deleted_client.is_none(),
+        "Client 1 should not exist after deletion"
+    );
+
+    let remaining_clients: HashSet<&str> = clients_after
+        .iter()
+        .map(|(name, _, _)| name.as_str())
+        .collect();
+    assert_eq!(
+        remaining_clients,
+        HashSet::from(["Client 2", "Android app"])
+    );
+}
+
 async fn login(
     username: &str,
     password: &str,
@@ -1111,6 +1188,23 @@ mod helpers {
                 let client_secret = codes.next()?.text().collect::<String>();
 
                 Some((name, client_id, client_secret))
+            })
+            .collect()
+    }
+
+    /// Returns the client id values from all client delete forms in the page.
+    pub fn find_client_delete_forms(content: &str) -> Vec<String> {
+        let document = Html::parse_document(content);
+        let form_sel = Selector::parse(r#"form[action="/do_client_delete"]"#).unwrap();
+        let input_sel = Selector::parse(r#"input[name="id"]"#).unwrap();
+
+        document
+            .select(&form_sel)
+            .filter_map(|form| {
+                form.select(&input_sel)
+                    .next()
+                    .and_then(|input| input.value().attr("value"))
+                    .map(|v| v.to_string())
             })
             .collect()
     }

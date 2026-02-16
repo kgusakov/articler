@@ -61,7 +61,7 @@ pub async fn create_client(
 
     if let Some(user) = users::find_by_username(&mut tx, username).await? {
         let now = chrono::Utc::now().timestamp();
-        let client = clients::create_client(
+        let client = clients::create(
             &mut tx,
             user.id,
             client_name,
