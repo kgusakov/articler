@@ -48,7 +48,7 @@ impl Scraper {
         {
             return Ok(Document {
                 title: extract_title(url).to_owned(),
-                content_html: "".to_owned(),
+                content_html: String::new(),
                 image_url: None,
                 mime_type,
                 language: None,
@@ -86,7 +86,7 @@ impl Scraper {
         let mut title = article.title;
 
         if title.is_empty() {
-            title = extract_title(url).to_owned();
+            extract_title(url).to_owned().clone_into(&mut title);
         }
 
         Ok(Document {
@@ -100,6 +100,7 @@ impl Scraper {
     }
 }
 
+#[must_use]
 pub fn extract_title(url: &Url) -> &str {
     if let Some(mut segments) = url.path_segments()
         && let Some(last) = segments.next_back()

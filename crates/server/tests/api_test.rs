@@ -97,7 +97,7 @@ fn assert_json_date_between(
             .with_timezone(&Utc);
         assert!(date.timestamp() >= before.timestamp() && date.timestamp() <= after.timestamp());
     } else {
-        panic!("{} is expected, but not found", date_json_field);
+        panic!("{date_json_field} is expected, but not found");
     }
 }
 
@@ -179,11 +179,11 @@ async fn options_version(f: &str, #[ignore] pool: SqlitePool) {
         .unwrap()
         .to_str()
         .unwrap()
-        .split(",")
-        .map(|s| s.trim())
+        .split(',')
+        .map(str::trim)
         .collect();
 
-    sorted_result.sort();
+    sorted_result.sort_unstable();
 
     assert!(
         ["GET", "POST", "PATCH"]
@@ -465,9 +465,9 @@ async fn post_entries_with_scraping_error(pool: SqlitePool) {
     let mock_server = MockServer::start().await;
     let base_server_uri = mock_server.uri();
 
-    let content = r#"
+    let content = r"
             <!DOCTYPE html><html><body><!-- This HTML is intentionally broken and incomplete to trigger parsing error
-        "#;
+        ";
 
     Mock::given(method("GET"))
         .and(path("/test-article/parsing-error"))

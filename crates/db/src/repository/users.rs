@@ -1,4 +1,3 @@
-use std::ops::DerefMut;
 
 use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
@@ -22,7 +21,7 @@ pub async fn create_user(
             .bind(password_hash)
             .bind(created_at)
             .bind(updated_at)
-            .fetch_one(tx.deref_mut())
+            .fetch_one(&mut **tx)
             .await?)
 }
 
@@ -37,7 +36,7 @@ pub async fn find_by_username_and_password(
     ))
     .bind(username)
     .bind(password_hash)
-    .fetch_optional(tx.deref_mut())
+    .fetch_optional(&mut **tx)
     .await?;
 
     Ok(result)
@@ -48,9 +47,9 @@ pub async fn find_by_username(
     username: &str,
 ) -> ArticlerResult<Option<UserRow>> {
     let result =
-        sqlx::query_as::<_, UserRow>(&format!("SELECT * FROM {} WHERE username = ?", USERS_TABLE))
+        sqlx::query_as::<_, UserRow>(&format!("SELECT * FROM {USERS_TABLE} WHERE username = ?"))
             .bind(username)
-            .fetch_optional(tx.deref_mut())
+            .fetch_optional(&mut **tx)
             .await?;
 
     Ok(result)

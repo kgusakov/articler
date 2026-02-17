@@ -173,12 +173,12 @@ async fn index_page(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let titles = helpers::find_article_titles(content);
-    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
 
     assert_eq!(titles_set, HashSet::from(["title1", "title3", "title5"]));
 
     let forms = helpers::find_archive_forms(content);
-    let forms_set: HashSet<&str> = forms.iter().map(|s| s.as_str()).collect();
+    let forms_set: HashSet<&str> = forms.iter().map(std::string::String::as_str).collect();
     assert_eq!(forms_set, HashSet::from(["1", "3", "5"]));
 
     let archive_icons = helpers::find_archive_icons(content);
@@ -190,7 +190,7 @@ async fn index_page(pool: SqlitePool) {
     );
 
     let del_forms = helpers::find_delete_forms(content);
-    let delete_forms: HashSet<&str> = del_forms.iter().map(|s| s.as_str()).collect();
+    let delete_forms: HashSet<&str> = del_forms.iter().map(std::string::String::as_str).collect();
     assert_eq!(delete_forms, HashSet::from(["1", "3", "5"]));
 }
 
@@ -214,7 +214,7 @@ async fn article_links_on_index_page(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let links = helpers::find_article_links(content);
-    let links_set: HashSet<&str> = links.iter().map(|s| s.as_str()).collect();
+    let links_set: HashSet<&str> = links.iter().map(std::string::String::as_str).collect();
 
     assert_eq!(
         links_set,
@@ -253,7 +253,7 @@ async fn do_archive(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let titles = helpers::find_article_titles(content);
-    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
 
     assert_eq!(titles_set, HashSet::from(["title3", "title5"]));
 }
@@ -289,7 +289,7 @@ async fn do_unarchive(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let titles = helpers::find_article_titles(content);
-    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
 
     assert_eq!(
         titles_set,
@@ -318,7 +318,7 @@ async fn all_page(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let titles = helpers::find_article_titles(content);
-    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
 
     assert_eq!(
         titles_set,
@@ -347,7 +347,7 @@ async fn favourite_page(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let titles = helpers::find_article_titles(content);
-    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
 
     assert_eq!(titles_set, HashSet::from(["title3", "title4", "title6"]));
 }
@@ -373,7 +373,7 @@ async fn archive_page(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let titles = helpers::find_article_titles(content);
-    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
 
     assert_eq!(titles_set, HashSet::from(["title2", "title4", "title6"]));
 
@@ -480,7 +480,7 @@ async fn do_favourite(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let titles = helpers::find_article_titles(content);
-    let titles_set: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
     assert_eq!(
         titles_set,
         HashSet::from(["title1", "title3", "title4", "title6"])
@@ -533,7 +533,7 @@ async fn do_unfavourite(pool: SqlitePool) {
     let content = str::from_utf8(&body).unwrap();
 
     let titles = helpers::find_article_titles(content);
-    let article_titles: HashSet<&str> = titles.iter().map(|s| s.as_str()).collect();
+    let article_titles: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
     assert_eq!(article_titles, HashSet::from(["title4", "title6"]));
 
     let req = test::TestRequest::get()
@@ -1041,12 +1041,12 @@ mod helpers {
                 form.select(&img_sel)
                     .next()
                     .and_then(|img| img.value().attr("src"))
-                    .map(|v| v.to_owned())
+                    .map(std::borrow::ToOwned::to_owned)
             })
             .collect()
     }
 
-    /// Returns the article_id values from all archive forms in the page.
+    /// Returns the `article_id` values from all archive forms in the page.
     pub fn find_archive_forms(content: &str) -> Vec<String> {
         let document = Html::parse_document(content);
         let form_sel = Selector::parse(r#"form[action="/do_archive"]"#).unwrap();
@@ -1058,12 +1058,12 @@ mod helpers {
                 form.select(&input_sel)
                     .next()
                     .and_then(|input| input.value().attr("value"))
-                    .map(|v| v.to_owned())
+                    .map(std::borrow::ToOwned::to_owned)
             })
             .collect()
     }
 
-    /// Returns the article_id values from all delete forms in the page.
+    /// Returns the `article_id` values from all delete forms in the page.
     pub fn find_delete_forms(content: &str) -> Vec<String> {
         let document = Html::parse_document(content);
         let form_sel = Selector::parse(r#"form[action="/do_delete"]"#).unwrap();
@@ -1075,12 +1075,12 @@ mod helpers {
                 form.select(&input_sel)
                     .next()
                     .and_then(|input| input.value().attr("value"))
-                    .map(|v| v.to_owned())
+                    .map(std::borrow::ToOwned::to_owned)
             })
             .collect()
     }
 
-    /// Returns the back_location value from the delete form, if present.
+    /// Returns the `back_location` value from the delete form, if present.
     pub fn find_delete_back_location(content: &str) -> Option<String> {
         let document = Html::parse_document(content);
         let form_sel = Selector::parse(r#"form[action="/do_delete"]"#).unwrap();
@@ -1090,11 +1090,11 @@ mod helpers {
             form.select(&input_sel)
                 .next()
                 .and_then(|input| input.value().attr("value"))
-                .map(|v| v.to_owned())
+                .map(std::borrow::ToOwned::to_owned)
         })
     }
 
-    /// Returns (article_id, icon_src) pairs from all favourite forms in the page.
+    /// Returns (`article_id`, `icon_src`) pairs from all favourite forms in the page.
     pub fn find_favourite_icons_by_article(content: &str) -> Vec<(String, String)> {
         let document = Html::parse_document(content);
         let form_sel = Selector::parse(r#"form[action="/do_favourite"]"#).unwrap();
@@ -1108,12 +1108,12 @@ mod helpers {
                     .select(&input_sel)
                     .next()
                     .and_then(|input| input.value().attr("value"))
-                    .map(|v| v.to_owned())?;
+                    .map(std::borrow::ToOwned::to_owned)?;
                 let icon_src = form
                     .select(&img_sel)
                     .next()
                     .and_then(|img| img.value().attr("src"))
-                    .map(|v| v.to_owned())?;
+                    .map(std::borrow::ToOwned::to_owned)?;
                 Some((article_id, icon_src))
             })
             .collect()
@@ -1126,7 +1126,7 @@ mod helpers {
         let mut seen = std::collections::HashSet::new();
         document
             .select(&sel)
-            .filter_map(|el| el.value().attr("href").map(|v| v.to_owned()))
+            .filter_map(|el| el.value().attr("href").map(std::borrow::ToOwned::to_owned))
             .filter(|href| seen.insert(href.clone()))
             .collect()
     }
@@ -1140,7 +1140,7 @@ mod helpers {
             .map(|el| el.text().collect::<String>())
     }
 
-    /// Returns (domain_text, href) from the domain link on the article detail page.
+    /// Returns (`domain_text`, href) from the domain link on the article detail page.
     pub fn find_article_domain_link(content: &str) -> Option<(String, String)> {
         let document = Html::parse_document(content);
         let link = document
@@ -1172,7 +1172,7 @@ mod helpers {
         None
     }
 
-    /// Returns clients from the clients page as (name, client_id, client_secret) tuples.
+    /// Returns clients from the clients page as (name, `client_id`, `client_secret`) tuples.
     pub fn find_clients(content: &str) -> Vec<(String, String, String)> {
         let document = Html::parse_document(content);
         let details_sel = Selector::parse("details").unwrap();
@@ -1205,7 +1205,7 @@ mod helpers {
                 form.select(&input_sel)
                     .next()
                     .and_then(|input| input.value().attr("value"))
-                    .map(|v| v.to_owned())
+                    .map(std::borrow::ToOwned::to_owned)
             })
             .collect()
     }

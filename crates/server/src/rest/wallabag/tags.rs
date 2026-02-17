@@ -21,7 +21,7 @@ pub async fn get_tags(
     let result = tags::get_all(&mut tx, user_info.user_id)
         .await?
         .into_iter()
-        .map(|tr| tr.into())
+        .map(std::convert::Into::into)
         .collect();
 
     Ok(Json(result))
@@ -37,7 +37,7 @@ pub async fn delete_tags_by_label(
     let result = tags::delete_all_by_label(&mut tx, user_info.user_id, &label.labels)
         .await?
         .into_iter()
-        .map(|tr| tr.into())
+        .map(std::convert::Into::into)
         .collect();
 
     Ok(Json(result))
@@ -52,7 +52,7 @@ pub async fn delete_tag_by_id(
 
     let result = tags::delete_by_id(&mut tx, user_info.user_id, tag_id.into_inner())
         .await?
-        .map(|tr| tr.into());
+        .map(std::convert::Into::into);
 
     if let Some(delete_tag) = result {
         Ok(Json(delete_tag))
@@ -70,7 +70,7 @@ pub async fn delete_tag_by_label(
 
     let result = tags::delete_by_label(&mut tx, user_info.user_id, &label.label)
         .await?
-        .map(|tr| tr.into());
+        .map(std::convert::Into::into);
 
     if let Some(delete_tag) = result {
         Ok(Json(delete_tag))

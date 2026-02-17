@@ -22,7 +22,7 @@ pub struct TransactionHolder<'a, 'c> {
     tx: RefMut<'a, Option<Transaction<'c, Db>>>,
 }
 
-impl<'a, 'c> Deref for TransactionHolder<'a, 'c> {
+impl<'c> Deref for TransactionHolder<'_, 'c> {
     type Target = Transaction<'c, Db>;
 
     fn deref(&self) -> &Self::Target {
@@ -30,7 +30,7 @@ impl<'a, 'c> Deref for TransactionHolder<'a, 'c> {
     }
 }
 
-impl<'a, 'c> DerefMut for TransactionHolder<'a, 'c> {
+impl DerefMut for TransactionHolder<'_, '_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.tx.as_mut().expect("Transaction already consumed")
     }
@@ -74,17 +74,17 @@ pub async fn wrap_with_tx(
         Ok(response) => {
             let status = response.status();
 
-            if !(status.is_client_error() || status.is_server_error()) {
+            if status.is_client_error() || status.is_server_error()  {
                 let tx_option = request_context.tx.borrow_mut().take();
                 if let Some(tx) = tx_option {
-                    tx.commit().await.map_err(ErrorInternalServerError)?;
+                    tx.rollback().await.map_err(ErrorInternalServerError)?;
                 } else {
                     return Err(ErrorInternalServerError("Transaction already consumed"));
                 }
             } else {
                 let tx_option = request_context.tx.borrow_mut().take();
                 if let Some(tx) = tx_option {
-                    tx.rollback().await.map_err(ErrorInternalServerError)?;
+                    tx.commit().await.map_err(ErrorInternalServerError)?;
                 } else {
                     return Err(ErrorInternalServerError("Transaction already consumed"));
                 }

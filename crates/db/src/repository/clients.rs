@@ -1,4 +1,3 @@
-use std::ops::DerefMut;
 
 use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
@@ -20,7 +19,7 @@ pub async fn create(
             .bind(client_secret)
             .bind(user_id)
             .bind(created_at)
-            .fetch_one(tx.deref_mut())
+            .fetch_one(&mut **tx)
             .await?)
 }
 
@@ -34,7 +33,7 @@ pub async fn delete_by_id(
     ))
     .bind(user_id)
     .bind(id)
-    .execute(tx.deref_mut())
+    .execute(&mut **tx)
     .await?;
 
     Ok(result.rows_affected() > 0)
@@ -47,13 +46,12 @@ pub async fn find_by_user_id_client_id_and_secret(
     client_secret: &str,
 ) -> ArticlerResult<Option<ClientRow>> {
     let result = sqlx::query_as::<_, ClientRow>(&format!(
-        "SELECT * FROM {} WHERE user_id = ? AND client_id = ? AND client_secret = ?",
-        CLIENTS_TABLE
+        "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? AND client_id = ? AND client_secret = ?"
     ))
     .bind(user_id)
     .bind(client_id)
     .bind(client_secret)
-    .fetch_optional(executor.deref_mut())
+    .fetch_optional(&mut **executor)
     .await?;
 
     Ok(result)
@@ -65,12 +63,11 @@ pub async fn find_by_client_id_and_secret(
     client_secret: &str,
 ) -> ArticlerResult<Option<ClientRow>> {
     let result = sqlx::query_as::<_, ClientRow>(&format!(
-        "SELECT * FROM {} WHERE client_id = ? AND client_secret = ?",
-        CLIENTS_TABLE
+        "SELECT * FROM {CLIENTS_TABLE} WHERE client_id = ? AND client_secret = ?"
     ))
     .bind(client_id)
     .bind(client_secret)
-    .fetch_optional(executor.deref_mut())
+    .fetch_optional(&mut **executor)
     .await?;
 
     Ok(result)
@@ -82,12 +79,11 @@ pub async fn find_by_client_name_and_user_id(
     client_name: &str,
 ) -> ArticlerResult<Option<ClientRow>> {
     let result = sqlx::query_as::<_, ClientRow>(&format!(
-        "SELECT * FROM {} WHERE user_id = ? AND name = ?",
-        CLIENTS_TABLE
+        "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? AND name = ?"
     ))
     .bind(user_id)
     .bind(client_name)
-    .fetch_optional(tx.deref_mut())
+    .fetch_optional(&mut **tx)
     .await?;
 
     Ok(result)
@@ -98,11 +94,10 @@ pub async fn find_by_user_id(
     user_id: Id,
 ) -> ArticlerResult<Vec<ClientRow>> {
     let result = sqlx::query_as::<_, ClientRow>(&format!(
-        "SELECT * FROM {} WHERE user_id = ? ORDER BY id;",
-        CLIENTS_TABLE
+        "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? ORDER BY id;"
     ))
     .bind(user_id)
-    .fetch_all(tx.deref_mut())
+    .fetch_all(&mut **tx)
     .await?;
 
     Ok(result)
@@ -198,7 +193,7 @@ mod tests {
             client_id: "client_1".to_owned(),
             client_secret: "secret_1".to_owned(),
             user_id: 1,
-            created_at: 1687895200,
+            created_at: 1_687_895_200,
         };
 
         assert_eq!(client, Some(expected_client));
@@ -213,7 +208,7 @@ mod tests {
             client_id: "client_2".to_owned(),
             client_secret: "secret_2".to_owned(),
             user_id: 1,
-            created_at: 1687895300,
+            created_at: 1_687_895_300,
         };
 
         assert_eq!(client, Some(expected_client_2));
@@ -263,7 +258,7 @@ mod tests {
             client_id: "android_client_id".to_owned(),
             client_secret: "android_client_secret".to_owned(),
             user_id: 1,
-            created_at: 1687895400,
+            created_at: 1_687_895_400,
         };
 
         assert_eq!(client, Some(expected_client));
@@ -303,7 +298,7 @@ mod tests {
                 client_id: "client_1".to_owned(),
                 client_secret: "secret_1".to_owned(),
                 user_id: 1,
-                created_at: 1687895200,
+                created_at: 1_687_895_200,
             },
             ClientRow {
                 id: 2,
@@ -311,7 +306,7 @@ mod tests {
                 client_id: "client_2".to_owned(),
                 client_secret: "secret_2".to_owned(),
                 user_id: 1,
-                created_at: 1687895300,
+                created_at: 1_687_895_300,
             },
             ClientRow {
                 id: 3,
@@ -319,7 +314,7 @@ mod tests {
                 client_id: "android_client_id".to_owned(),
                 client_secret: "android_client_secret".to_owned(),
                 user_id: 1,
-                created_at: 1687895400,
+                created_at: 1_687_895_400,
             },
         ];
 
@@ -334,7 +329,7 @@ mod tests {
             client_id: "client_4".to_owned(),
             client_secret: "secret_4".to_owned(),
             user_id: 2,
-            created_at: 1687895200,
+            created_at: 1_687_895_200,
         }];
 
         assert_eq!(clients, expected_clients);

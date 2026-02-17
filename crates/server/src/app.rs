@@ -22,6 +22,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    #[must_use] 
     pub fn new(pool: Pool<Sqlite>, scraper: Scraper, handlebars: Handlebars<'static>) -> Self {
         Self {
             pool,
@@ -79,7 +80,7 @@ pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::
 
     Ok(
         HttpServer::new(move || app(app_data.clone(), cookie_key.clone()))
-            .bind(format!("0.0.0.0:{}", port))?
+            .bind(format!("0.0.0.0:{port}"))?
             .run(),
     )
 }

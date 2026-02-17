@@ -1,4 +1,3 @@
-use std::ops::DerefMut;
 
 use result::ArticlerResult;
 use sqlx::{prelude::*, sqlite::SqliteRow};
@@ -21,7 +20,7 @@ pub async fn create_token(
     .bind(expires_in)
     .bind(user_id)
     .bind(client_id)
-    .fetch_one(tx.deref_mut())
+    .fetch_one(&mut **tx)
     .await?)
 }
 
@@ -32,7 +31,7 @@ pub async fn delete_token(
     Ok(
         sqlx::query_as::<_, TokenRow>(&format!("DELETE FROM {TOKENS_TABLE} WHERE token = ?"))
             .bind(token)
-            .fetch_optional(tx.deref_mut())
+            .fetch_optional(&mut **tx)
             .await?,
     )
 }
@@ -41,7 +40,7 @@ pub async fn delete_expired_tokens(tx: &mut sqlx::Transaction<'_, Db>) -> Articl
     sqlx::query_as::<_, TokenRow>(&format!(
         "DELETE FROM {TOKENS_TABLE} WHERE expires_at <= strftime('%s', 'now');"
     ))
-    .fetch_optional(tx.deref_mut())
+    .fetch_optional(&mut **tx)
     .await?;
 
     Ok(())
@@ -54,7 +53,7 @@ pub async fn find_token(
     Ok(
         sqlx::query_as::<_, TokenRow>(&format!("SELECT * FROM {TOKENS_TABLE} WHERE token = ?;"))
             .bind(token)
-            .fetch_optional(tx.deref_mut())
+            .fetch_optional(&mut **tx)
             .await?,
     )
 }

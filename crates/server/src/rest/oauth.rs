@@ -26,6 +26,8 @@ pub fn routes(cfg: &mut ServiceConfig) {
     );
 }
 
+// TODO refactor this ugle deeeep ifs and the method itself
+#[expect(clippy::too_many_lines)]
 async fn post_token(
     tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
@@ -199,10 +201,10 @@ struct GetToken {
 #[derive(Serialize, Debug)]
 struct Token {
     access_token: String,
+    refresh_token: String,
     expires_in: i64,
     token_type: String,
     scope: Option<String>,
-    refresh_token: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -214,7 +216,7 @@ struct OauthError {
 impl std::fmt::Display for OauthError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let json = serde_json::to_string(self).map_err(|_| std::fmt::Error)?;
-        write!(f, "{}", json)
+        write!(f, "{json}")
     }
 }
 

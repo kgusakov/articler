@@ -65,16 +65,14 @@ async fn android_app_login_flow(pool: SqlitePool) {
         Regex::new(r#"/login_check"? method="?post"? name="?loginform"?>"#).unwrap();
     assert!(
         login_form_pattern.is_match(login_html),
-        "Login form pattern not found in: {}",
-        login_html
+        "Login form pattern not found in: {login_html}"
     );
 
     // Check WALLABAG_LOGO_V2 pattern: alt="wallabag logo" />
     let logo_pattern = Regex::new(r#"alt="wallabag logo" ?/?>"#).unwrap();
     assert!(
         logo_pattern.is_match(login_html),
-        "Wallabag logo pattern not found in: {}",
-        login_html
+        "Wallabag logo pattern not found in: {login_html}"
     );
 
     // Step 3: Login with credentials from fixtures
@@ -104,8 +102,7 @@ async fn android_app_login_flow(pool: SqlitePool) {
     let logout_pattern = Regex::new(r#"/logout"?>"#).unwrap();
     assert!(
         logout_pattern.is_match(home_html),
-        "Logout link pattern not found in: {}",
-        home_html
+        "Logout link pattern not found in: {home_html}"
     );
 
     // Step 5: Go to /developer and check client pattern

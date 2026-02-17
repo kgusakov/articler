@@ -1,4 +1,4 @@
-use std::{fmt::Display, ops::DerefMut};
+use std::fmt::Display;
 
 use chrono::Utc;
 use indexmap::IndexMap;
@@ -19,10 +19,10 @@ pub async fn find_all(
     params: &EntriesCriteria,
 ) -> ArticlerResult<Vec<(EntryRow, Vec<crate::repository::tags::TagRow>)>> {
     let mut q_builder = QueryBuilder::new(format!(
-        r#"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
+        r"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
         WHERE e.id in (
             SELECT id FROM {ENTRIES_TABLE}
-            WHERE user_id = "#
+            WHERE user_id = "
     ));
 
     q_builder.push_bind(params.user_id);
@@ -100,7 +100,7 @@ pub async fn find_all(
         );
     }
 
-    let raw_rows = q_builder.build().fetch_all(tx.deref_mut()).await?;
+    let raw_rows = q_builder.build().fetch_all(&mut **tx).await?;
 
     let mut entrs = IndexMap::<i32, Vec<&SqliteRow>>::new();
 
@@ -139,7 +139,7 @@ pub async fn exists_by_id(
     ))
     .bind(user_id)
     .bind(id)
-    .fetch_one(tx.deref_mut())
+    .fetch_one(&mut **tx)
     .await?;
 
     Ok(result == 1)
@@ -152,12 +152,12 @@ pub async fn delete_tag_by_tag_id(
     tag_id: Id,
 ) -> ArticlerResult<bool> {
     let result = sqlx::query(&format!(
-        r#"DELETE FROM {ENTRIES_TAG_TABLE} WHERE tag_id = ? AND entry_id in (SELECT id FROM {ENTRIES_TABLE} WHERE id = ? AND user_id = ?)"#
+        r"DELETE FROM {ENTRIES_TAG_TABLE} WHERE tag_id = ? AND entry_id in (SELECT id FROM {ENTRIES_TABLE} WHERE id = ? AND user_id = ?)"
     ))
     .bind(tag_id)
     .bind(id)
     .bind(user_id)
-    .execute(tx.deref_mut())
+    .execute(&mut **tx)
     .await?;
 
     Ok(result.rows_affected() > 0)
@@ -169,7 +169,7 @@ pub async fn count(
 ) -> ArticlerResult<i64> {
     // TODO rewrite this funny stupid count
     let mut q_builder = QueryBuilder::new(format!(
-        r#"SELECT COUNT(DISTINCT e.id) FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"#,
+        r"SELECT COUNT(DISTINCT e.id) FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id",
     ));
     q_builder.push(" WHERE e.user_id = ");
     q_builder.push_bind(params.user_id);
@@ -216,7 +216,7 @@ pub async fn count(
         );
     }
 
-    Ok(q_builder.build().fetch_one(tx.deref_mut()).await?.get(0))
+    Ok(q_builder.build().fetch_one(&mut **tx).await?.get(0))
 }
 
 pub async fn create(
@@ -225,7 +225,7 @@ pub async fn create(
     tags: &[crate::repository::tags::CreateTag],
 ) -> ArticlerResult<(EntryRow, Vec<crate::repository::tags::TagRow>)> {
     let id: i64 = sqlx::query_scalar(
-        r#"
+        r"
         INSERT INTO entries (
             user_id, url, hashed_url, given_url, hashed_given_url, title, content, is_archived, archived_at,
             is_starred, starred_at, created_at, updated_at, mimetype,
@@ -233,7 +233,7 @@ pub async fn create(
             origin_url, published_at, published_by, is_public, uid
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
-        "#,
+        ",
     )
     .bind(entry.user_id)
     .bind(entry.url)
@@ -258,7 +258,7 @@ pub async fn create(
     .bind(entry.published_by)
     .bind(entry.is_public)
     .bind(entry.uid)
-    .fetch_one(tx.deref_mut())
+    .fetch_one(&mut **tx)
     .await?;
 
     if !tags.is_empty() {
@@ -267,19 +267,18 @@ pub async fn create(
 
     let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
         .bind(id)
-        .fetch_one(tx.deref_mut())
+        .fetch_one(&mut **tx)
         .await?;
 
     let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(&format!(
-        r#"
-        SELECT t.* FROM {} as et
-        LEFT JOIN {} t on t.id = et.tag_id
+        r"
+        SELECT t.* FROM {ENTRIES_TAG_TABLE} as et
+        LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
         WHERE et.entry_id = ?
-        "#,
-        ENTRIES_TAG_TABLE, TAGS_TABLE
+        "
     ))
     .bind(entry.id)
-    .fetch_all(tx.deref_mut())
+    .fetch_all(&mut **tx)
     .await?;
 
     Ok((entry, tags))
@@ -295,7 +294,7 @@ pub async fn find_by_id(
     ))
     .bind(user_id)
     .bind(id)
-    .fetch_optional(tx.deref_mut())
+    .fetch_optional(&mut **tx)
     .await?;
 
     let Some(entry) = entry else {
@@ -303,15 +302,14 @@ pub async fn find_by_id(
     };
 
     let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(&format!(
-        r#"
-        SELECT t.* FROM {} as et
-        LEFT JOIN {} t on t.id = et.tag_id
+        r"
+        SELECT t.* FROM {ENTRIES_TAG_TABLE} as et
+        LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
         WHERE et.entry_id = ?
-        "#,
-        ENTRIES_TAG_TABLE, TAGS_TABLE
+        "
     ))
     .bind(id)
-    .fetch_all(tx.deref_mut())
+    .fetch_all(&mut **tx)
     .await?;
 
     Ok(Some((entry, tags)))
@@ -323,7 +321,7 @@ pub async fn update_by_id(
     id: Id,
     update: UpdateEntry,
 ) -> ArticlerResult<bool> {
-    let mut query_builder = QueryBuilder::new(format!("UPDATE {} SET ", ENTRIES_TABLE));
+    let mut query_builder = QueryBuilder::new(format!("UPDATE {ENTRIES_TABLE} SET "));
 
     let mut separated = query_builder.separated(", ");
 
@@ -406,7 +404,7 @@ pub async fn update_by_id(
     query_builder.push(" AND user_id = ");
     query_builder.push_bind(user_id);
 
-    let result = query_builder.build().execute(tx.deref_mut()).await?;
+    let result = query_builder.build().execute(&mut **tx).await?;
 
     Ok(result.rows_affected() > 0)
 }
@@ -419,7 +417,7 @@ pub async fn delete_by_id(
     let result = sqlx::query("DELETE FROM entries WHERE user_id = ? AND id = ?")
         .bind(user_id)
         .bind(id)
-        .execute(tx.deref_mut())
+        .execute(&mut **tx)
         .await?;
 
     Ok(result.rows_affected() > 0)
@@ -552,21 +550,21 @@ pub struct UpdateEntry {
 impl Default for UpdateEntry {
     fn default() -> Self {
         Self {
-            title: Default::default(),
-            content: Default::default(),
-            is_archived: Default::default(),
-            archived_at: Default::default(),
-            is_starred: Default::default(),
-            starred_at: Default::default(),
+            title: None,
+            content: None,
+            is_archived: None,
+            archived_at: None,
+            is_starred: None,
+            starred_at: None,
             updated_at: Utc::now().timestamp(),
-            language: Default::default(),
-            reading_time: Default::default(),
-            preview_picture: Default::default(),
-            origin_url: Default::default(),
-            published_at: Default::default(),
-            published_by: Default::default(),
-            is_public: Default::default(),
-            uid: Default::default(),
+            language: None,
+            reading_time: None,
+            preview_picture: None,
+            origin_url: None,
+            published_at: None,
+            published_by: None,
+            is_public: None,
+            uid: None,
         }
     }
 }
@@ -717,10 +715,10 @@ mod tests {
             title: None,
             content: None,
             is_archived: Some(Some(true)),
-            archived_at: Some(Some(1701787200)),
+            archived_at: Some(Some(1_701_787_200)),
             is_starred: None,
             starred_at: None,
-            updated_at: 0, // Invalid: 0 < 1701428400
+            updated_at: 0, // Invalid: 0 < 1_701_428_400
             language: None,
             reading_time: None,
             preview_picture: None,
@@ -741,8 +739,7 @@ mod tests {
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("CHECK") || err_msg.contains("constraint"),
-            "Error should mention constraint violation, got: {}",
-            err_msg
+            "Error should mention constraint violation, got: {err_msg}"
         );
     }
 
@@ -769,15 +766,15 @@ mod tests {
                 archived_at: None,
                 is_starred: false,
                 starred_at: None,
-                created_at: 1701428400,
-                updated_at: 1702220700,
+                created_at: 1_701_428_400,
+                updated_at: 1_702_220_700,
                 mimetype: Some("text/html".to_owned()),
                 language: Some("en".to_owned()),
                 reading_time: 8,
                 domain_name: "a.com".to_owned(),
                 preview_picture: Some("https://a.com/pic1.jpg".to_owned()),
                 origin_url: Some("https://a.com/o1".to_owned()),
-                published_at: Some(1701424800),
+                published_at: Some(1_701_424_800),
                 published_by: Some("author1".to_owned()),
                 is_public: Some(false),
                 uid: None,
@@ -827,15 +824,15 @@ mod tests {
                 title: Some(Some("new title".to_owned())),
                 content: Some(Some("new content".to_owned())),
                 is_archived: Some(Some(true)),
-                archived_at: Some(Some(1702000000)),
+                archived_at: Some(Some(1_702_000_000)),
                 is_starred: Some(Some(true)),
-                starred_at: Some(Some(1702000001)),
-                updated_at: 1702300000,
+                starred_at: Some(Some(1_702_000_001)),
+                updated_at: 1_702_300_000,
                 language: Some(Some("fr".to_owned())),
                 reading_time: Some(Some(42)),
                 preview_picture: Some(Some("https://new.pic/img.jpg".to_owned())),
                 origin_url: Some(Some("https://new.origin".to_owned())),
-                published_at: Some(Some(1702000002)),
+                published_at: Some(Some(1_702_000_002)),
                 published_by: Some(Some("new author".to_owned())),
                 is_public: Some(Some(true)),
                 uid: Some(Some("new-uid".to_owned())),
@@ -858,18 +855,18 @@ mod tests {
                 title: "new title".to_owned(),
                 content: "new content".to_owned(),
                 is_archived: true,
-                archived_at: Some(1702000000),
+                archived_at: Some(1_702_000_000),
                 is_starred: true,
-                starred_at: Some(1702000001),
-                created_at: 1701428400,
-                updated_at: 1702300000,
+                starred_at: Some(1_702_000_001),
+                created_at: 1_701_428_400,
+                updated_at: 1_702_300_000,
                 mimetype: Some("text/html".to_owned()),
                 language: Some("fr".to_owned()),
                 reading_time: 42,
                 domain_name: "a.com".to_owned(),
                 preview_picture: Some("https://new.pic/img.jpg".to_owned()),
                 origin_url: Some("https://new.origin".to_owned()),
-                published_at: Some(1702000002),
+                published_at: Some(1_702_000_002),
                 published_by: Some("new author".to_owned()),
                 is_public: Some(true),
                 uid: Some("new-uid".to_owned()),
@@ -890,7 +887,7 @@ mod tests {
             1,
             UpdateEntry {
                 title: Some(Some("only title changed".to_owned())),
-                updated_at: 1702300000,
+                updated_at: 1_702_300_000,
                 ..Default::default()
             },
         )
@@ -914,15 +911,15 @@ mod tests {
                 archived_at: None,
                 is_starred: false,
                 starred_at: None,
-                created_at: 1701428400,
-                updated_at: 1702300000,
+                created_at: 1_701_428_400,
+                updated_at: 1_702_300_000,
                 mimetype: Some("text/html".to_owned()),
                 language: Some("en".to_owned()),
                 reading_time: 8,
                 domain_name: "a.com".to_owned(),
                 preview_picture: Some("https://a.com/pic1.jpg".to_owned()),
                 origin_url: Some("https://a.com/o1".to_owned()),
-                published_at: Some(1701424800),
+                published_at: Some(1_701_424_800),
                 published_by: Some("author1".to_owned()),
                 is_public: Some(false),
                 uid: None,
@@ -947,7 +944,7 @@ mod tests {
                 origin_url: Some(None),
                 published_at: Some(None),
                 published_by: Some(None),
-                updated_at: 1702300000,
+                updated_at: 1_702_300_000,
                 ..Default::default()
             },
         )
@@ -976,7 +973,7 @@ mod tests {
             999,
             UpdateEntry {
                 title: Some(Some("nope".to_owned())),
-                updated_at: 1702300000,
+                updated_at: 1_702_300_000,
                 ..Default::default()
             },
         )
@@ -990,7 +987,7 @@ mod tests {
             1,
             UpdateEntry {
                 title: Some(Some("nope".to_owned())),
-                updated_at: 1702300000,
+                updated_at: 1_702_300_000,
                 ..Default::default()
             },
         )

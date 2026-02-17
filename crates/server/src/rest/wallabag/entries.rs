@@ -47,7 +47,7 @@ pub async fn post_entries(
             (
                 t,
                 c,
-                "".to_owned(),
+                String::new(),
                 add_entry.published_at,
                 add_entry.language,
                 add_entry.preview_picture,
@@ -57,7 +57,7 @@ pub async fn post_entries(
                 Ok(document) => (
                     document.title,
                     document.content_html,
-                    document.mime_type.unwrap_or("".to_owned()),
+                    document.mime_type.unwrap_or(String::new()),
                     document.published_at,
                     document.language,
                     document.image_url,
@@ -67,8 +67,8 @@ pub async fn post_entries(
                     (
                         // TODO abstraction is leaking here - we need to generalize handling of parsing errors
                         extract_title(&add_entry.url).to_owned(),
-                        "".to_owned(),
-                        "".to_owned(),
+                        String::new(),
+                        String::new(),
                         None,
                         None,
                         None,
@@ -125,9 +125,8 @@ pub async fn post_entries(
 
     let create_tags = add_entry
         .tags
-        .map(|_tags| {
-            _tags
-                .into_iter()
+        .map(|tags| {
+            tags.into_iter()
                 .map(tag_to_create_tag)
                 .collect::<Vec<tags::CreateTag>>()
         })
@@ -180,10 +179,13 @@ pub async fn entries(
 
     let count_without_paging = entries::count(&mut tx, &params).await?;
 
+    // TODO fix clippy
+    #[expect(clippy::cast_precision_loss)]
+    #[expect(clippy::cast_possible_truncation)]
     let pages = (count_without_paging as f64 / request.per_page as f64).ceil() as i64;
 
     if request.page > pages {
-        return Err(ErrorNotFound("Not found"));
+        return Err(ErrorNotFound("Page not found"));
     }
 
     // TODO implement all needed request filters and etc
@@ -192,7 +194,7 @@ pub async fn entries(
     let mut ents = vec![];
 
     for (e, tags) in entries {
-        let mapped_tags: Vec<Tag> = tags.into_iter().map(|tr| tr.into()).collect();
+        let mapped_tags: Vec<Tag> = tags.into_iter().map(std::convert::Into::into).collect();
         ents.push(Entry::try_from((e, mapped_tags))?);
     }
 
@@ -228,7 +230,7 @@ pub async fn get_tags_by_entry(
         let result = tags::find_by_entry_id(&mut tx, user_info.user_id, entry_id)
             .await?
             .into_iter()
-            .map(|tr| tr.into())
+            .map(std::convert::Into::into)
             .collect();
 
         Ok(Json(result))
@@ -252,7 +254,7 @@ pub async fn delete_tag_from_entry(
         if let Some((entry_row, tag_rows)) =
             entries::find_by_id(&mut tx, user_info.user_id, entry_id).await?
         {
-            let tags = tag_rows.into_iter().map(|tr| tr.into()).collect();
+            let tags = tag_rows.into_iter().map(std::convert::Into::into).collect();
 
             Ok(Json(Entry::try_from((entry_row, tags))?))
         } else {
@@ -297,7 +299,7 @@ pub async fn delete_entry(
                 return Err(ErrorNotFound("Entry not found"));
             }
 
-            let tags: Vec<Tag> = tag_rows.into_iter().map(|tr| tr.into()).collect();
+            let tags: Vec<Tag> = tag_rows.into_iter().map(std::convert::Into::into).collect();
             let entry = Entry::try_from((entry_row, tags))?;
 
             Ok(Json(DeleteEntryResponse::Full {
@@ -410,13 +412,13 @@ pub async fn patch_entry(
             .collect();
 
         tags::update_tags_by_entry_id(&mut tx, user_info.user_id, entry_id, &full_tags).await?;
-    };
+    }
 
     let (entry_row, tag_rows) = entries::find_by_id(&mut tx, user_info.user_id, entry_id)
         .await?
         .ok_or_else(|| ErrorNotFound("Entry not found"))?;
 
-    let entry_tags = tag_rows.into_iter().map(|t| t.into()).collect();
+    let entry_tags = tag_rows.into_iter().map(std::convert::Into::into).collect();
 
     let entry = Entry::try_from((entry_row, entry_tags))?;
 
@@ -550,7 +552,7 @@ impl TryFrom<(entries::EntryRow, Vec<Tag>)> for Entry {
             // TODO this .map(to_string) look ugly
             published_by: e
                 .published_by
-                .map(|s| s.split(",").map(|s| s.to_owned()).collect()),
+                .map(|s| s.split(',').map(std::borrow::ToOwned::to_owned).collect()),
             is_public: e.is_public,
             uid: e.uid,
         })

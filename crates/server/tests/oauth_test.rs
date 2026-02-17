@@ -601,11 +601,11 @@ async fn test_options_oauth_token(pool: SqlitePool) {
         .unwrap()
         .to_str()
         .unwrap()
-        .split(",")
-        .map(|s| s.trim())
+        .split(',')
+        .map(str::trim)
         .collect();
 
-    sorted_result.sort();
+    sorted_result.sort_unstable();
 
     assert!(
         ["GET", "POST", "PATCH"]

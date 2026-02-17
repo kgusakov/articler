@@ -1,4 +1,3 @@
-use std::ops::DerefMut;
 
 use sqlx::{FromRow, QueryBuilder, Row, sqlite::SqliteRow};
 
@@ -34,14 +33,13 @@ pub async fn create_and_link_tags(
             .push_bind(&tag.slug);
     });
     tag_builder.push(" ON CONFLICT DO NOTHING");
-    tag_builder.build().execute(tx.deref_mut()).await?;
+    tag_builder.build().execute(&mut **tx).await?;
 
     let mut insert_query =
-        QueryBuilder::new(format!(r#"INSERT INTO {} SELECT "#, ENTRIES_TAG_TABLE));
+        QueryBuilder::new(format!(r"INSERT INTO {ENTRIES_TAG_TABLE} SELECT "));
     insert_query.push(entry_id);
     insert_query.push(format!(
-        " as entry_id, id as tag_id FROM {} WHERE label IN (",
-        TAGS_TABLE
+        " as entry_id, id as tag_id FROM {TAGS_TABLE} WHERE label IN ("
     ));
     let mut separated = insert_query.separated(", ");
     for tag in tags {
@@ -49,9 +47,9 @@ pub async fn create_and_link_tags(
     }
     separated.push_unseparated(") ON CONFLICT DO NOTHING");
 
-    insert_query.build().execute(tx.deref_mut()).await?;
+    insert_query.build().execute(&mut **tx).await?;
 
-    let mut get_tags = QueryBuilder::new(format!("SELECT * from {} WHERE label IN (", TAGS_TABLE));
+    let mut get_tags = QueryBuilder::new(format!("SELECT * from {TAGS_TABLE} WHERE label IN ("));
 
     let mut tags_separated = get_tags.separated(", ");
     for tag in tags {
@@ -61,7 +59,7 @@ pub async fn create_and_link_tags(
 
     Ok(get_tags
         .build_query_as::<TagRow>()
-        .fetch_all(tx.deref_mut())
+        .fetch_all(&mut **tx)
         .await?)
 }
 
@@ -84,10 +82,10 @@ pub async fn update_tags_by_entry_id(
     builder.push(") ");
 
     builder.push(format!(
-        r#"
+        r"
          AND tag_id NOT IN (
             SELECT id FROM {TAGS_TABLE} t WHERE t.label IN (
-    "#,
+    ",
     ));
 
     let mut separated = builder.separated(", ");
@@ -97,7 +95,7 @@ pub async fn update_tags_by_entry_id(
 
     separated.push_unseparated("))");
 
-    builder.build().execute(tx.deref_mut()).await?;
+    builder.build().execute(&mut **tx).await?;
 
     Ok(result_tags)
 }
@@ -108,15 +106,15 @@ pub async fn find_by_entry_id(
     entry_id: Id,
 ) -> ArticlerResult<Vec<TagRow>> {
     Ok(sqlx::query_as::<_, TagRow>(&format!(
-        r#"
+        r"
         SELECT t.* FROM {TAGS_TABLE} t
         INNER JOIN {ENTRIES_TAG_TABLE} et ON et.entry_id = ? AND et.tag_id = t.id
         WHERE t.user_id = ?
-    "#,
+    ",
     ))
     .bind(entry_id)
     .bind(user_id)
-    .fetch_all(tx.deref_mut())
+    .fetch_all(&mut **tx)
     .await?)
 }
 
@@ -127,7 +125,7 @@ pub async fn get_all(
     Ok(
         sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {TAGS_TABLE} t WHERE user_id = ?",))
             .bind(user_id)
-            .fetch_all(tx.deref_mut())
+            .fetch_all(&mut **tx)
             .await?,
     )
 }
@@ -142,7 +140,7 @@ pub async fn delete_by_label(
     ))
     .bind(user_id)
     .bind(label)
-    .fetch_optional(tx.deref_mut())
+    .fetch_optional(&mut **tx)
     .await?)
 }
 
@@ -165,7 +163,7 @@ pub async fn delete_all_by_label(
 
     Ok(builder
         .build_query_as::<TagRow>()
-        .fetch_all(tx.deref_mut())
+        .fetch_all(&mut **tx)
         .await?)
 }
 
@@ -179,7 +177,7 @@ pub async fn delete_by_id(
     ))
     .bind(user_id)
     .bind(id)
-    .fetch_optional(tx.deref_mut())
+    .fetch_optional(&mut **tx)
     .await?)
 }
 

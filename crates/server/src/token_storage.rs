@@ -50,6 +50,7 @@ impl Default for TokenStorage {
 }
 
 impl TokenStorage {
+    #[must_use] 
     pub fn new() -> Self {
         TokenStorage {
             inner: Mutex::new(TokenStorageInner {
@@ -231,11 +232,11 @@ mod tests {
             .unwrap();
 
         assert!(
-            token.access_token.chars().all(|c| c.is_alphanumeric()),
+            token.access_token.chars().all(char::is_alphanumeric),
             "Token should only contain alphanumeric characters"
         );
         assert!(
-            token.refresh_token.chars().all(|c| c.is_alphanumeric()),
+            token.refresh_token.chars().all(char::is_alphanumeric),
             "Token should only contain alphanumeric characters"
         );
         assert!(token.expires_in > 0, "Expiry should be positive number");
