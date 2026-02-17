@@ -50,7 +50,7 @@ impl Default for TokenStorage {
 }
 
 impl TokenStorage {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         TokenStorage {
             inner: Mutex::new(TokenStorageInner {
@@ -92,7 +92,7 @@ impl TokenStorage {
             },
         );
 
-        let token_row = tokens::create_token(
+        let token_row = tokens::create(
             tx,
             &refresh_token,
             user_id,
@@ -138,9 +138,9 @@ impl TokenStorage {
         // It's ok to unwrap - poison should be propagated
         let mut inner = self.inner.lock().await;
 
-        tokens::delete_expired_tokens(tx).await?;
+        tokens::delete_expired(tx).await?;
 
-        if let Some(internal_token) = tokens::find_token(tx, refresh_token).await? {
+        if let Some(internal_token) = tokens::find(tx, refresh_token).await? {
             let now = self.now();
 
             let access_token = generate_token();
@@ -152,7 +152,7 @@ impl TokenStorage {
             };
 
             inner.refresh_tokens.remove(refresh_token);
-            tokens::delete_token(tx, refresh_token).await?;
+            tokens::delete(tx, refresh_token).await?;
 
             inner.access_tokens.insert(
                 access_token.clone(),
@@ -162,7 +162,7 @@ impl TokenStorage {
                 },
             );
 
-            tokens::create_token(
+            tokens::create(
                 tx,
                 &new_refresh_token,
                 internal_token.user_id,

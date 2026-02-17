@@ -14,6 +14,7 @@ use sqlx::{Pool, Sqlite};
 use crate::{middleware::wrap_with_tx, scraper::Scraper, token_storage::TokenStorage};
 use db::repository;
 
+#[expect(clippy::module_name_repetitions)]
 pub struct AppState {
     pub pool: Pool<repository::Db>,
     pub token_storage: TokenStorage,
@@ -22,7 +23,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    #[must_use] 
+    #[must_use]
     pub fn new(pool: Pool<Sqlite>, scraper: Scraper, handlebars: Handlebars<'static>) -> Self {
         Self {
             pool,

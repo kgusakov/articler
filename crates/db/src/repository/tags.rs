@@ -1,4 +1,3 @@
-
 use sqlx::{FromRow, QueryBuilder, Row, sqlite::SqliteRow};
 
 use result::ArticlerResult;
@@ -8,7 +7,7 @@ use super::{
 };
 
 /* Return Vec of tags, which was linked to entry_id. Vec consists of ALL tags, even tags, which was already linked before and included in tags argument. */
-pub async fn create_and_link_tags(
+pub async fn create_and_link(
     tx: &mut sqlx::Transaction<'_, Db>,
     entry_id: Id,
     tags: &[CreateTag],
@@ -35,8 +34,7 @@ pub async fn create_and_link_tags(
     tag_builder.push(" ON CONFLICT DO NOTHING");
     tag_builder.build().execute(&mut **tx).await?;
 
-    let mut insert_query =
-        QueryBuilder::new(format!(r"INSERT INTO {ENTRIES_TAG_TABLE} SELECT "));
+    let mut insert_query = QueryBuilder::new(format!(r"INSERT INTO {ENTRIES_TAG_TABLE} SELECT "));
     insert_query.push(entry_id);
     insert_query.push(format!(
         " as entry_id, id as tag_id FROM {TAGS_TABLE} WHERE label IN ("
@@ -69,7 +67,7 @@ pub async fn update_tags_by_entry_id(
     entry_id: Id,
     tags: &[CreateTag],
 ) -> ArticlerResult<Vec<TagRow>> {
-    let result_tags = create_and_link_tags(tx, entry_id, tags).await?;
+    let result_tags = create_and_link(tx, entry_id, tags).await?;
 
     let mut builder = QueryBuilder::new(format!(
         "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE entry_id =",

@@ -160,7 +160,7 @@ pub async fn entries(
 ) -> actix_web::Result<Json<Entries>> {
     let request = request.into_inner();
 
-    let params = entries::EntriesCriteria {
+    let params = entries::FindParams {
         user_id: user_info.user_id,
         archive: request.archive,
         starred: request.starred,

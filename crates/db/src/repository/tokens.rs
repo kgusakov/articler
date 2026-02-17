@@ -1,10 +1,9 @@
-
 use result::ArticlerResult;
 use sqlx::{prelude::*, sqlite::SqliteRow};
 
 use crate::repository::{Db, Id, TOKENS_TABLE, Timestamp};
 
-pub async fn create_token(
+pub async fn create(
     tx: &mut sqlx::Transaction<'_, Db>,
     token: &str,
     user_id: Id,
@@ -24,7 +23,7 @@ pub async fn create_token(
     .await?)
 }
 
-pub async fn delete_token(
+pub async fn delete(
     tx: &mut sqlx::Transaction<'_, Db>,
     token: &str,
 ) -> ArticlerResult<Option<TokenRow>> {
@@ -36,7 +35,7 @@ pub async fn delete_token(
     )
 }
 
-pub async fn delete_expired_tokens(tx: &mut sqlx::Transaction<'_, Db>) -> ArticlerResult<()> {
+pub async fn delete_expired(tx: &mut sqlx::Transaction<'_, Db>) -> ArticlerResult<()> {
     sqlx::query_as::<_, TokenRow>(&format!(
         "DELETE FROM {TOKENS_TABLE} WHERE expires_at <= strftime('%s', 'now');"
     ))
@@ -46,7 +45,7 @@ pub async fn delete_expired_tokens(tx: &mut sqlx::Transaction<'_, Db>) -> Articl
     Ok(())
 }
 
-pub async fn find_token(
+pub async fn find(
     tx: &mut sqlx::Transaction<'_, Db>,
     token: &str,
 ) -> ArticlerResult<Option<TokenRow>> {
@@ -98,7 +97,7 @@ mod tests {
         let created_at = chrono::Utc::now().timestamp();
         let expires_in = 3600; // 1 hour
 
-        let token = create_token(
+        let token = create(
             &mut tx, token_str, user_id, client_id, created_at, expires_in,
         )
         .await
@@ -128,13 +127,13 @@ mod tests {
         let created_at = chrono::Utc::now().timestamp();
         let expires_in = 3600;
 
-        let created = create_token(
+        let created = create(
             &mut tx, token_str, user_id, client_id, created_at, expires_in,
         )
         .await
         .unwrap();
 
-        let found = find_token(&mut tx, token_str).await.unwrap();
+        let found = find(&mut tx, token_str).await.unwrap();
 
         assert!(found.is_some(), "Should find the created token");
         let found = found.unwrap();
@@ -151,7 +150,7 @@ mod tests {
     async fn test_find_token_not_found(pool: SqlitePool) {
         let mut tx = pool.begin().await.unwrap();
 
-        let found = find_token(&mut tx, "nonexistent_token").await.unwrap();
+        let found = find(&mut tx, "nonexistent_token").await.unwrap();
 
         assert!(found.is_none(), "Should not find nonexistent token");
     }
@@ -164,7 +163,7 @@ mod tests {
         let mut tx = pool.begin().await.unwrap();
 
         let token_str = "deletable_token";
-        create_token(
+        create(
             &mut tx,
             token_str,
             1,
@@ -175,15 +174,15 @@ mod tests {
         .await
         .unwrap();
 
-        let before_delete = find_token(&mut tx, token_str).await.unwrap();
+        let before_delete = find(&mut tx, token_str).await.unwrap();
         assert!(
             before_delete.is_some(),
             "Token should exist before deletion"
         );
 
-        delete_token(&mut tx, token_str).await.unwrap();
+        delete(&mut tx, token_str).await.unwrap();
 
-        let found = find_token(&mut tx, token_str).await.unwrap();
+        let found = find(&mut tx, token_str).await.unwrap();
         assert!(found.is_none(), "Token should be deleted");
     }
 
@@ -194,7 +193,7 @@ mod tests {
     async fn test_delete_token_not_found(pool: SqlitePool) {
         let mut tx = pool.begin().await.unwrap();
 
-        let deleted = delete_token(&mut tx, "nonexistent_token").await.unwrap();
+        let deleted = delete(&mut tx, "nonexistent_token").await.unwrap();
 
         assert!(
             deleted.is_none(),
@@ -212,21 +211,19 @@ mod tests {
         let now = chrono::Utc::now().timestamp();
 
         let expired_token = "expired_token";
-        create_token(&mut tx, expired_token, 1, 1, now, -7200)
+        create(&mut tx, expired_token, 1, 1, now, -7200)
             .await
             .unwrap();
 
         let valid_token = "valid_token";
-        create_token(&mut tx, valid_token, 1, 1, now, 3600)
-            .await
-            .unwrap();
+        create(&mut tx, valid_token, 1, 1, now, 3600).await.unwrap();
 
-        delete_expired_tokens(&mut tx).await.unwrap();
+        delete_expired(&mut tx).await.unwrap();
 
-        let found_expired = find_token(&mut tx, expired_token).await.unwrap();
+        let found_expired = find(&mut tx, expired_token).await.unwrap();
         assert!(found_expired.is_none(), "Expired token should be deleted");
 
-        let found_valid = find_token(&mut tx, valid_token).await.unwrap();
+        let found_valid = find(&mut tx, valid_token).await.unwrap();
         assert!(found_valid.is_some(), "Valid token should not be deleted");
     }
 
@@ -239,15 +236,9 @@ mod tests {
 
         let now = chrono::Utc::now().timestamp();
 
-        let token1 = create_token(&mut tx, "token_1_1", 1, 1, now, 3600)
-            .await
-            .unwrap();
-        let token2 = create_token(&mut tx, "token_1_2", 1, 2, now, 3600)
-            .await
-            .unwrap();
-        let token3 = create_token(&mut tx, "token_2_4", 2, 4, now, 3600)
-            .await
-            .unwrap();
+        let token1 = create(&mut tx, "token_1_1", 1, 1, now, 3600).await.unwrap();
+        let token2 = create(&mut tx, "token_1_2", 1, 2, now, 3600).await.unwrap();
+        let token3 = create(&mut tx, "token_2_4", 2, 4, now, 3600).await.unwrap();
 
         assert_eq!(token1.user_id, 1);
         assert_eq!(token1.client_id, 1);

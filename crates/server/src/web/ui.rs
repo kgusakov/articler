@@ -11,7 +11,7 @@ use db::{
     ArticlerResult,
     repository::{
         self, Db, Id, clients,
-        entries::{self, EntriesCriteria, EntryRow, SortOrder, UpdateEntry},
+        entries::{self, EntryRow, FindParams, SortOrder, UpdateEntry},
     },
 };
 use helpers::{generate_client_id, generate_client_secret};
@@ -153,7 +153,7 @@ async fn index(
             app,
             tctx,
             user_id,
-            EntriesCriteria {
+            FindParams {
                 user_id,
                 archive: Some(false),
                 sort: Some(entries::SortColumn::Created),
@@ -180,7 +180,7 @@ async fn all(
             app,
             tctx,
             user_id,
-            EntriesCriteria {
+            FindParams {
                 user_id,
                 sort: Some(entries::SortColumn::Created),
                 order: Some(SortOrder::Desc),
@@ -206,7 +206,7 @@ async fn favourite(
             app,
             tctx,
             user_id,
-            EntriesCriteria {
+            FindParams {
                 user_id,
                 starred: Some(true),
                 sort: Some(entries::SortColumn::Created),
@@ -233,7 +233,7 @@ async fn archive(
             app,
             tctx,
             user_id,
-            EntriesCriteria {
+            FindParams {
                 user_id,
                 archive: Some(true),
                 sort: Some(entries::SortColumn::Created),
@@ -254,7 +254,7 @@ async fn main(
     app: web::Data<AppState>,
     tctx: web::ReqData<TransactionContext<'_>>,
     user_id: Id,
-    entries_filter: EntriesCriteria,
+    entries_filter: FindParams,
     active_category: Category,
 ) -> actix_web::Result<HttpResponse> {
     let mut tx = tctx.tx()?;
@@ -329,7 +329,8 @@ async fn do_archive(
         .headers()
         .get(header::REFERER)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("/").to_owned();
+        .unwrap_or("/")
+        .to_owned();
 
     Ok(Redirect::to(referer).see_other())
 }
@@ -371,7 +372,8 @@ async fn do_favourite(
         .headers()
         .get(header::REFERER)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("/").to_owned();
+        .unwrap_or("/")
+        .to_owned();
 
     Ok(Redirect::to(referer).see_other())
 }
@@ -398,7 +400,8 @@ async fn do_delete(
         req.headers()
             .get(header::REFERER)
             .and_then(|v| v.to_str().ok())
-            .unwrap_or("/").to_owned(),
+            .unwrap_or("/")
+            .to_owned(),
     );
 
     Ok(Redirect::to(referer).see_other())
@@ -426,7 +429,8 @@ async fn do_client_delete(
         .headers()
         .get(header::REFERER)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("/").to_owned();
+        .unwrap_or("/")
+        .to_owned();
 
     Ok(Redirect::to(referer).see_other())
 }
@@ -460,7 +464,8 @@ async fn do_create_client(
         .headers()
         .get(header::REFERER)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("/").to_owned();
+        .unwrap_or("/")
+        .to_owned();
 
     Ok(Redirect::to(referer).see_other())
 }
@@ -581,7 +586,7 @@ impl ArticleCounters {
         Ok(Self {
             unread_counter: entries::count(
                 tx,
-                &EntriesCriteria {
+                &FindParams {
                     user_id,
                     archive: Some(false),
                     ..Default::default()
@@ -590,7 +595,7 @@ impl ArticleCounters {
             .await?,
             all_counter: entries::count(
                 tx,
-                &EntriesCriteria {
+                &FindParams {
                     user_id,
                     ..Default::default()
                 },
@@ -598,7 +603,7 @@ impl ArticleCounters {
             .await?,
             starred_counter: entries::count(
                 tx,
-                &EntriesCriteria {
+                &FindParams {
                     user_id,
                     starred: Some(true),
                     ..Default::default()
@@ -607,7 +612,7 @@ impl ArticleCounters {
             .await?,
             archived_counter: entries::count(
                 tx,
-                &EntriesCriteria {
+                &FindParams {
                     user_id,
                     archive: Some(true),
                     ..Default::default()

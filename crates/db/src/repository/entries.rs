@@ -16,7 +16,7 @@ pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
 
 pub async fn find_all(
     tx: &mut sqlx::Transaction<'_, Db>,
-    params: &EntriesCriteria,
+    params: &FindParams,
 ) -> ArticlerResult<Vec<(EntryRow, Vec<crate::repository::tags::TagRow>)>> {
     let mut q_builder = QueryBuilder::new(format!(
         r"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
@@ -163,10 +163,7 @@ pub async fn delete_tag_by_tag_id(
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn count(
-    tx: &mut sqlx::Transaction<'_, Db>,
-    params: &EntriesCriteria,
-) -> ArticlerResult<i64> {
+pub async fn count(tx: &mut sqlx::Transaction<'_, Db>, params: &FindParams) -> ArticlerResult<i64> {
     // TODO rewrite this funny stupid count
     let mut q_builder = QueryBuilder::new(format!(
         r"SELECT COUNT(DISTINCT e.id) FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id",
@@ -262,7 +259,7 @@ pub async fn create(
     .await?;
 
     if !tags.is_empty() {
-        crate::repository::tags::create_and_link_tags(tx, id, tags).await?;
+        crate::repository::tags::create_and_link(tx, id, tags).await?;
     }
 
     let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
@@ -600,7 +597,7 @@ impl Display for SortOrder {
 }
 
 #[derive(Default)]
-pub struct EntriesCriteria {
+pub struct FindParams {
     pub user_id: Id,
     pub archive: Option<bool>,
     pub starred: Option<bool>,
