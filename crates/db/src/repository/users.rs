@@ -1,10 +1,10 @@
 use std::ops::DerefMut;
 
-use sqlx::{Row, prelude::FromRow, sqlite::SqliteRow};
+use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
 use result::ArticlerResult;
 
-use super::*;
+use super::{Db, Id, Timestamp, USERS_TABLE};
 
 pub async fn create_user(
     tx: &mut sqlx::Transaction<'_, Db>,
@@ -68,7 +68,7 @@ pub struct UserRow {
 }
 
 impl<'r> FromRow<'r, SqliteRow> for UserRow {
-    fn from_row(row: &'r SqliteRow) -> std::result::Result<UserRow, SqlxError> {
+    fn from_row(row: &'r SqliteRow) -> std::result::Result<UserRow, Error> {
         Ok(UserRow {
             id: row.try_get("id")?,
             username: row.try_get("username")?,

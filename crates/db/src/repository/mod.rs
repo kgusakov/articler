@@ -4,7 +4,6 @@ pub mod tags;
 pub mod tokens;
 pub mod users;
 
-use sqlx::Error as SqlxError;
 use sqlx::Sqlite;
 use thiserror::Error;
 

@@ -42,7 +42,7 @@ fn main() -> result::ArticlerResult<()> {
             name,
             email,
         } => {
-            rt.block_on(async { create_user(&pool, &username, &password, &name, &email).await })?
+            rt.block_on(async { create_user(&pool, &username, &password, &name, &email).await })?;
         }
         Commands::CreateClient {
             username,
@@ -54,7 +54,7 @@ fn main() -> result::ArticlerResult<()> {
             println!(
                 "Client created:\nclient_id: {}\nclient_secret: {}",
                 client.client_id, client.client_secret
-            )
+            );
         }
     }
 

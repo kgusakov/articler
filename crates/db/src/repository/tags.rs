@@ -91,7 +91,7 @@ pub async fn update_tags_by_entry_id(
     ));
 
     let mut separated = builder.separated(", ");
-    for t in tags.iter() {
+    for t in tags {
         separated.push_bind(&t.label);
     }
 
@@ -273,9 +273,9 @@ mod tests {
         assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
 
         let labels_to_delete = vec![
-            "label1".to_string(),
-            "label2".to_string(),
-            "label3".to_string(),
+            "label1".to_owned(),
+            "label2".to_owned(),
+            "label3".to_owned(),
         ];
         let deleted_tags = delete_all_by_label(&mut tx, 1, &labels_to_delete)
             .await
@@ -284,18 +284,18 @@ mod tests {
         assert_eq!(deleted_tags.len(), 3, "Should return 3 deleted tags");
 
         let deleted_labels: Vec<String> = deleted_tags.iter().map(|t| t.label.clone()).collect();
-        assert!(deleted_labels.contains(&"label1".to_string()));
-        assert!(deleted_labels.contains(&"label2".to_string()));
-        assert!(deleted_labels.contains(&"label3".to_string()));
+        assert!(deleted_labels.contains(&"label1".to_owned()));
+        assert!(deleted_labels.contains(&"label2".to_owned()));
+        assert!(deleted_labels.contains(&"label3".to_owned()));
 
         let remaining_tags = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(remaining_tags.len(), 3, "Should have 3 tags after deletion");
 
         let remaining_labels: Vec<String> =
             remaining_tags.iter().map(|t| t.label.clone()).collect();
-        assert!(remaining_labels.contains(&"label4".to_string()));
-        assert!(remaining_labels.contains(&"label5".to_string()));
-        assert!(remaining_labels.contains(&"label6".to_string()));
+        assert!(remaining_labels.contains(&"label4".to_owned()));
+        assert!(remaining_labels.contains(&"label5".to_owned()));
+        assert!(remaining_labels.contains(&"label6".to_owned()));
 
         let entry_tags = find_by_entry_id(&mut tx, 1, 2).await.unwrap();
         assert_eq!(
@@ -312,9 +312,9 @@ mod tests {
         );
 
         let mixed_labels = vec![
-            "label4".to_string(),
-            "nonexistent".to_string(),
-            "label5".to_string(),
+            "label4".to_owned(),
+            "nonexistent".to_owned(),
+            "label5".to_owned(),
         ];
         let mixed_deleted = delete_all_by_label(&mut tx, 1, &mixed_labels)
             .await
@@ -323,15 +323,15 @@ mod tests {
 
         let mixed_deleted_labels: Vec<String> =
             mixed_deleted.iter().map(|t| t.label.clone()).collect();
-        assert!(mixed_deleted_labels.contains(&"label4".to_string()));
-        assert!(mixed_deleted_labels.contains(&"label5".to_string()));
-        assert!(!mixed_deleted_labels.contains(&"nonexistent".to_string()));
+        assert!(mixed_deleted_labels.contains(&"label4".to_owned()));
+        assert!(mixed_deleted_labels.contains(&"label5".to_owned()));
+        assert!(!mixed_deleted_labels.contains(&"nonexistent".to_owned()));
 
         let final_tags = get_all(&mut tx, 1).await.unwrap();
         assert_eq!(final_tags.len(), 1, "Should have 1 tag remaining");
         assert_eq!(final_tags[0].label, "label6");
 
-        let nonexistent_labels = vec!["fake1".to_string(), "fake2".to_string()];
+        let nonexistent_labels = vec!["fake1".to_owned(), "fake2".to_owned()];
         let none_deleted = delete_all_by_label(&mut tx, 1, &nonexistent_labels)
             .await
             .unwrap();

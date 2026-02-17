@@ -57,7 +57,7 @@ async fn post_token(
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
                                     expires_in: new_token.expires_in,
-                                    token_type: BEARER.to_string(),
+                                    token_type: BEARER.to_owned(),
                                     scope: None,
                                     refresh_token: new_token.refresh_token,
                                 }))
@@ -106,7 +106,7 @@ async fn post_token(
                                 Ok(Json(Token {
                                     access_token: new_token.access_token,
                                     expires_in: new_token.expires_in,
-                                    token_type: "bearer".to_string(),
+                                    token_type: "bearer".to_owned(),
                                     scope: None,
                                     refresh_token: new_token.refresh_token,
                                 }))
@@ -161,7 +161,10 @@ pub async fn auth_extractor(
             req,
         ));
     };
-    let token_storage = &req.app_data::<web::Data<AppState>>().unwrap().token_storage;
+    let token_storage = &req
+        .app_data::<web::Data<AppState>>()
+        .expect("App data for the request is not configured properly")
+        .token_storage;
 
     match token_storage.validate(credentials.token()).await {
         Ok(Some(claim)) => {
@@ -217,8 +220,8 @@ impl std::fmt::Display for OauthError {
 
 fn oauth_error(error: &str, description: &str) -> OauthError {
     OauthError {
-        error: error.to_string(),
-        error_description: description.to_string(),
+        error: error.to_owned(),
+        error_description: description.to_owned(),
     }
 }
 

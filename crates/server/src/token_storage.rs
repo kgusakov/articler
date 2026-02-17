@@ -154,7 +154,7 @@ impl TokenStorage {
             tokens::delete_token(tx, refresh_token).await?;
 
             inner.access_tokens.insert(
-                access_token.to_string(),
+                access_token.clone(),
                 InternalToken {
                     claim,
                     expires_at: now + EXPIRATION_TIME,

@@ -47,8 +47,8 @@ impl Scraper {
             && !m.contains("text/html")
         {
             return Ok(Document {
-                title: extract_title(url).to_string(),
-                content_html: "".to_string(),
+                title: extract_title(url).to_owned(),
+                content_html: "".to_owned(),
                 image_url: None,
                 mime_type,
                 language: None,
@@ -86,7 +86,7 @@ impl Scraper {
         let mut title = article.title;
 
         if title.is_empty() {
-            title = extract_title(url).to_string();
+            title = extract_title(url).to_owned();
         }
 
         Ok(Document {
@@ -171,20 +171,20 @@ mod tests {
         let document = scraper.extract(&url).await.unwrap();
 
         assert_eq!(Document {
-            title: "Test Title".to_string(),
+            title: "Test Title".to_owned(),
             content_html:
                 "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>"
                     .into(),
             image_url: Some(Url::parse("http://example.com/main.jpg").unwrap()),
-            mime_type: Some("text/html".to_string()),
-            language: Some("en".to_string()),
+            mime_type: Some("text/html".to_owned()),
+            language: Some("en".to_owned()),
             published_at: Some(
                 NaiveDateTime::parse_from_str("2020-11-24T02:43:22+00:00", "%Y-%m-%dT%H:%M:%S%:z")
                     .unwrap()
                     .and_utc()
             )
         }, document);
-        mock_server.verify().await
+        mock_server.verify().await;
     }
 
     #[actix_web::test]
@@ -208,7 +208,7 @@ mod tests {
         let document = scraper.extract(&url).await.unwrap();
 
         assert!(document.image_url.is_none());
-        mock_server.verify().await
+        mock_server.verify().await;
     }
 
     #[actix_web::test]
@@ -234,7 +234,7 @@ mod tests {
         let document = scraper.extract(&url).await.unwrap();
 
         assert_eq!("slug-like-url-path", document.title);
-        mock_server.verify().await
+        mock_server.verify().await;
     }
 
     #[actix_web::test]
@@ -258,7 +258,7 @@ mod tests {
 
         assert_eq!("new.pdf", document.title);
         assert_eq!("", document.content_html);
-        mock_server.verify().await
+        mock_server.verify().await;
     }
 
     #[test]

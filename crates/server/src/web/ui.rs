@@ -43,7 +43,7 @@ async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
         "index",
         &Page {
             nav_partial: None,
-            main_partial: "login".to_string(),
+            main_partial: "login".to_owned(),
         },
     ) {
         Ok(rendered) => HttpResponse::Ok()
@@ -72,8 +72,8 @@ async fn clients(
             &Clients {
                 clients,
                 page: Page {
-                    nav_partial: Some("navigation".to_string()),
-                    main_partial: "clients".to_string(),
+                    nav_partial: Some("navigation".to_owned()),
+                    main_partial: "clients".to_owned(),
                 },
             },
         ) {
@@ -121,8 +121,8 @@ async fn article(
                 is_archived: article.is_archived,
                 is_starred: article.is_starred,
                 page: Page {
-                    nav_partial: Some("navigation".to_string()),
-                    main_partial: "article".to_string(),
+                    nav_partial: Some("navigation".to_owned()),
+                    main_partial: "article".to_owned(),
                 },
             };
             match app.handlebars.render("index", &article_page) {
@@ -268,8 +268,8 @@ async fn main(
 
     let context = ArticlesContext {
         page: Page {
-            nav_partial: Some("navigation".to_string()),
-            main_partial: "main".to_string(),
+            nav_partial: Some("navigation".to_owned()),
+            main_partial: "main".to_owned(),
         },
         articles: articles_metadata,
         counters: ArticleCounters::load(&mut tx, user_id).await?,
@@ -329,8 +329,7 @@ async fn do_archive(
         .headers()
         .get(header::REFERER)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("/")
-        .to_string();
+        .unwrap_or("/").to_owned();
 
     Ok(Redirect::to(referer).see_other())
 }
@@ -372,8 +371,7 @@ async fn do_favourite(
         .headers()
         .get(header::REFERER)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("/")
-        .to_string();
+        .unwrap_or("/").to_owned();
 
     Ok(Redirect::to(referer).see_other())
 }
@@ -400,8 +398,7 @@ async fn do_delete(
         req.headers()
             .get(header::REFERER)
             .and_then(|v| v.to_str().ok())
-            .unwrap_or("/")
-            .to_string(),
+            .unwrap_or("/").to_owned(),
     );
 
     Ok(Redirect::to(referer).see_other())
@@ -429,8 +426,7 @@ async fn do_client_delete(
         .headers()
         .get(header::REFERER)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("/")
-        .to_string();
+        .unwrap_or("/").to_owned();
 
     Ok(Redirect::to(referer).see_other())
 }
@@ -464,8 +460,7 @@ async fn do_create_client(
         .headers()
         .get(header::REFERER)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("/")
-        .to_string();
+        .unwrap_or("/").to_owned();
 
     Ok(Redirect::to(referer).see_other())
 }

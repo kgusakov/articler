@@ -571,7 +571,7 @@ async fn active_category_highlighting(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
     let active_category = helpers::find_active_category(content);
-    assert_eq!(active_category, Some("unread".to_string()));
+    assert_eq!(active_category, Some("unread".to_owned()));
 
     let req = test::TestRequest::get()
         .uri("/all")
@@ -583,7 +583,7 @@ async fn active_category_highlighting(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
     let active_category = helpers::find_active_category(content);
-    assert_eq!(active_category, Some("all".to_string()));
+    assert_eq!(active_category, Some("all".to_owned()));
 
     let req = test::TestRequest::get()
         .uri("/favourite")
@@ -595,7 +595,7 @@ async fn active_category_highlighting(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
     let active_category = helpers::find_active_category(content);
-    assert_eq!(active_category, Some("favourite".to_string()));
+    assert_eq!(active_category, Some("favourite".to_owned()));
 
     let req = test::TestRequest::get()
         .uri("/archive")
@@ -607,7 +607,7 @@ async fn active_category_highlighting(pool: SqlitePool) {
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();
     let active_category = helpers::find_active_category(content);
-    assert_eq!(active_category, Some("archived".to_string()));
+    assert_eq!(active_category, Some("archived".to_owned()));
 }
 
 #[sqlx::test(
@@ -648,7 +648,7 @@ async fn article_page_unarchived_unstarred(pool: SqlitePool) {
 
     assert_eq!(
         helpers::find_article_title(content),
-        Some("title1".to_string())
+        Some("title1".to_owned())
     );
 
     // TODO replace by actual html path searching
@@ -678,7 +678,7 @@ async fn article_page_unarchived_unstarred(pool: SqlitePool) {
     assert_eq!(delete_forms[0], "1");
     assert_eq!(
         helpers::find_delete_back_location(content),
-        Some("/".to_string())
+        Some("/".to_owned())
     );
 }
 
@@ -703,7 +703,7 @@ async fn article_page_archived_starred(pool: SqlitePool) {
 
     assert_eq!(
         helpers::find_article_title(content),
-        Some("title4".to_string())
+        Some("title4".to_owned())
     );
     assert!(content.contains("content4"));
 
@@ -730,7 +730,7 @@ async fn article_page_archived_starred(pool: SqlitePool) {
     assert_eq!(delete_forms[0], "4");
     assert_eq!(
         helpers::find_delete_back_location(content),
-        Some("/".to_string())
+        Some("/".to_owned())
     );
 }
 
@@ -954,7 +954,7 @@ async fn do_client_delete(pool: SqlitePool) {
 
     let delete_forms = helpers::find_client_delete_forms(content);
     assert_eq!(delete_forms.len(), 3);
-    assert!(delete_forms.contains(&"1".to_string()));
+    assert!(delete_forms.contains(&"1".to_owned()));
 
     let req = test::TestRequest::post()
         .uri("/do_client_delete")
@@ -1041,7 +1041,7 @@ mod helpers {
                 form.select(&img_sel)
                     .next()
                     .and_then(|img| img.value().attr("src"))
-                    .map(|v| v.to_string())
+                    .map(|v| v.to_owned())
             })
             .collect()
     }
@@ -1058,7 +1058,7 @@ mod helpers {
                 form.select(&input_sel)
                     .next()
                     .and_then(|input| input.value().attr("value"))
-                    .map(|v| v.to_string())
+                    .map(|v| v.to_owned())
             })
             .collect()
     }
@@ -1075,7 +1075,7 @@ mod helpers {
                 form.select(&input_sel)
                     .next()
                     .and_then(|input| input.value().attr("value"))
-                    .map(|v| v.to_string())
+                    .map(|v| v.to_owned())
             })
             .collect()
     }
@@ -1090,7 +1090,7 @@ mod helpers {
             form.select(&input_sel)
                 .next()
                 .and_then(|input| input.value().attr("value"))
-                .map(|v| v.to_string())
+                .map(|v| v.to_owned())
         })
     }
 
@@ -1108,12 +1108,12 @@ mod helpers {
                     .select(&input_sel)
                     .next()
                     .and_then(|input| input.value().attr("value"))
-                    .map(|v| v.to_string())?;
+                    .map(|v| v.to_owned())?;
                 let icon_src = form
                     .select(&img_sel)
                     .next()
                     .and_then(|img| img.value().attr("src"))
-                    .map(|v| v.to_string())?;
+                    .map(|v| v.to_owned())?;
                 Some((article_id, icon_src))
             })
             .collect()
@@ -1126,7 +1126,7 @@ mod helpers {
         let mut seen = std::collections::HashSet::new();
         document
             .select(&sel)
-            .filter_map(|el| el.value().attr("href").map(|v| v.to_string()))
+            .filter_map(|el| el.value().attr("href").map(|v| v.to_owned()))
             .filter(|href| seen.insert(href.clone()))
             .collect()
     }
@@ -1146,7 +1146,7 @@ mod helpers {
         let link = document
             .select(&Selector::parse(r#"a[target="_blank"]"#).unwrap())
             .next()?;
-        let href = link.value().attr("href")?.to_string();
+        let href = link.value().attr("href")?.to_owned();
         let text = link.text().collect::<String>();
         Some((text, href))
     }
@@ -1166,7 +1166,7 @@ mod helpers {
                     "/archive" => "archived",
                     _ => continue,
                 };
-                return Some(category.to_string());
+                return Some(category.to_owned());
             }
         }
         None
@@ -1205,7 +1205,7 @@ mod helpers {
                 form.select(&input_sel)
                     .next()
                     .and_then(|input| input.value().attr("value"))
-                    .map(|v| v.to_string())
+                    .map(|v| v.to_owned())
             })
             .collect()
     }

@@ -47,7 +47,7 @@ pub async fn post_entries(
             (
                 t,
                 c,
-                "".to_string(),
+                "".to_owned(),
                 add_entry.published_at,
                 add_entry.language,
                 add_entry.preview_picture,
@@ -57,7 +57,7 @@ pub async fn post_entries(
                 Ok(document) => (
                     document.title,
                     document.content_html,
-                    document.mime_type.unwrap_or("".to_string()),
+                    document.mime_type.unwrap_or("".to_owned()),
                     document.published_at,
                     document.language,
                     document.image_url,
@@ -66,9 +66,9 @@ pub async fn post_entries(
                     error!("Error while parsing url {}: {:?}", add_entry.url, err);
                     (
                         // TODO abstraction is leaking here - we need to generalize handling of parsing errors
-                        extract_title(&add_entry.url).to_string(),
-                        "".to_string(),
-                        "".to_string(),
+                        extract_title(&add_entry.url).to_owned(),
+                        "".to_owned(),
+                        "".to_owned(),
                         None,
                         None,
                         None,
@@ -106,9 +106,9 @@ pub async fn post_entries(
         mimetype: Some(mime_type),
         language,
         reading_time,
-        domain_name: domain_name.unwrap_or("").to_string(),
+        domain_name: domain_name.unwrap_or("").to_owned(),
         preview_picture: preview_picture.map(|u| u.to_string()),
-        origin_url: add_entry.origin_url.map(|u| u.to_string()),
+        origin_url: add_entry.origin_url,
         published_at: published_at.map(|v| v.timestamp()),
         published_by: add_entry.authors.map(|a| a.join(",")),
         is_public: add_entry.public,
@@ -550,7 +550,7 @@ impl TryFrom<(entries::EntryRow, Vec<Tag>)> for Entry {
             // TODO this .map(to_string) look ugly
             published_by: e
                 .published_by
-                .map(|s| s.split(",").map(|s| s.to_string()).collect()),
+                .map(|s| s.split(",").map(|s| s.to_owned()).collect()),
             is_public: e.is_public,
             uid: e.uid,
         })

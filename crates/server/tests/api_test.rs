@@ -79,7 +79,7 @@ async fn auhorization_header(
         .unwrap()
         .as_str()
         .unwrap()
-        .to_string();
+        .to_owned();
 
     format!("Bearer {access_token}")
 }
@@ -995,10 +995,10 @@ async fn delete_tags_by_label_partial(pool: SqlitePool) {
 
     let labels: Vec<String> = tags
         .iter()
-        .map(|t| t["label"].as_str().unwrap().to_string())
+        .map(|t| t["label"].as_str().unwrap().to_owned())
         .collect();
-    assert!(labels.contains(&"label1".to_string()));
-    assert!(labels.contains(&"label2".to_string()));
+    assert!(labels.contains(&"label1".to_owned()));
+    assert!(labels.contains(&"label2".to_owned()));
 }
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
@@ -1242,7 +1242,7 @@ async fn auth_success(pool: SqlitePool) {
             .unwrap()
             .as_str()
             .unwrap()
-            .to_string()
+            .to_owned()
     };
 
     let req = test::TestRequest::default()

@@ -1,10 +1,10 @@
 use std::ops::DerefMut;
 
-use sqlx::{Row, prelude::FromRow, sqlite::SqliteRow};
+use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
 use result::ArticlerResult;
 
-use super::*;
+use super::{CLIENTS_TABLE, Db, Id, Timestamp};
 
 pub async fn create(
     tx: &mut sqlx::Transaction<'_, Db>,
@@ -119,7 +119,7 @@ pub struct ClientRow {
 }
 
 impl<'r> FromRow<'r, SqliteRow> for ClientRow {
-    fn from_row(row: &'r SqliteRow) -> std::result::Result<ClientRow, SqlxError> {
+    fn from_row(row: &'r SqliteRow) -> std::result::Result<ClientRow, Error> {
         Ok(ClientRow {
             id: row.try_get("id")?,
             name: row.try_get("name")?,
@@ -159,9 +159,9 @@ mod tests {
 
         let expected_client = ClientRow {
             id: client.id, // ID is auto-generated, so we use the returned value
-            name: "Test Client".to_string(),
-            client_id: "test_client_id".to_string(),
-            client_secret: "test_client_secret".to_string(),
+            name: "Test Client".to_owned(),
+            client_id: "test_client_id".to_owned(),
+            client_secret: "test_client_secret".to_owned(),
             user_id,
             created_at: now,
         };
@@ -194,9 +194,9 @@ mod tests {
 
         let expected_client = ClientRow {
             id: 1,
-            name: "Client 1".to_string(),
-            client_id: "client_1".to_string(),
-            client_secret: "secret_1".to_string(),
+            name: "Client 1".to_owned(),
+            client_id: "client_1".to_owned(),
+            client_secret: "secret_1".to_owned(),
             user_id: 1,
             created_at: 1687895200,
         };
@@ -209,9 +209,9 @@ mod tests {
 
         let expected_client_2 = ClientRow {
             id: 2,
-            name: "Client 2".to_string(),
-            client_id: "client_2".to_string(),
-            client_secret: "secret_2".to_string(),
+            name: "Client 2".to_owned(),
+            client_id: "client_2".to_owned(),
+            client_secret: "secret_2".to_owned(),
             user_id: 1,
             created_at: 1687895300,
         };
@@ -259,9 +259,9 @@ mod tests {
 
         let expected_client = ClientRow {
             id: 3,
-            name: "Android app".to_string(),
-            client_id: "android_client_id".to_string(),
-            client_secret: "android_client_secret".to_string(),
+            name: "Android app".to_owned(),
+            client_id: "android_client_id".to_owned(),
+            client_secret: "android_client_secret".to_owned(),
             user_id: 1,
             created_at: 1687895400,
         };
@@ -299,25 +299,25 @@ mod tests {
         let expected_clients = vec![
             ClientRow {
                 id: 1,
-                name: "Client 1".to_string(),
-                client_id: "client_1".to_string(),
-                client_secret: "secret_1".to_string(),
+                name: "Client 1".to_owned(),
+                client_id: "client_1".to_owned(),
+                client_secret: "secret_1".to_owned(),
                 user_id: 1,
                 created_at: 1687895200,
             },
             ClientRow {
                 id: 2,
-                name: "Client 2".to_string(),
-                client_id: "client_2".to_string(),
-                client_secret: "secret_2".to_string(),
+                name: "Client 2".to_owned(),
+                client_id: "client_2".to_owned(),
+                client_secret: "secret_2".to_owned(),
                 user_id: 1,
                 created_at: 1687895300,
             },
             ClientRow {
                 id: 3,
-                name: "Android app".to_string(),
-                client_id: "android_client_id".to_string(),
-                client_secret: "android_client_secret".to_string(),
+                name: "Android app".to_owned(),
+                client_id: "android_client_id".to_owned(),
+                client_secret: "android_client_secret".to_owned(),
                 user_id: 1,
                 created_at: 1687895400,
             },
@@ -330,9 +330,9 @@ mod tests {
 
         let expected_clients = vec![ClientRow {
             id: 4,
-            name: "Client 4".to_string(),
-            client_id: "client_4".to_string(),
-            client_secret: "secret_4".to_string(),
+            name: "Client 4".to_owned(),
+            client_id: "client_4".to_owned(),
+            client_secret: "secret_4".to_owned(),
             user_id: 2,
             created_at: 1687895200,
         }];
@@ -361,7 +361,10 @@ mod tests {
         let client_before = find_by_client_name_and_user_id(&mut tx, 1, "Client 1")
             .await
             .unwrap();
-        assert!(client_before.is_some(), "Client should exist before deletion");
+        assert!(
+            client_before.is_some(),
+            "Client should exist before deletion"
+        );
 
         let deleted = delete_by_id(&mut tx, 1, 1).await.unwrap();
         assert!(deleted, "Delete should return true when client exists");
@@ -372,17 +375,29 @@ mod tests {
         assert_eq!(client_after, None, "Client should not exist after deletion");
 
         let deleted_again = delete_by_id(&mut tx, 1, 1).await.unwrap();
-        assert!(!deleted_again, "Delete should return false when client doesn't exist");
+        assert!(
+            !deleted_again,
+            "Delete should return false when client doesn't exist"
+        );
 
         let deleted_wrong_user = delete_by_id(&mut tx, 2, 2).await.unwrap();
-        assert!(!deleted_wrong_user, "Delete should return false when user_id doesn't match");
+        assert!(
+            !deleted_wrong_user,
+            "Delete should return false when user_id doesn't match"
+        );
 
         let client_2_still_exists = find_by_client_name_and_user_id(&mut tx, 1, "Client 2")
             .await
             .unwrap();
-        assert!(client_2_still_exists.is_some(), "Client 2 should still exist");
+        assert!(
+            client_2_still_exists.is_some(),
+            "Client 2 should still exist"
+        );
 
         let deleted_nonexistent = delete_by_id(&mut tx, 1, 999).await.unwrap();
-        assert!(!deleted_nonexistent, "Delete should return false for nonexistent client");
+        assert!(
+            !deleted_nonexistent,
+            "Delete should return false for nonexistent client"
+        );
     }
 }

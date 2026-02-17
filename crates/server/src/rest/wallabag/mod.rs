@@ -12,8 +12,11 @@ use actix_web::{
     web::{self, Json},
 };
 use actix_web_httpauth::middleware::HttpAuthentication;
-use entries::*;
-use tags::*;
+use entries::{
+    delete_entry, delete_tag_from_entry, entries, get_tags_by_entry, patch_entry, post_entries,
+    post_entry_tags,
+};
+use tags::{delete_tag_by_id, delete_tag_by_label, delete_tags_by_label, get_tags};
 
 type Id = i64;
 
@@ -84,7 +87,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
 }
 
 async fn version() -> actix_web::Result<Json<String>> {
-    Ok(Json(VERSION.to_string()))
+    Ok(Json(VERSION.to_owned()))
 }
 
 impl FromRequest for UserInfo {
