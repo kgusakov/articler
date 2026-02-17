@@ -77,7 +77,6 @@ pub fn init_handlebars() -> Result<Handlebars<'static>, TemplateError> {
 pub fn http_server(port: u16, app_state: AppState, cookie_key: Key) -> std::io::Result<Server> {
     let app_data = web::Data::new(app_state);
 
-    // TODO looks like it is created multiple times as a result - need to check
     Ok(
         HttpServer::new(move || app(app_data.clone(), cookie_key.clone()))
             .bind(format!("0.0.0.0:{}", port))?
