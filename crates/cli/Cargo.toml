@@ -3,6 +3,9 @@ name = "cli"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "articlerctl"
 path = "src/main.rs"

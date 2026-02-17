@@ -48,13 +48,13 @@ pub fn app(
 > {
     let generated = static_resources();
     App::new()
-        .app_data(app_data.clone())
+        .app_data(app_data)
         .wrap(Logger::default())
         .wrap(from_fn(wrap_with_tx))
         .configure(crate::rest::oauth::routes)
         .configure(crate::rest::wallabag::routes)
         .service(ResourceFiles::new("/static", generated))
-        .configure(|cfg| crate::web::routes(cfg, cookie_key.clone()))
+        .configure(|cfg| crate::web::routes(cfg, cookie_key))
 }
 
 // TODO rethink 'static hardcode

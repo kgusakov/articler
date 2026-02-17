@@ -3,6 +3,9 @@ name = "helpers"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 argon2 = { version = "0.5.3", features = ["std"] }
 sha1 = "0.10.6"

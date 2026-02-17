@@ -34,3 +34,8 @@ cli = { path = "crates/cli" }
 strip = true
 opt-level = "z"
 lto = true
+
+[workspace.lints.clippy]
+needless_pass_by_value = "warn"
+ptr_arg = "warn"
+needless_pass_by_ref_mut = "warn"

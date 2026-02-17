@@ -916,7 +916,10 @@ async fn do_create_client(pool: SqlitePool) {
 
     assert_eq!(new_client.0, "New Test Client");
     assert!(!new_client.1.is_empty(), "Client ID should not be empty");
-    assert!(!new_client.2.is_empty(), "Client secret should not be empty");
+    assert!(
+        !new_client.2.is_empty(),
+        "Client secret should not be empty"
+    );
 }
 
 #[sqlx::test(
@@ -978,9 +981,7 @@ async fn do_client_delete(pool: SqlitePool) {
     let clients_after = helpers::find_clients(content);
     assert_eq!(clients_after.len(), 2);
 
-    let deleted_client = clients_after
-        .iter()
-        .find(|(name, _, _)| name == "Client 1");
+    let deleted_client = clients_after.iter().find(|(name, _, _)| name == "Client 1");
     assert!(
         deleted_client.is_none(),
         "Client 1 should not exist after deletion"
