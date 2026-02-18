@@ -1,7 +1,8 @@
-<nav class="flex items-center gap-6">
-    <button class="flex items-center gap-2 text-secondary hover:text-primary">
-        <span class="text-sm">Add article</span>
-    </button>
+<nav class="flex-1 flex items-center gap-6">
+    <form action="/add" method="post" class="flex-1 max-w-lg mx-auto">
+        <input type="url" name="url" placeholder="Paste article URL..."
+            class="w-full px-4 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-primary" />
+    </form>
     <div class="flex items-center gap-4">
         <button class="text-secondary hover:text-primary">
             <img src="/static/images/Search.svg" />

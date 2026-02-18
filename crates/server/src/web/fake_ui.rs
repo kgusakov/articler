@@ -6,12 +6,11 @@ use actix_web::{
     mime,
     web::{self, ServiceConfig, get, post},
 };
-use serde::Serialize;
 
 use crate::{
     app::AppState,
     middleware::TransactionContext,
-    web::{template_data::Client, ui::do_login},
+    web::{dto::Client, fake_ui::dto::Clients, ui::do_login},
 };
 use db::repository::clients::{self};
 
@@ -59,7 +58,13 @@ async fn developer(
     }
 }
 
-#[derive(Serialize)]
-struct Clients {
-    clients: Vec<Client>,
+mod dto {
+    use serde::Serialize;
+
+    use crate::web::dto::Client;
+
+    #[derive(Serialize)]
+    pub struct Clients {
+        pub clients: Vec<Client>,
+    }
 }

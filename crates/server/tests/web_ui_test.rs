@@ -997,6 +997,58 @@ async fn do_client_delete(pool: SqlitePool) {
     );
 }
 
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_add(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+
+    let mock_server = wiremock::MockServer::start().await;
+
+    let content = r#"<!DOCTYPE html><html lang="en"><head><title>Scraped Article Title</title></head><body><p>Article body content</p></body></html>"#;
+
+    wiremock::Mock::given(wiremock::matchers::method("GET"))
+        .and(wiremock::matchers::path("/test-article"))
+        .respond_with(wiremock::ResponseTemplate::new(200).set_body_raw(content, "text/html"))
+        .mount(&mock_server)
+        .await;
+
+    let url = format!("{}/test-article", mock_server.uri());
+
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::post()
+        .uri("/add")
+        .insert_header((header::REFERER, "/all"))
+        .cookie(cookie.clone())
+        .set_form([("url", url.as_str())])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/all");
+
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let page_content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(page_content);
+
+    assert!(
+        titles.contains(&"Scraped Article Title".to_owned()),
+        "Expected 'Scraped Article Title' in {titles:?}"
+    );
+}
+
 async fn login(
     username: &str,
     password: &str,

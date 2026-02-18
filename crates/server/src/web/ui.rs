@@ -7,18 +7,25 @@ use actix_web::{
     web::{self, Redirect, ServiceConfig, get, post},
 };
 use chrono::Utc;
-use db::{
-    ArticlerResult,
-    repository::{
-        self, Db, Id, clients,
-        entries::{self, EntryRow, FindParams, SortOrder, UpdateEntry},
-    },
+use db::repository::{
+    Id, clients,
+    entries::{self, FindParams, SortOrder, UpdateEntry},
 };
-use helpers::{generate_client_id, generate_client_secret};
-use serde::{Deserialize, Serialize};
+use helpers::{generate_client_id, generate_client_secret, hash_str};
+use url::Url;
 
 use crate::{
-    app::AppState, auth::find_user, middleware::TransactionContext, web::template_data::Client,
+    app::AppState,
+    auth::find_user,
+    middleware::TransactionContext,
+    scraper::extract_title,
+    web::dto::{Client, LoginForm},
+};
+
+use dto::{
+    AddArticleForm, ArchiveForm, ArticleCounters, ArticleMetadata, ArticlePageData,
+    ArticlesContext, Category, ClientDeleteForm, Clients, CreateClientForm, DeleteForm,
+    FavouriteForm, Page,
 };
 
 pub fn routes(cfg: &mut ServiceConfig) {
@@ -35,7 +42,8 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/do_login", post().to(do_login))
         .route("/do_archive", post().to(do_archive))
         .route("/do_favourite", post().to(do_favourite))
-        .route("/do_delete", post().to(do_delete));
+        .route("/do_delete", post().to(do_delete))
+        .route("/add", post().to(do_add));
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
@@ -93,13 +101,6 @@ async fn logout(session: Session) -> actix_web::Result<impl Responder> {
     // TODO this approach purge cookie with CookieSessionStore only if the client correctly process the received answer
     session.purge();
     Ok(Redirect::to("/login").see_other())
-}
-
-#[derive(Serialize)]
-struct Clients {
-    #[serde(flatten)]
-    page: Page,
-    clients: Vec<Client>,
 }
 
 async fn article(
@@ -285,18 +286,6 @@ async fn main(
         .body(rendered))
 }
 
-#[derive(Deserialize)]
-struct DeleteForm {
-    article_id: repository::Id,
-    back_location: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct ArchiveForm {
-    article_id: repository::Id,
-    archived: bool,
-}
-
 async fn do_archive(
     session: Session,
     req: HttpRequest,
@@ -305,11 +294,7 @@ async fn do_archive(
 ) -> actix_web::Result<impl Responder> {
     let mut tx = tctx.tx()?;
 
-    // TODO error messages must be reworked
-    let user_id = session
-        .get("user_id")
-        .map_err(ErrorInternalServerError)?
-        .ok_or(ErrorForbidden(""))?;
+    let user_id = check_user_id(&session)?;
 
     let form = form.into_inner();
 
@@ -325,20 +310,7 @@ async fn do_archive(
 
     entries::update_by_id(&mut tx, user_id, form.article_id, update).await?;
 
-    let referer = req
-        .headers()
-        .get(header::REFERER)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("/")
-        .to_owned();
-
-    Ok(Redirect::to(referer).see_other())
-}
-
-#[derive(Deserialize)]
-struct FavouriteForm {
-    article_id: repository::Id,
-    starred: bool,
+    Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
 
 async fn do_favourite(
@@ -349,10 +321,7 @@ async fn do_favourite(
 ) -> actix_web::Result<impl Responder> {
     let mut tx = tctx.tx()?;
 
-    let user_id = session
-        .get("user_id")
-        .map_err(ErrorInternalServerError)?
-        .ok_or(ErrorForbidden(""))?;
+    let user_id = check_user_id(&session)?;
 
     let form = form.into_inner();
 
@@ -368,14 +337,7 @@ async fn do_favourite(
 
     entries::update_by_id(&mut tx, user_id, form.article_id, update).await?;
 
-    let referer = req
-        .headers()
-        .get(header::REFERER)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("/")
-        .to_owned();
-
-    Ok(Redirect::to(referer).see_other())
+    Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
 
 async fn do_delete(
@@ -386,23 +348,13 @@ async fn do_delete(
 ) -> actix_web::Result<impl Responder> {
     let mut tx = tctx.tx()?;
 
-    let user_id = session
-        .get("user_id")
-        .map_err(ErrorInternalServerError)?
-        // TODO fix error or redirect to login
-        .ok_or(ErrorForbidden(""))?;
+    let user_id = check_user_id(&session)?;
 
     let form = form.into_inner();
 
     entries::delete_by_id(&mut tx, user_id, form.article_id).await?;
 
-    let referer = form.back_location.unwrap_or(
-        req.headers()
-            .get(header::REFERER)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("/")
-            .to_owned(),
-    );
+    let referer = form.back_location.unwrap_or(referer_or_root(&req));
 
     Ok(Redirect::to(referer).see_other())
 }
@@ -415,24 +367,13 @@ async fn do_client_delete(
 ) -> actix_web::Result<impl Responder> {
     let mut tx = tctx.tx()?;
 
-    let user_id = session
-        .get("user_id")
-        .map_err(ErrorInternalServerError)?
-        // TODO fix error or redirect to login
-        .ok_or(ErrorForbidden(""))?;
+    let user_id = check_user_id(&session)?;
 
     let form = form.into_inner();
 
     clients::delete_by_id(&mut tx, user_id, form.id).await?;
 
-    let referer = req
-        .headers()
-        .get(header::REFERER)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("/")
-        .to_owned();
-
-    Ok(Redirect::to(referer).see_other())
+    Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
 
 async fn do_create_client(
@@ -443,11 +384,7 @@ async fn do_create_client(
 ) -> actix_web::Result<impl Responder> {
     let mut tx = tctx.tx()?;
 
-    let user_id = session
-        .get("user_id")
-        .map_err(ErrorInternalServerError)?
-        // TODO fix error or redirect to login
-        .ok_or(ErrorForbidden(""))?;
+    let user_id = check_user_id(&session)?;
 
     let now = chrono::Utc::now().timestamp();
     let _ = clients::create(
@@ -460,32 +397,81 @@ async fn do_create_client(
     )
     .await?;
 
-    let referer = req
-        .headers()
-        .get(header::REFERER)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("/")
-        .to_owned();
-
-    Ok(Redirect::to(referer).see_other())
+    Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
 
-#[derive(Serialize, Deserialize)]
-pub(in crate::web) struct LoginForm {
-    #[serde(rename(deserialize = "_username"))]
-    username: String,
-    #[serde(rename(deserialize = "_password"))]
-    password: String,
-}
+async fn do_add(
+    session: Session,
+    req: HttpRequest,
+    data: web::Data<AppState>,
+    form: web::Form<AddArticleForm>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+) -> actix_web::Result<impl Responder> {
+    let mut tx = tctx.tx()?;
 
-#[derive(Deserialize)]
-pub(in crate::web) struct CreateClientForm {
-    client_name: String,
-}
+    let user_id = check_user_id(&session)?;
 
-#[derive(Deserialize)]
-struct ClientDeleteForm {
-    id: Id,
+    let url: Url = form
+        .into_inner()
+        .url
+        .parse()
+        .map_err(ErrorInternalServerError)?;
+
+    let (title, content, mime_type, published_at, language, preview_picture) =
+        match data.scraper.extract(&url).await {
+            Ok(document) => (
+                document.title,
+                document.content_html,
+                document.mime_type.unwrap_or_default(),
+                document.published_at,
+                document.language,
+                document.image_url,
+            ),
+            Err(err) => {
+                log::error!("Error while parsing url {url}: {err:?}");
+                (
+                    extract_title(&url).to_owned(),
+                    String::new(),
+                    String::new(),
+                    None,
+                    None,
+                    None,
+                )
+            }
+        };
+
+    let now = Utc::now().timestamp();
+    let domain_name = url.domain().or(url.host_str()).unwrap_or("").to_owned();
+
+    let create_entry = entries::CreateEntry {
+        user_id,
+        url: url.to_string(),
+        hashed_url: hash_str(url.as_str()),
+        given_url: url.to_string(),
+        hashed_given_url: hash_str(url.as_str()),
+        title,
+        content,
+        is_archived: false,
+        archived_at: None,
+        is_starred: false,
+        starred_at: None,
+        created_at: now,
+        updated_at: now,
+        mimetype: Some(mime_type),
+        language,
+        reading_time: 0,
+        domain_name,
+        preview_picture: preview_picture.map(|u| u.to_string()),
+        origin_url: None,
+        published_at: published_at.map(|v| v.timestamp()),
+        published_by: None,
+        is_public: None,
+        uid: None,
+    };
+
+    entries::create(&mut tx, create_entry, &[]).await?;
+
+    Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
 
 pub(in crate::web) async fn do_login(
@@ -509,116 +495,184 @@ pub(in crate::web) async fn do_login(
         .finish()
 }
 
-#[derive(Serialize)]
-struct ArticlePageData {
-    id: Id,
-    title: String,
-    content: String,
-    domain: String,
-    url: String,
-    reading_time: i32,
-    is_archived: bool,
-    is_starred: bool,
-    #[serde(flatten)]
-    page: Page,
+fn check_user_id(session: &Session) -> Result<i64, actix_web::Error> {
+    session
+        .get("user_id")
+        .map_err(ErrorInternalServerError)?
+        .ok_or(ErrorForbidden(""))
 }
 
-#[derive(Serialize)]
-struct Page {
-    nav_partial: Option<String>,
-    main_partial: String,
+fn referer_or_root(req: &HttpRequest) -> String {
+    req.headers()
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("/")
+        .to_owned()
 }
 
-#[derive(Serialize)]
-struct ArticleMetadata {
-    id: repository::Id,
-    title: String,
-    image_url: Option<String>,
-    domain: String,
-    reading_time: i32,
-    is_archived: bool,
-    is_starred: bool,
-}
+mod dto {
+    use db::{
+        ArticlerResult,
+        repository::{
+            self, Db, Id,
+            entries::{self, EntryRow, FindParams},
+        },
+    };
+    use serde::{Deserialize, Serialize};
 
-impl From<EntryRow> for ArticleMetadata {
-    fn from(entry: EntryRow) -> Self {
-        Self {
-            id: entry.id,
-            title: entry.title,
-            image_url: entry.preview_picture,
-            domain: entry.domain_name,
-            reading_time: entry.reading_time,
-            is_archived: entry.is_archived,
-            is_starred: entry.is_starred,
+    use crate::web::dto::Client;
+
+    #[derive(Deserialize)]
+    pub struct DeleteForm {
+        pub article_id: repository::Id,
+        pub back_location: Option<String>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct ArchiveForm {
+        pub article_id: repository::Id,
+        pub archived: bool,
+    }
+
+    #[derive(Deserialize)]
+    pub struct FavouriteForm {
+        pub article_id: repository::Id,
+        pub starred: bool,
+    }
+
+    #[derive(Serialize)]
+    pub struct Clients {
+        #[serde(flatten)]
+        pub page: Page,
+        pub clients: Vec<Client>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct CreateClientForm {
+        pub client_name: String,
+    }
+
+    #[derive(Deserialize)]
+    pub struct AddArticleForm {
+        pub url: String,
+    }
+
+    #[derive(Deserialize)]
+    pub struct ClientDeleteForm {
+        pub id: Id,
+    }
+
+    #[derive(Serialize)]
+    pub struct ArticlePageData {
+        pub id: Id,
+        pub title: String,
+        pub content: String,
+        pub domain: String,
+        pub url: String,
+        pub reading_time: i32,
+        pub is_archived: bool,
+        pub is_starred: bool,
+        #[serde(flatten)]
+        pub page: Page,
+    }
+
+    #[derive(Serialize)]
+    pub struct Page {
+        pub nav_partial: Option<String>,
+        pub main_partial: String,
+    }
+
+    #[derive(Serialize)]
+    pub struct ArticleMetadata {
+        pub id: repository::Id,
+        pub title: String,
+        pub image_url: Option<String>,
+        pub domain: String,
+        pub reading_time: i32,
+        pub is_archived: bool,
+        pub is_starred: bool,
+    }
+
+    impl From<EntryRow> for ArticleMetadata {
+        fn from(entry: EntryRow) -> Self {
+            Self {
+                id: entry.id,
+                title: entry.title,
+                image_url: entry.preview_picture,
+                domain: entry.domain_name,
+                reading_time: entry.reading_time,
+                is_archived: entry.is_archived,
+                is_starred: entry.is_starred,
+            }
         }
     }
-}
 
-#[derive(Serialize)]
-struct ArticlesContext {
-    #[serde(flatten)]
-    page: Page,
-    articles: Vec<ArticleMetadata>,
-    #[serde(flatten)]
-    counters: ArticleCounters,
-    active_category: Category,
-}
+    #[derive(Serialize)]
+    pub struct ArticlesContext {
+        #[serde(flatten)]
+        pub page: Page,
+        pub articles: Vec<ArticleMetadata>,
+        #[serde(flatten)]
+        pub counters: ArticleCounters,
+        pub active_category: Category,
+    }
 
-#[derive(Serialize)]
-#[serde(rename_all = "lowercase")]
-enum Category {
-    All,
-    Unread,
-    Favourite,
-    Archived,
-}
+    #[derive(Serialize)]
+    #[serde(rename_all = "lowercase")]
+    pub enum Category {
+        All,
+        Unread,
+        Favourite,
+        Archived,
+    }
 
-#[derive(Serialize)]
-struct ArticleCounters {
-    unread_counter: i64,
-    all_counter: i64,
-    starred_counter: i64,
-    archived_counter: i64,
-}
+    #[derive(Serialize)]
+    pub struct ArticleCounters {
+        pub unread_counter: i64,
+        pub all_counter: i64,
+        pub starred_counter: i64,
+        pub archived_counter: i64,
+    }
 
-impl ArticleCounters {
-    async fn load(tx: &mut sqlx::Transaction<'_, Db>, user_id: Id) -> ArticlerResult<Self> {
-        Ok(Self {
-            unread_counter: entries::count(
-                tx,
-                &FindParams {
-                    user_id,
-                    archive: Some(false),
-                    ..Default::default()
-                },
-            )
-            .await?,
-            all_counter: entries::count(
-                tx,
-                &FindParams {
-                    user_id,
-                    ..Default::default()
-                },
-            )
-            .await?,
-            starred_counter: entries::count(
-                tx,
-                &FindParams {
-                    user_id,
-                    starred: Some(true),
-                    ..Default::default()
-                },
-            )
-            .await?,
-            archived_counter: entries::count(
-                tx,
-                &FindParams {
-                    user_id,
-                    archive: Some(true),
-                    ..Default::default()
-                },
-            )
-            .await?,
-        })
+    impl ArticleCounters {
+        pub async fn load(tx: &mut sqlx::Transaction<'_, Db>, user_id: Id) -> ArticlerResult<Self> {
+            Ok(Self {
+                unread_counter: entries::count(
+                    tx,
+                    &FindParams {
+                        user_id,
+                        archive: Some(false),
+                        ..Default::default()
+                    },
+                )
+                .await?,
+                all_counter: entries::count(
+                    tx,
+                    &FindParams {
+                        user_id,
+                        ..Default::default()
+                    },
+                )
+                .await?,
+                starred_counter: entries::count(
+                    tx,
+                    &FindParams {
+                        user_id,
+                        starred: Some(true),
+                        ..Default::default()
+                    },
+                )
+                .await?,
+                archived_counter: entries::count(
+                    tx,
+                    &FindParams {
+                        user_id,
+                        archive: Some(true),
+                        ..Default::default()
+                    },
+                )
+                .await?,
+            })
+        }
     }
 }
