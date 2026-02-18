@@ -1,4 +1,5 @@
 use std::env;
+use std::str::FromStr;
 
 use actix_web::cookie::Key;
 use result::ArticlerResult;
@@ -6,7 +7,7 @@ use server::{
     app::{AppState, http_server, init_handlebars},
     scraper::Scraper,
 };
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 
 #[actix_web::main]
 async fn main() -> ArticlerResult<()> {
@@ -20,7 +21,12 @@ async fn main() -> ArticlerResult<()> {
         _ => None,
     };
 
-    let pool = SqlitePoolOptions::new().connect(&db_path).await?;
+    let connect_options = SqliteConnectOptions::from_str(&db_path)?
+        .journal_mode(SqliteJournalMode::Wal);
+
+    let pool = SqlitePoolOptions::new()
+        .connect_with(connect_options)
+        .await?;
 
     sqlx::migrate!("../../migrations")
         .run(&pool)
