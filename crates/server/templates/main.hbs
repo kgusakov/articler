@@ -2,40 +2,7 @@
 <main class="flex flex-col lg:flex-row px-4 md:px-8 lg:px-[120px] pt-6 lg:pt-[76px] pb-8 lg:pb-12 gap-6 lg:gap-0">
     <!-- Sidebar -->
     <aside class="w-full lg:w-[348px] lg:pr-8 space-y-1 flex lg:block gap-2 overflow-x-auto lg:overflow-visible">
-        <!-- Unread (active) -->
-        <a href="/"
-            class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 {{#if (eq active_category 'unread')}}bg-surface{{else}}hover:bg-surface{{/if}} rounded text-left">
-            <img src="/static/images/MarkUnRead.svg" />
-            <span class="hidden lg:inline flex-1 font-medium">Unread</span>
-            <span class="hidden lg:inline text-xs text-muted">{{unread_counter}}</span>
-        </a>
-        <!-- All -->
-        <a href="/all"
-            class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left {{#if (eq active_category 'all')}}bg-surface{{else}}hover:bg-surface{{/if}}">
-            <img src="/static/images/All.svg" />
-            <span class="hidden lg:inline flex-1">All</span>
-            <span class="hidden lg:inline text-xs text-muted">{{all_counter}}</span>
-        </a>
-        <!-- Starred -->
-        <a href="/favourite"
-            class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left {{#if (eq active_category 'favourite')}}bg-surface{{else}}hover:bg-surface{{/if}}">
-            <img src="/static/images/FavoriteOff.svg" />
-            <span class="hidden lg:inline flex-1">Starred</span>
-            <span class="hidden lg:inline text-xs text-muted">{{starred_counter}}</span>
-        </a>
-        <!-- Archive -->
-        <a href="/archive"
-            class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left {{#if (eq active_category 'archived')}}bg-surface{{else}}hover:bg-surface{{/if}}">
-            <img src="/static/images/Archived.svg" />
-            <span class="hidden lg:inline flex-1">Archived</span>
-            <span class="hidden lg:inline text-xs text-muted">{{archived_counter}}</span>
-        </a>
-        <!-- Tags -->
-        <button class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left hover:bg-surface">
-            <!-- TODO replace tagged svg by normal variant -->
-            <img class="w-5 h-5" src="/static/images/Tagged.svg" />
-            <span class="hidden lg:inline flex-1">Tags</span>
-        </button>
+        {{> categories}}
     </aside>
 
     <!-- Content -->
