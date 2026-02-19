@@ -507,6 +507,56 @@ async fn do_favourite(pool: SqlitePool) {
     migrations = "../../migrations",
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
+async fn do_favourite_htmx(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(resp.headers().get(header::LOCATION).is_none());
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let fav_icons = helpers::find_favourite_icons_by_article(content);
+    let icons: HashSet<(&str, &str)> = fav_icons
+        .iter()
+        .map(|(id, src)| (id.as_str(), src.as_str()))
+        .collect();
+    assert!(!icons.contains(&("1", "/static/images/FavoriteOn.svg")));
+
+    let req = test::TestRequest::post()
+        .uri("/do_favourite")
+        .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
+        .insert_header((header::REFERER, "/"))
+        .set_form([("article_id", "1"), ("starred", "true")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(resp.headers().get(header::LOCATION).is_none());
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let fav_icons = helpers::find_favourite_icons_by_article(content);
+    let icons: HashSet<(&str, &str)> = fav_icons
+        .iter()
+        .map(|(id, src)| (id.as_str(), src.as_str()))
+        .collect();
+    assert!(icons.contains(&("1", "/static/images/FavoriteOn.svg")));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
 async fn do_unfavourite(pool: SqlitePool) {
     let app = init_ui_app(pool).await;
     let cookie = login("wallabag", "wallabag", &app).await;
@@ -996,7 +1046,6 @@ async fn do_client_delete(pool: SqlitePool) {
         HashSet::from(["Client 2", "Android app"])
     );
 }
-
 
 #[sqlx::test(
     migrations = "../../migrations",

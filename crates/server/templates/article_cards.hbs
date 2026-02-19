@@ -9,7 +9,7 @@
         </a>
         <div class="absolute bottom-0 right-0 flex items-center gap-5 pl-5 pr-4 py-2.5 rounded-tl-lg"
             style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
-            <form method="post" action="/do_favourite" class="flex items-center">
+            <form method="post" action="/do_favourite" hx-post="/do_favourite" hx-target="#article-cards" hx-swap="morph:innerHTML" class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <input type="hidden" name="starred"
                     value="{{#unless is_starred}}true{{else}}false{{/unless}}" />

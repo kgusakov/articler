@@ -317,8 +317,9 @@ async fn do_favourite(
     session: Session,
     req: HttpRequest,
     form: web::Form<FavouriteForm>,
+    app: web::Data<AppState>,
     tctx: web::ReqData<TransactionContext<'_>>,
-) -> actix_web::Result<impl Responder> {
+) -> actix_web::Result<HttpResponse> {
     let mut tx = tctx.tx()?;
 
     let user_id = check_user_id(&session)?;
@@ -337,7 +338,13 @@ async fn do_favourite(
 
     entries::update_by_id(&mut tx, user_id, form.article_id, update).await?;
 
-    Ok(Redirect::to(referer_or_root(&req)).see_other())
+    if is_htmx_request(&req) {
+        render_article_cards(&app, &mut tx, user_id, &req).await
+    } else {
+        Ok(HttpResponse::SeeOther()
+            .append_header((header::LOCATION, referer_or_root(&req)))
+            .finish())
+    }
 }
 
 async fn do_delete(
@@ -508,6 +515,68 @@ fn referer_or_root(req: &HttpRequest) -> String {
         .and_then(|v| v.to_str().ok())
         .unwrap_or("/")
         .to_owned()
+}
+
+fn is_htmx_request(req: &HttpRequest) -> bool {
+    req.headers().get("HX-Request").is_some()
+}
+
+fn find_params_from_referer(user_id: Id, req: &HttpRequest) -> FindParams {
+    let path = req
+        .headers()
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|referer| referer.parse::<Url>().ok())
+        .map(|u| u.path().to_owned())
+        .unwrap_or_else(|| "/".to_owned());
+
+    let base = FindParams {
+        user_id,
+        sort: Some(entries::SortColumn::Created),
+        order: Some(SortOrder::Desc),
+        ..Default::default()
+    };
+
+    match path.as_str() {
+        "/all" => base,
+        "/favourite" => FindParams {
+            starred: Some(true),
+            ..base
+        },
+        "/archive" => FindParams {
+            archive: Some(true),
+            ..base
+        },
+        _ => FindParams {
+            archive: Some(false),
+            ..base
+        },
+    }
+}
+
+async fn render_article_cards(
+    app: &AppState,
+    tx: &mut sqlx::Transaction<'_, db::repository::Db>,
+    user_id: Id,
+    req: &HttpRequest,
+) -> actix_web::Result<HttpResponse> {
+    let params = find_params_from_referer(user_id, req);
+
+    let articles: Vec<ArticleMetadata> = entries::find_all(tx, &params)
+        .await
+        .map_err(ErrorInternalServerError)?
+        .into_iter()
+        .map(|e| e.0.into())
+        .collect();
+
+    let rendered = app
+        .handlebars
+        .render("article_cards", &serde_json::json!({ "articles": articles }))
+        .map_err(ErrorInternalServerError)?;
+
+    Ok(HttpResponse::Ok()
+        .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+        .body(rendered))
 }
 
 mod dto {
