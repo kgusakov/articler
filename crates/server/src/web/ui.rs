@@ -356,8 +356,9 @@ async fn do_archive(
     session: Session,
     req: HttpRequest,
     form: web::Form<ArchiveForm>,
+    app: web::Data<AppState>,
     tctx: web::ReqData<TransactionContext<'_>>,
-) -> actix_web::Result<impl Responder> {
+) -> actix_web::Result<HttpResponse> {
     let mut tx = tctx.tx()?;
 
     let user_id = check_user_id(&session)?;
@@ -376,7 +377,13 @@ async fn do_archive(
 
     entries::update_by_id(&mut tx, user_id, form.article_id, update).await?;
 
-    Ok(Redirect::to(referer_or_root(&req)).see_other())
+    if is_htmx_request(&req) {
+        render_article_cards(&app, &mut tx, user_id, &req).await
+    } else {
+        Ok(HttpResponse::SeeOther()
+            .append_header((header::LOCATION, referer_or_root(&req)))
+            .finish())
+    }
 }
 
 async fn do_favourite(
