@@ -6,14 +6,12 @@ use actix_web::{
     web::{self, Json, ServiceConfig, post},
 };
 use actix_web_httpauth::extractors::bearer::BearerAuth;
-use serde::{Deserialize, Serialize};
 
-use crate::{app::AppState, auth::find_user, middleware::TransactionContext};
+use crate::{app::AppState, auth::find_user, middleware::TransactionContext, rest::UserInfo};
 use db::repository::clients;
+use dto::{GetToken, OauthError, Token};
 
 static BEARER: &str = "bearer";
-
-type Id = i64;
 
 pub fn routes(cfg: &mut ServiceConfig) {
     // TODO permissive cors is a security issue - must be fixed
@@ -150,7 +148,7 @@ async fn post_token(
     }
 }
 
-pub async fn auth_extractor(
+pub(in crate::rest) async fn auth_extractor(
     req: ServiceRequest,
     credentials: Option<BearerAuth>,
 ) -> Result<ServiceRequest, (Error, ServiceRequest)> {
@@ -188,38 +186,6 @@ pub async fn auth_extractor(
     }
 }
 
-#[derive(Deserialize, Debug)]
-struct GetToken {
-    grant_type: Option<String>,
-    client_id: Option<String>,
-    client_secret: Option<String>,
-    username: Option<String>,
-    password: Option<String>,
-    refresh_token: Option<String>,
-}
-
-#[derive(Serialize, Debug)]
-struct Token {
-    access_token: String,
-    refresh_token: String,
-    expires_in: i64,
-    token_type: String,
-    scope: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct OauthError {
-    error: String,
-    error_description: String,
-}
-
-impl std::fmt::Display for OauthError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let json = serde_json::to_string(self).map_err(|_| std::fmt::Error)?;
-        write!(f, "{json}")
-    }
-}
-
 fn oauth_error(error: &str, description: &str) -> OauthError {
     OauthError {
         error: error.to_owned(),
@@ -227,8 +193,38 @@ fn oauth_error(error: &str, description: &str) -> OauthError {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct UserInfo {
-    pub user_id: Id,
-    pub client_id: Id,
+mod dto {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Deserialize, Debug)]
+    pub struct GetToken {
+        pub grant_type: Option<String>,
+        pub client_id: Option<String>,
+        pub client_secret: Option<String>,
+        pub username: Option<String>,
+        pub password: Option<String>,
+        pub refresh_token: Option<String>,
+    }
+
+    #[derive(Serialize, Debug)]
+    pub struct Token {
+        pub access_token: String,
+        pub refresh_token: String,
+        pub expires_in: i64,
+        pub token_type: String,
+        pub scope: Option<String>,
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct OauthError {
+        pub error: String,
+        pub error_description: String,
+    }
+
+    impl std::fmt::Display for OauthError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let json = serde_json::to_string(self).map_err(|_| std::fmt::Error)?;
+            write!(f, "{json}")
+        }
+    }
 }

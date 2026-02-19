@@ -1,7 +1,7 @@
 mod entries;
 mod tags;
 
-use super::oauth::UserInfo;
+use crate::rest::UserInfo;
 use crate::rest::wallabag::entries::exists;
 use actix_cors::Cors;
 use actix_utils::future::{Ready, ready};

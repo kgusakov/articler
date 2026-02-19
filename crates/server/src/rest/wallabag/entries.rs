@@ -3,32 +3,32 @@ use actix_web::{
     error::{ErrorInternalServerError, ErrorNotFound},
     web::{self, Json, Query},
 };
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use log::error;
-use serde::{Deserialize, Serialize};
-use serde_with::{BoolFromInt, StringWithSeparator};
-use serde_with::{formats::CommaSeparator, serde_as};
 use slug::slugify;
-use thiserror::Error;
 use url::Url;
 
 use crate::{
     app::AppState,
     middleware::TransactionContext,
     models::{Entry, Tag},
-    rest::{oauth::UserInfo, wallabag::Id},
+    rest::{UserInfo, wallabag::Id},
     scraper::extract_title,
 };
 use db::repository::{entries, tags};
+use dto::{
+    AddEntry, AddEntryResponse, DeleteEntryRequest, DeleteEntryResponse, Embedded, Entries,
+    EntriesRequest, EntryTags, Exists, Expect, Link, Links, UpdateEntry,
+};
 use helpers::{generate_uid, hash_str};
-use result::{ArticlerError, ArticlerResult};
+use result::ArticlerError;
 
 // TODO current implementation needed only for mobile app healthchecks. Needed full implementation
-pub async fn exists() -> actix_web::Result<Json<Exists>> {
+pub(in crate::rest::wallabag) async fn exists() -> actix_web::Result<Json<Exists>> {
     Ok(Json(Exists { exists: false }))
 }
 
-pub async fn post_entries(
+pub(in crate::rest::wallabag) async fn post_entries(
     tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
     request: Either<web::Json<AddEntry>, web::Form<AddEntry>>,
@@ -153,7 +153,7 @@ pub async fn post_entries(
     }))
 }
 
-pub async fn entries(
+pub(in crate::rest::wallabag) async fn entries(
     tctx: web::ReqData<TransactionContext<'_>>,
     request: Query<EntriesRequest>,
     user_info: UserInfo,
@@ -217,7 +217,7 @@ pub async fn entries(
     }))
 }
 
-pub async fn get_tags_by_entry(
+pub(in crate::rest::wallabag) async fn get_tags_by_entry(
     tctx: web::ReqData<TransactionContext<'_>>,
     entry_id: web::Path<Id>,
     user_info: UserInfo,
@@ -239,7 +239,7 @@ pub async fn get_tags_by_entry(
     }
 }
 
-pub async fn delete_tag_from_entry(
+pub(in crate::rest::wallabag) async fn delete_tag_from_entry(
     tctx: web::ReqData<TransactionContext<'_>>,
     ids: web::Path<(Id, Id)>,
     user_info: UserInfo,
@@ -266,7 +266,7 @@ pub async fn delete_tag_from_entry(
     }
 }
 
-pub async fn delete_entry(
+pub(in crate::rest::wallabag) async fn delete_entry(
     tctx: web::ReqData<TransactionContext<'_>>,
     entry_id: web::Path<i64>,
     request: Query<DeleteEntryRequest>,
@@ -310,7 +310,7 @@ pub async fn delete_entry(
 }
 
 // TODO implement Either based version for Json input data also
-pub async fn post_entry_tags(
+pub(in crate::rest::wallabag) async fn post_entry_tags(
     tctx: web::ReqData<TransactionContext<'_>>,
     entry_id: web::Path<Id>,
     request: web::Form<EntryTags>,
@@ -350,7 +350,7 @@ pub async fn post_entry_tags(
     }
 }
 
-pub async fn patch_entry(
+pub(in crate::rest::wallabag) async fn patch_entry(
     tctx: web::ReqData<TransactionContext<'_>>,
     entry_id: web::Path<i64>,
     request: Either<web::Json<UpdateEntry>, web::Form<UpdateEntry>>,
@@ -425,299 +425,306 @@ pub async fn patch_entry(
     Ok(Json(entry))
 }
 
-#[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
-enum Expect {
-    #[default]
-    #[serde(rename(deserialize = "id"))]
-    Id,
-    #[serde(rename(deserialize = "full"))]
-    Full,
-}
+mod dto {
+    use chrono::{DateTime, Utc};
+    use serde::{Deserialize, Serialize};
+    use serde_with::{BoolFromInt, StringWithSeparator};
+    use serde_with::{formats::CommaSeparator, serde_as};
+    use thiserror::Error;
+    use url::Url;
 
-#[derive(Deserialize, Debug)]
-pub struct DeleteEntryRequest {
-    #[serde(default)]
-    expect: Expect,
-}
+    use crate::models::{Entry, Tag};
+    use db::repository::{entries, tags};
+    use result::{ArticlerError, ArticlerResult};
 
-#[derive(Serialize)]
-#[serde(untagged)]
-pub enum DeleteEntryResponse {
-    Id {
-        id: i64,
-    },
-    Full {
-        #[serde(flatten)]
-        entry: Box<Entry>,
-    },
-}
+    #[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
+    pub enum Expect {
+        #[default]
+        #[serde(rename(deserialize = "id"))]
+        Id,
+        #[serde(rename(deserialize = "full"))]
+        Full,
+    }
 
-#[serde_as]
-#[derive(Deserialize)]
-pub struct EntryTags {
-    #[serde(rename(deserialize = "tags"))]
-    #[serde_as(as = "StringWithSeparator::<CommaSeparator, String>")]
-    labels: Vec<String>,
-}
+    #[derive(Deserialize, Debug)]
+    pub struct DeleteEntryRequest {
+        #[serde(default)]
+        pub expect: Expect,
+    }
 
-#[derive(Serialize)]
-pub struct AddEntryResponse {
-    #[serde(flatten)]
-    entry: Entry,
-    _links: Links,
-}
-
-#[derive(Serialize)]
-pub struct Embedded {
-    items: Vec<Entry>,
-}
-
-#[derive(Serialize)]
-pub struct Entries {
-    page: i64,
-    limit: i64,
-    pages: i64,
-    total: i64,
-    #[serde(rename(serialize = "_embedded"))]
-    embedded: Embedded,
-    _links: Links,
-}
-
-fn try_parse_url(s: Option<String>) -> ArticlerResult<Option<Url>> {
-    Ok(s.map(|u| Url::parse(&u)).transpose()?)
-}
-
-// TODO ugly place for errors - api module is overwhelmed with logic already
-#[derive(Error, Debug)]
-enum HandlerError {
-    #[error("Date from seconds convert error")]
-    DateFromError,
-}
-
-fn try_parse_timestamp_opt(s: Option<i64>) -> ArticlerResult<Option<DateTime<Utc>>> {
-    match s {
-        Some(t) => match DateTime::from_timestamp_secs(t) {
-            Some(r) => Ok(Some(r)),
-            None => Err(HandlerError::DateFromError.into()),
+    #[derive(Serialize)]
+    #[serde(untagged)]
+    pub enum DeleteEntryResponse {
+        Id {
+            id: i64,
         },
-        None => Ok(None),
+        Full {
+            #[serde(flatten)]
+            entry: Box<Entry>,
+        },
     }
-}
 
-fn try_parse_timestamp(s: i64) -> ArticlerResult<DateTime<Utc>> {
-    match DateTime::from_timestamp_secs(s) {
-        Some(r) => Ok(r),
-        None => Err(HandlerError::DateFromError.into()),
+    #[serde_as]
+    #[derive(Deserialize)]
+    pub struct EntryTags {
+        #[serde(rename(deserialize = "tags"))]
+        #[serde_as(as = "StringWithSeparator::<CommaSeparator, String>")]
+        pub labels: Vec<String>,
     }
-}
 
-impl From<tags::TagRow> for Tag {
-    fn from(value: tags::TagRow) -> Self {
-        Self {
-            id: value.id,
-            label: value.label,
-            slug: value.slug,
+    #[derive(Serialize)]
+    pub struct AddEntryResponse {
+        #[serde(flatten)]
+        pub entry: Entry,
+        pub _links: Links,
+    }
+
+    #[derive(Serialize)]
+    pub struct Embedded {
+        pub items: Vec<Entry>,
+    }
+
+    #[derive(Serialize)]
+    pub struct Entries {
+        pub page: i64,
+        pub limit: i64,
+        pub pages: i64,
+        pub total: i64,
+        #[serde(rename(serialize = "_embedded"))]
+        pub embedded: Embedded,
+        pub _links: Links,
+    }
+
+    fn try_parse_url(s: Option<String>) -> ArticlerResult<Option<Url>> {
+        Ok(s.map(|u| Url::parse(&u)).transpose()?)
+    }
+
+    // TODO ugly place for errors - api module is overwhelmed with logic already
+    #[derive(Error, Debug)]
+    enum HandlerError {
+        #[error("Date from seconds convert error")]
+        DateFromError,
+    }
+
+    fn try_parse_timestamp_opt(s: Option<i64>) -> ArticlerResult<Option<DateTime<Utc>>> {
+        match s {
+            Some(t) => match DateTime::from_timestamp_secs(t) {
+                Some(r) => Ok(Some(r)),
+                None => Err(HandlerError::DateFromError.into()),
+            },
+            None => Ok(None),
         }
     }
-}
 
-impl TryFrom<(entries::EntryRow, Vec<Tag>)> for Entry {
-    type Error = ArticlerError;
-
-    fn try_from((e, tags): (entries::EntryRow, Vec<Tag>)) -> Result<Self, Self::Error> {
-        Ok(Entry {
-            id: e.id,
-            url: Url::parse(&e.url)?,
-            hashed_url: e.hashed_url,
-            given_url: try_parse_url(e.given_url)?,
-            hashed_given_url: e.hashed_given_url,
-            title: e.title,
-            content: e.content,
-            is_archived: e.is_archived,
-            archived_at: try_parse_timestamp_opt(e.archived_at)?,
-            is_starred: e.is_starred,
-            starred_at: try_parse_timestamp_opt(e.starred_at)?,
-            tags,
-            created_at: try_parse_timestamp(e.created_at)?,
-            updated_at: try_parse_timestamp(e.updated_at)?,
-            // TODO implement annotations support
-            annotations: vec![],
-            mimetype: e.mimetype,
-            language: e.language,
-            reading_time: e.reading_time,
-            domain_name: e.domain_name,
-            preview_picture: try_parse_url(e.preview_picture)?,
-            origin_url: try_parse_url(e.origin_url)?,
-            published_at: try_parse_timestamp_opt(e.published_at)?,
-            // TODO this .map(to_string) look ugly
-            published_by: e
-                .published_by
-                .map(|s| s.split(',').map(std::borrow::ToOwned::to_owned).collect()),
-            is_public: e.is_public,
-            uid: e.uid,
-        })
-    }
-}
-
-#[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
-enum FindSortEnum {
-    #[default]
-    #[serde(rename(deserialize = "created"))]
-    Created,
-    #[serde(rename(deserialize = "updated"))]
-    Updated,
-    #[serde(rename(deserialize = "archived"))]
-    Archived,
-}
-
-impl From<FindSortEnum> for entries::SortColumn {
-    fn from(val: FindSortEnum) -> Self {
-        match val {
-            FindSortEnum::Created => entries::SortColumn::Created,
-            FindSortEnum::Updated => entries::SortColumn::Updated,
-            FindSortEnum::Archived => entries::SortColumn::Archived,
+    fn try_parse_timestamp(s: i64) -> ArticlerResult<DateTime<Utc>> {
+        match DateTime::from_timestamp_secs(s) {
+            Some(r) => Ok(r),
+            None => Err(HandlerError::DateFromError.into()),
         }
     }
-}
 
-#[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
-enum FindSortOrder {
-    #[default]
-    #[serde(rename(deserialize = "asc"))]
-    Asc,
-    #[serde(rename(deserialize = "desc"))]
-    Desc,
-}
-
-impl From<FindSortOrder> for entries::SortOrder {
-    fn from(val: FindSortOrder) -> Self {
-        match val {
-            FindSortOrder::Asc => entries::SortOrder::Asc,
-            FindSortOrder::Desc => entries::SortOrder::Desc,
+    impl From<tags::TagRow> for Tag {
+        fn from(value: tags::TagRow) -> Self {
+            Self {
+                id: value.id,
+                label: value.label,
+                slug: value.slug,
+            }
         }
     }
-}
 
-#[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
-enum Detail {
-    #[serde(rename(deserialize = "metadata"))]
-    Metadata,
-    #[default]
-    #[serde(rename(deserialize = "full"))]
-    Full,
-}
+    impl TryFrom<(entries::EntryRow, Vec<Tag>)> for Entry {
+        type Error = ArticlerError;
 
-impl From<Detail> for entries::Detail {
-    fn from(val: Detail) -> Self {
-        match val {
-            Detail::Full => entries::Detail::Full,
-            Detail::Metadata => entries::Detail::Metadata,
+        fn try_from((e, tags): (entries::EntryRow, Vec<Tag>)) -> Result<Self, Self::Error> {
+            Ok(Entry {
+                id: e.id,
+                url: Url::parse(&e.url)?,
+                hashed_url: e.hashed_url,
+                given_url: try_parse_url(e.given_url)?,
+                hashed_given_url: e.hashed_given_url,
+                title: e.title,
+                content: e.content,
+                is_archived: e.is_archived,
+                archived_at: try_parse_timestamp_opt(e.archived_at)?,
+                is_starred: e.is_starred,
+                starred_at: try_parse_timestamp_opt(e.starred_at)?,
+                tags,
+                created_at: try_parse_timestamp(e.created_at)?,
+                updated_at: try_parse_timestamp(e.updated_at)?,
+                // TODO implement annotations support
+                annotations: vec![],
+                mimetype: e.mimetype,
+                language: e.language,
+                reading_time: e.reading_time,
+                domain_name: e.domain_name,
+                preview_picture: try_parse_url(e.preview_picture)?,
+                origin_url: try_parse_url(e.origin_url)?,
+                published_at: try_parse_timestamp_opt(e.published_at)?,
+                // TODO this .map(to_string) look ugly
+                published_by: e
+                    .published_by
+                    .map(|s| s.split(',').map(std::borrow::ToOwned::to_owned).collect()),
+                is_public: e.is_public,
+                uid: e.uid,
+            })
         }
     }
-}
 
-fn default_page() -> i64 {
-    1
-}
+    #[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
+    pub enum FindSortEnum {
+        #[default]
+        #[serde(rename(deserialize = "created"))]
+        Created,
+        #[serde(rename(deserialize = "updated"))]
+        Updated,
+        #[serde(rename(deserialize = "archived"))]
+        Archived,
+    }
 
-fn default_per_page() -> i64 {
-    30
-}
+    impl From<FindSortEnum> for entries::SortColumn {
+        fn from(val: FindSortEnum) -> Self {
+            match val {
+                FindSortEnum::Created => entries::SortColumn::Created,
+                FindSortEnum::Updated => entries::SortColumn::Updated,
+                FindSortEnum::Archived => entries::SortColumn::Archived,
+            }
+        }
+    }
 
-#[serde_as]
-#[derive(Deserialize, PartialEq, Debug)]
-pub struct AddEntry {
-    // If not set - title will be retrieved by scraping
-    title: Option<String>,
-    // If not set - content will be retrieved by scraping
-    content: Option<String>,
-    #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
-    tags: Option<Vec<String>>,
-    #[serde_as(as = "Option<BoolFromInt>")]
-    archive: Option<bool>,
-    #[serde_as(as = "Option<BoolFromInt>")]
-    starred: Option<bool>,
-    // Will be set as given url for the entry
-    // If there will be some redirects, result url will be set as entry url
-    url: Url,
-    language: Option<String>,
-    published_at: Option<DateTime<Utc>>,
-    preview_picture: Option<Url>,
-    #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
-    authors: Option<Vec<String>>,
-    // Generate public link for the url or not
-    #[serde_as(as = "Option<BoolFromInt>")]
-    public: Option<bool>,
-    // Origin url for the entry (from where user found it).
-    origin_url: Option<String>,
-}
+    #[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
+    pub enum FindSortOrder {
+        #[default]
+        #[serde(rename(deserialize = "asc"))]
+        Asc,
+        #[serde(rename(deserialize = "desc"))]
+        Desc,
+    }
 
-#[serde_as]
-#[derive(Deserialize, PartialEq, Debug)]
-pub struct UpdateEntry {
-    title: Option<String>,
-    content: Option<String>,
-    #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
-    tags: Option<Vec<String>>,
-    #[serde_as(as = "Option<BoolFromInt>")]
-    archive: Option<bool>,
-    #[serde_as(as = "Option<BoolFromInt>")]
-    starred: Option<bool>,
-    language: Option<String>,
-    published_at: Option<DateTime<Utc>>,
-    preview_picture: Option<Url>,
-    #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
-    authors: Option<Vec<String>>,
-    #[serde_as(as = "Option<BoolFromInt>")]
-    public: Option<bool>,
-    origin_url: Option<String>,
-}
+    impl From<FindSortOrder> for entries::SortOrder {
+        fn from(val: FindSortOrder) -> Self {
+            match val {
+                FindSortOrder::Asc => entries::SortOrder::Asc,
+                FindSortOrder::Desc => entries::SortOrder::Desc,
+            }
+        }
+    }
 
-#[serde_as]
-#[derive(Deserialize, Debug, PartialEq)]
-pub struct EntriesRequest {
-    #[serde_as(as = "Option<BoolFromInt>")]
-    archive: Option<bool>,
-    #[serde_as(as = "Option<BoolFromInt>")]
-    starred: Option<bool>,
-    #[serde(default)]
-    sort: FindSortEnum,
-    #[serde(default)]
-    order: FindSortOrder,
-    #[serde(default = "default_page")]
-    page: i64,
-    #[serde(rename(deserialize = "perPage"))]
-    #[serde(default = "default_per_page")]
-    per_page: i64,
-    #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
-    tags: Option<Vec<String>>,
-    #[serde(default)]
-    since: i64,
-    #[serde_as(as = "Option<BoolFromInt>")]
-    public: Option<bool>,
-    #[serde(default)]
-    detail: Detail,
-    domain_name: Option<String>,
-}
+    #[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
+    pub enum Detail {
+        #[serde(rename(deserialize = "metadata"))]
+        Metadata,
+        #[default]
+        #[serde(rename(deserialize = "full"))]
+        Full,
+    }
 
-#[derive(Serialize)]
-pub struct Links {
-    #[serde(rename(serialize = "self"))]
-    _self: Link,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    first: Option<Link>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    last: Option<Link>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    next: Option<Link>,
-}
+    impl From<Detail> for entries::Detail {
+        fn from(val: Detail) -> Self {
+            match val {
+                Detail::Full => entries::Detail::Full,
+                Detail::Metadata => entries::Detail::Metadata,
+            }
+        }
+    }
 
-#[derive(Serialize)]
-struct Link {
-    href: Url,
-}
+    fn default_page() -> i64 {
+        1
+    }
 
-#[derive(Debug, Serialize)]
-pub struct Exists {
-    exists: bool,
+    fn default_per_page() -> i64 {
+        30
+    }
+
+    #[serde_as]
+    #[derive(Deserialize, PartialEq, Debug)]
+    pub struct AddEntry {
+        pub title: Option<String>,
+        pub content: Option<String>,
+        #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
+        pub tags: Option<Vec<String>>,
+        #[serde_as(as = "Option<BoolFromInt>")]
+        pub archive: Option<bool>,
+        #[serde_as(as = "Option<BoolFromInt>")]
+        pub starred: Option<bool>,
+        pub url: Url,
+        pub language: Option<String>,
+        pub published_at: Option<DateTime<Utc>>,
+        pub preview_picture: Option<Url>,
+        #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
+        pub authors: Option<Vec<String>>,
+        #[serde_as(as = "Option<BoolFromInt>")]
+        pub public: Option<bool>,
+        pub origin_url: Option<String>,
+    }
+
+    #[serde_as]
+    #[derive(Deserialize, PartialEq, Debug)]
+    pub struct UpdateEntry {
+        pub title: Option<String>,
+        pub content: Option<String>,
+        #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
+        pub tags: Option<Vec<String>>,
+        #[serde_as(as = "Option<BoolFromInt>")]
+        pub archive: Option<bool>,
+        #[serde_as(as = "Option<BoolFromInt>")]
+        pub starred: Option<bool>,
+        pub language: Option<String>,
+        pub published_at: Option<DateTime<Utc>>,
+        pub preview_picture: Option<Url>,
+        #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
+        pub authors: Option<Vec<String>>,
+        #[serde_as(as = "Option<BoolFromInt>")]
+        pub public: Option<bool>,
+        pub origin_url: Option<String>,
+    }
+
+    #[serde_as]
+    #[derive(Deserialize, PartialEq, Debug)]
+    pub struct EntriesRequest {
+        #[serde_as(as = "Option<BoolFromInt>")]
+        pub archive: Option<bool>,
+        #[serde_as(as = "Option<BoolFromInt>")]
+        pub starred: Option<bool>,
+        #[serde(default)]
+        pub sort: FindSortEnum,
+        #[serde(default)]
+        pub order: FindSortOrder,
+        #[serde(default = "default_page")]
+        pub page: i64,
+        #[serde(rename(deserialize = "perPage"))]
+        #[serde(default = "default_per_page")]
+        pub per_page: i64,
+        #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
+        pub tags: Option<Vec<String>>,
+        #[serde(default)]
+        pub since: i64,
+        #[serde_as(as = "Option<BoolFromInt>")]
+        pub public: Option<bool>,
+        #[serde(default)]
+        pub detail: Detail,
+        pub domain_name: Option<String>,
+    }
+
+    #[derive(Serialize)]
+    pub struct Links {
+        #[serde(rename(serialize = "self"))]
+        pub _self: Link,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub first: Option<Link>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub last: Option<Link>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub next: Option<Link>,
+    }
+
+    #[derive(Serialize)]
+    pub struct Link {
+        pub href: Url,
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct Exists {
+        pub exists: bool,
+    }
 }

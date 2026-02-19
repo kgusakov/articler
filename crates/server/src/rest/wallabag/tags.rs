@@ -2,17 +2,16 @@ use actix_web::{
     error::ErrorNotFound,
     web::{self, Json},
 };
-use serde::Deserialize;
-use serde_with::{StringWithSeparator, formats::CommaSeparator, serde_as};
 
 use crate::{
-    rest::{oauth::UserInfo, wallabag::Id},
     middleware::TransactionContext,
     models::Tag,
+    rest::{UserInfo, wallabag::Id},
 };
 use db::repository::tags;
+use dto::{TagLabel, TagsLabel};
 
-pub async fn get_tags(
+pub(in crate::rest::wallabag) async fn get_tags(
     tctx: web::ReqData<TransactionContext<'_>>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
@@ -27,7 +26,7 @@ pub async fn get_tags(
     Ok(Json(result))
 }
 
-pub async fn delete_tags_by_label(
+pub(in crate::rest::wallabag) async fn delete_tags_by_label(
     tctx: web::ReqData<TransactionContext<'_>>,
     label: web::Query<TagsLabel>,
     user_info: UserInfo,
@@ -43,7 +42,7 @@ pub async fn delete_tags_by_label(
     Ok(Json(result))
 }
 
-pub async fn delete_tag_by_id(
+pub(in crate::rest::wallabag) async fn delete_tag_by_id(
     tctx: web::ReqData<TransactionContext<'_>>,
     tag_id: web::Path<Id>,
     user_info: UserInfo,
@@ -61,7 +60,7 @@ pub async fn delete_tag_by_id(
     }
 }
 
-pub async fn delete_tag_by_label(
+pub(in crate::rest::wallabag) async fn delete_tag_by_label(
     tctx: web::ReqData<TransactionContext<'_>>,
     label: web::Query<TagLabel>,
     user_info: UserInfo,
@@ -79,16 +78,21 @@ pub async fn delete_tag_by_label(
     }
 }
 
-#[derive(Deserialize)]
-pub struct TagLabel {
-    #[serde(rename(deserialize = "tag"))]
-    label: String,
-}
+mod dto {
+    use serde::Deserialize;
+    use serde_with::{StringWithSeparator, formats::CommaSeparator, serde_as};
 
-#[serde_as]
-#[derive(Deserialize)]
-pub struct TagsLabel {
-    #[serde(rename(deserialize = "tags"))]
-    #[serde_as(as = "StringWithSeparator::<CommaSeparator, String>")]
-    labels: Vec<String>,
+    #[derive(Deserialize)]
+    pub struct TagLabel {
+        #[serde(rename(deserialize = "tag"))]
+        pub label: String,
+    }
+
+    #[serde_as]
+    #[derive(Deserialize)]
+    pub struct TagsLabel {
+        #[serde(rename(deserialize = "tags"))]
+        #[serde_as(as = "StringWithSeparator::<CommaSeparator, String>")]
+        pub labels: Vec<String>,
+    }
 }
