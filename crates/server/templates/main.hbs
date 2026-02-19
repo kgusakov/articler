@@ -1,7 +1,9 @@
 <!-- Main -->
 <main class="flex flex-col lg:flex-row px-4 md:px-8 lg:px-[120px] pt-6 lg:pt-[76px] pb-8 lg:pb-12 gap-6 lg:gap-0">
     <!-- Sidebar -->
-    <aside class="w-full lg:w-[348px] lg:pr-8 space-y-1 flex lg:block gap-2 overflow-x-auto lg:overflow-visible">
+    <aside id="categories-menu"
+        class="w-full lg:w-[348px] lg:pr-8 space-y-1 flex lg:block gap-2 overflow-x-auto lg:overflow-visible"
+        hx-swap="morph::innerHTML" hx-get="/partial/categories" hx-trigger="htmx:afterRequest from:#do_favourite_form">
         {{> categories}}
     </aside>
 

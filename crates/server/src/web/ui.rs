@@ -19,7 +19,10 @@ use crate::{
     auth::find_user,
     middleware::TransactionContext,
     scraper::extract_title,
-    web::dto::{Client, LoginForm},
+    web::{
+        dto::{Client, LoginForm},
+        ui::dto::PartialCategoriesContext,
+    },
 };
 
 use dto::{
@@ -43,7 +46,8 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/do_archive", post().to(do_archive))
         .route("/do_favourite", post().to(do_favourite))
         .route("/do_delete", post().to(do_delete))
-        .route("/add", post().to(do_add));
+        .route("/add", post().to(do_add))
+        .route("/partial/categories", get().to(partial_categories));
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
@@ -286,6 +290,34 @@ async fn main(
         .body(rendered))
 }
 
+async fn partial_categories(
+    session: Session,
+    req: HttpRequest,
+    app: web::Data<AppState>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+) -> actix_web::Result<HttpResponse> {
+    let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? else {
+        return Ok(HttpResponse::Forbidden().finish());
+    };
+
+    let mut tx = tctx.tx()?;
+
+    let active_category = Category::from(&req);
+
+    let context = PartialCategoriesContext {
+        counters: ArticleCounters::load(&mut tx, user_id).await?,
+        active_category,
+    };
+
+    let rendered = app
+        .handlebars
+        .render("categories", &context)
+        .map_err(ErrorInternalServerError)?;
+    Ok(HttpResponse::Ok()
+        .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+        .body(rendered))
+}
+
 async fn do_archive(
     session: Session,
     req: HttpRequest,
@@ -522,34 +554,26 @@ fn is_htmx_request(req: &HttpRequest) -> bool {
 }
 
 fn find_params_from_referer(user_id: Id, req: &HttpRequest) -> FindParams {
-    let path = req
-        .headers()
-        .get(header::REFERER)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|referer| referer.parse::<Url>().ok())
-        .map(|u| u.path().to_owned())
-        .unwrap_or_else(|| "/".to_owned());
-
-    let base = FindParams {
+    let all = FindParams {
         user_id,
         sort: Some(entries::SortColumn::Created),
         order: Some(SortOrder::Desc),
         ..Default::default()
     };
 
-    match path.as_str() {
-        "/all" => base,
-        "/favourite" => FindParams {
+    match Category::from(req) {
+        Category::All => all,
+        Category::Favourite => FindParams {
             starred: Some(true),
-            ..base
+            ..all
         },
-        "/archive" => FindParams {
+        Category::Archived => FindParams {
             archive: Some(true),
-            ..base
+            ..all
         },
         _ => FindParams {
             archive: Some(false),
-            ..base
+            ..all
         },
     }
 }
@@ -571,7 +595,10 @@ async fn render_article_cards(
 
     let rendered = app
         .handlebars
-        .render("article_cards", &serde_json::json!({ "articles": articles }))
+        .render(
+            "article_cards",
+            &serde_json::json!({ "articles": articles }),
+        )
         .map_err(ErrorInternalServerError)?;
 
     Ok(HttpResponse::Ok()
@@ -580,6 +607,8 @@ async fn render_article_cards(
 }
 
 mod dto {
+    use actix_http::header;
+    use actix_web::HttpRequest;
     use db::{
         ArticlerResult,
         repository::{
@@ -588,6 +617,7 @@ mod dto {
         },
     };
     use serde::{Deserialize, Serialize};
+    use url::Url;
 
     use crate::web::dto::Client;
 
@@ -695,6 +725,25 @@ mod dto {
         Archived,
     }
 
+    impl Category {
+        pub fn from(req: &HttpRequest) -> Self {
+            let path = req
+                .headers()
+                .get(header::REFERER)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|referer| Url::parse(referer).ok())
+                .map(|u| u.path().to_owned())
+                .unwrap_or_else(|| "/".to_owned());
+
+            match path.as_str() {
+                "/all" => Category::All,
+                "/favourite" => Category::Favourite,
+                "/archive" => Category::Archived,
+                _ => Category::Unread,
+            }
+        }
+    }
+
     #[derive(Serialize)]
     pub struct ArticleCounters {
         pub unread_counter: i64,
@@ -743,5 +792,12 @@ mod dto {
                 .await?,
             })
         }
+    }
+
+    #[derive(Serialize)]
+    pub struct PartialCategoriesContext {
+        #[serde(flatten)]
+        pub counters: ArticleCounters,
+        pub active_category: Category,
     }
 }

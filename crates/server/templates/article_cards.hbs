@@ -1,7 +1,6 @@
 {{#each articles}}
 <article class="group">
-    <div
-        class="aspect-347/200 rounded overflow-hidden bg-linear-to-br from-blue-600 to-purple-700 mb-4 relative">
+    <div class="aspect-347/200 rounded overflow-hidden bg-linear-to-br from-blue-600 to-purple-700 mb-4 relative">
         <a href="/article/{{id}}" class="block w-full h-full">
             {{#if image_url}}
             <img src="{{image_url}}" alt="{{title}}" class="w-full h-full object-cover">
@@ -9,10 +8,10 @@
         </a>
         <div class="absolute bottom-0 right-0 flex items-center gap-5 pl-5 pr-4 py-2.5 rounded-tl-lg"
             style="background: rgba(255,255,255,0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);">
-            <form method="post" action="/do_favourite" hx-post="/do_favourite" hx-target="#article-cards" hx-swap="morph:innerHTML" class="flex items-center">
+            <form method="post" action="/do_favourite" hx-post="/do_favourite" hx-target="#article-cards"
+                hx-swap="morph:innerHTML" class="flex items-center" id="do_favourite_form">
                 <input type="hidden" name="article_id" value="{{id}}" />
-                <input type="hidden" name="starred"
-                    value="{{#unless is_starred}}true{{else}}false{{/unless}}" />
+                <input type="hidden" name="starred" value="{{#unless is_starred}}true{{else}}false{{/unless}}" />
                 {{#if is_starred}}
                 <button type="submit" class="hover:scale-110 transition-transform" title="Unstar">
                     <img src="/static/images/FavoriteOn.svg" alt="Unstar" />
@@ -25,8 +24,7 @@
             </form>
             <form method="post" action="/do_archive" class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
-                <input type="hidden" name="archived"
-                    value="{{#unless is_archived}}true{{else}}false{{/unless}}" />
+                <input type="hidden" name="archived" value="{{#unless is_archived}}true{{else}}false{{/unless}}" />
                 {{#if is_archived}}
                 <button type="submit" class="hover:scale-110 transition-transform" title="Mark as unread">
                     <img src="/static/images/MarkRead.svg" alt="Mark as unread" />
