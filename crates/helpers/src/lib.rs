@@ -6,11 +6,12 @@ use argon2::{
 };
 use rand::{Rng, distr::Alphanumeric};
 use sha1::{Digest, Sha1};
+use url::Url;
 
 static PASSWORD_HASHER: LazyLock<Argon2> = LazyLock::new(Argon2::default);
 
-pub fn hash_str(st: &str) -> String {
-    format!("{:x}", Sha1::digest(st))
+pub fn hash_url(url: &Url) -> String {
+    format!("{:x}", Sha1::digest(url.as_str()))
 }
 
 pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {

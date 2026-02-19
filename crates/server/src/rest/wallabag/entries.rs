@@ -20,7 +20,7 @@ use dto::{
     AddEntry, AddEntryResponse, DeleteEntryRequest, DeleteEntryResponse, Embedded, Entries,
     EntriesRequest, EntryTags, Exists, Expect, Link, Links, UpdateEntry,
 };
-use helpers::{generate_uid, hash_str};
+use helpers::{generate_uid, hash_url};
 use result::ArticlerError;
 
 // TODO current implementation needed only for mobile app healthchecks. Needed full implementation
@@ -92,9 +92,9 @@ pub(in crate::rest::wallabag) async fn post_entries(
         user_id: user_info.user_id,
         // TODO actually here we must have url without redirects already
         url: add_entry.url.to_string(),
-        hashed_url: hash_str(add_entry.url.as_str()),
+        hashed_url: hash_url(&add_entry.url),
         given_url: add_entry.url.to_string(),
-        hashed_given_url: hash_str(add_entry.url.as_str()),
+        hashed_given_url: hash_url(&add_entry.url),
         title,
         content,
         is_archived: archived,

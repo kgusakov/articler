@@ -11,18 +11,18 @@ use actix_web::{
 };
 
 use chrono::{DateTime, Utc};
+use db::repository::entries;
+use helpers::hash_url;
 use rstest::rstest;
 use rstest_reuse::apply;
 use serde_json::{Value, json};
 use serde_json_assert::{assert_json_eq, assert_json_include};
-use sqlx::SqlitePool;
-// TODO is it appropriate way?
-use db::repository::entries;
-use helpers::hash_str;
 use server::{
     app::{AppState, app, init_handlebars},
     scraper::Scraper,
 };
+use sqlx::SqlitePool;
+use url::Url;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
     matchers::{method, path},
@@ -434,14 +434,14 @@ async fn post_entries_with_scraping_needed(pool: SqlitePool) {
 
     assert_eq!(url, result.get("url").unwrap().as_str().unwrap());
     assert_eq!(
-        hash_str(&url),
+        hash_url(&Url::parse(&url).unwrap()),
         result.get("hashed_url").unwrap().as_str().unwrap()
     );
 
     // TODO implement integration test with redirects
     assert_eq!(url, result.get("given_url").unwrap().as_str().unwrap());
     assert_eq!(
-        hash_str(&url),
+        hash_url(&Url::parse(&url).unwrap()),
         result.get("hashed_given_url").unwrap().as_str().unwrap()
     );
 
@@ -496,7 +496,7 @@ async fn post_entries_with_scraping_error(pool: SqlitePool) {
 
     assert_eq!(url, result.get("url").unwrap().as_str().unwrap());
     assert_eq!(
-        hash_str(&url),
+        hash_url(&Url::parse(&url).unwrap()),
         result.get("hashed_url").unwrap().as_str().unwrap()
     );
 

@@ -11,7 +11,7 @@ use db::repository::{
     Id, clients,
     entries::{self, FindParams, SortOrder, UpdateEntry},
 };
-use helpers::{generate_client_id, generate_client_secret, hash_str};
+use helpers::{generate_client_id, generate_client_secret, hash_url};
 use url::Url;
 
 use crate::{
@@ -446,9 +446,9 @@ async fn do_add(
     let create_entry = entries::CreateEntry {
         user_id,
         url: url.to_string(),
-        hashed_url: hash_str(url.as_str()),
+        hashed_url: hash_url(&url),
         given_url: url.to_string(),
-        hashed_given_url: hash_str(url.as_str()),
+        hashed_given_url: hash_url(&url),
         title,
         content,
         is_archived: false,
