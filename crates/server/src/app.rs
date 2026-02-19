@@ -81,6 +81,14 @@ pub fn init_handlebars() -> Result<Handlebars<'static>, TemplateError> {
         "article_cards",
         include_str!("../templates/article_cards.hbs"),
     )?;
+    handlebars.register_partial(
+        "articles_and_categories",
+        include_str!("../templates/articles_and_categories.hbs"),
+    )?;
+    handlebars.register_template_string(
+        "articles_and_categories",
+        include_str!("../templates/articles_and_categories.hbs"),
+    )?;
     handlebars.register_partial("clients", include_str!("../templates/clients.hbs"))?;
     Ok(handlebars)
 }

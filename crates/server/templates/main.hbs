@@ -1,18 +1,9 @@
 <!-- Main -->
-<main class="flex flex-col lg:flex-row px-4 md:px-8 lg:px-[120px] pt-6 lg:pt-[76px] pb-8 lg:pb-12 gap-6 lg:gap-0">
-    <!-- Sidebar -->
-    <aside id="categories-menu"
-        class="w-full lg:w-[348px] lg:pr-8 space-y-1 flex lg:block gap-2 overflow-x-auto lg:overflow-visible"
-        hx-swap="morph::innerHTML" hx-get="/partial/categories" hx-trigger="htmx:afterRequest from:#do_favourite_form">
-        {{> categories}}
-    </aside>
+<main class="flex flex-col lg:flex-row px-4 md:px-8 lg:px-[120px] pt-6 lg:pt-[76px] pb-8 lg:pb-12 gap-6 lg:gap-0"
+    id="main-block">
 
-    <!-- Content -->
-    <section class="flex-1">
-        <div id="article-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8">
-            {{> article_cards}}
-        </div>
-    </section>
+    {{> articles_and_categories}}
+
 </main>
 <!-- DO NOT REMOVE THIS. Needed for wallabag android app autorization -->
 <div style="display:none">

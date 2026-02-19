@@ -21,7 +21,7 @@ use crate::{
     scraper::extract_title,
     web::{
         dto::{Client, LoginForm},
-        ui::dto::PartialCategoriesContext,
+        ui::dto::{PartialArticlesContext, PartialCategoriesContext},
     },
 };
 
@@ -47,7 +47,8 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/do_favourite", post().to(do_favourite))
         .route("/do_delete", post().to(do_delete))
         .route("/add", post().to(do_add))
-        .route("/partial/categories", get().to(partial_categories));
+        .route("/partial/categories", get().to(partial_categories))
+        .route("/partial/articles/{category}", get().to(partial_articles));
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
@@ -284,6 +285,39 @@ async fn main(
     let rendered = app
         .handlebars
         .render("index", &context)
+        .map_err(ErrorInternalServerError)?;
+    Ok(HttpResponse::Ok()
+        .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+        .body(rendered))
+}
+
+async fn partial_articles(
+    session: Session,
+    app: web::Data<AppState>,
+    category: web::Path<Category>,
+    tctx: web::ReqData<TransactionContext<'_>>,
+) -> actix_web::Result<HttpResponse> {
+    let mut tx = tctx.tx()?;
+
+    let user_id = check_user_id(&session)?;
+    let params = find_params_for_category(user_id, &category);
+
+    // TODO must load only metadata
+    let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut tx, &params)
+        .await?
+        .into_iter()
+        .map(|e| e.0.into())
+        .collect();
+
+    let context = PartialArticlesContext {
+        articles: articles_metadata,
+        counters: ArticleCounters::load(&mut tx, user_id).await?,
+        active_category: category.into_inner(),
+    };
+
+    let rendered = app
+        .handlebars
+        .render("articles_and_categories", &context)
         .map_err(ErrorInternalServerError)?;
     Ok(HttpResponse::Ok()
         .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
@@ -553,7 +587,7 @@ fn is_htmx_request(req: &HttpRequest) -> bool {
     req.headers().get("HX-Request").is_some()
 }
 
-fn find_params_from_referer(user_id: Id, req: &HttpRequest) -> FindParams {
+fn find_params_for_category(user_id: Id, category: &Category) -> FindParams {
     let all = FindParams {
         user_id,
         sort: Some(entries::SortColumn::Created),
@@ -561,7 +595,11 @@ fn find_params_from_referer(user_id: Id, req: &HttpRequest) -> FindParams {
         ..Default::default()
     };
 
-    match Category::from(req) {
+    category_to_find_params(category, all)
+}
+
+fn category_to_find_params(category: &Category, all: FindParams) -> FindParams {
+    match category {
         Category::All => all,
         Category::Favourite => FindParams {
             starred: Some(true),
@@ -571,7 +609,7 @@ fn find_params_from_referer(user_id: Id, req: &HttpRequest) -> FindParams {
             archive: Some(true),
             ..all
         },
-        _ => FindParams {
+        Category::Unread => FindParams {
             archive: Some(false),
             ..all
         },
@@ -584,7 +622,7 @@ async fn render_article_cards(
     user_id: Id,
     req: &HttpRequest,
 ) -> actix_web::Result<HttpResponse> {
-    let params = find_params_from_referer(user_id, req);
+    let params = find_params_for_category(user_id, &Category::from(req));
 
     let articles: Vec<ArticleMetadata> = entries::find_all(tx, &params)
         .await
@@ -716,7 +754,7 @@ mod dto {
         pub active_category: Category,
     }
 
-    #[derive(Serialize)]
+    #[derive(Serialize, Deserialize)]
     #[serde(rename_all = "lowercase")]
     pub enum Category {
         All,
@@ -732,8 +770,7 @@ mod dto {
                 .get(header::REFERER)
                 .and_then(|v| v.to_str().ok())
                 .and_then(|referer| Url::parse(referer).ok())
-                .map(|u| u.path().to_owned())
-                .unwrap_or_else(|| "/".to_owned());
+                .map_or_else(|| "/".to_owned(), |u| u.path().to_owned());
 
             match path.as_str() {
                 "/all" => Category::All,
@@ -796,6 +833,14 @@ mod dto {
 
     #[derive(Serialize)]
     pub struct PartialCategoriesContext {
+        #[serde(flatten)]
+        pub counters: ArticleCounters,
+        pub active_category: Category,
+    }
+
+    #[derive(Serialize)]
+    pub struct PartialArticlesContext {
+        pub articles: Vec<ArticleMetadata>,
         #[serde(flatten)]
         pub counters: ArticleCounters,
         pub active_category: Category,

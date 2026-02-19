@@ -1098,6 +1098,117 @@ async fn do_add(pool: SqlitePool) {
     );
 }
 
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn partial_articles_unread(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/partial/articles/unread")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
+    assert_eq!(titles_set, HashSet::from(["title1", "title3", "title5"]));
+
+    let active_category = helpers::find_active_category(content);
+    assert_eq!(active_category, Some("unread".to_owned()));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn partial_articles_all(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/partial/articles/all")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
+    assert_eq!(
+        titles_set,
+        HashSet::from(["title1", "title2", "title3", "title4", "title5", "title6"])
+    );
+
+    let active_category = helpers::find_active_category(content);
+    assert_eq!(active_category, Some("all".to_owned()));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn partial_articles_favourite(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/partial/articles/favourite")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
+    assert_eq!(titles_set, HashSet::from(["title3", "title4", "title6"]));
+
+    let active_category = helpers::find_active_category(content);
+    assert_eq!(active_category, Some("favourite".to_owned()));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn partial_articles_archived(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/partial/articles/archived")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
+    assert_eq!(titles_set, HashSet::from(["title2", "title4", "title6"]));
+
+    let active_category = helpers::find_active_category(content);
+    assert_eq!(active_category, Some("archived".to_owned()));
+}
+
 async fn login(
     username: &str,
     password: &str,
