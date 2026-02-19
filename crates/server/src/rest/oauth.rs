@@ -24,8 +24,6 @@ pub fn routes(cfg: &mut ServiceConfig) {
     );
 }
 
-// TODO refactor this ugle deeeep ifs and the method itself
-#[expect(clippy::too_many_lines)]
 async fn post_token(
     tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
@@ -33,119 +31,130 @@ async fn post_token(
 ) -> actix_web::Result<Json<Token>> {
     let mut tx = tctx.tx()?;
     let request = request.into_inner();
-    match request.grant_type {
-        Some(gt) if gt == "password" => {
-            if let Some(username) = request.username
-                && let Some(password) = request.password
-            {
-                if let Some(client_id) = request.client_id {
-                    if let Some(client_secret) = request.client_secret {
-                        if let Some(user_row) = find_user(&mut tx, &username, &password).await? {
-                            if let Some(client_row) = clients::find_by_user_id_client_id_and_secret(
-                                &mut tx,
-                                user_row.id,
-                                &client_id,
-                                &client_secret,
-                            )
-                            .await?
-                            {
-                                let new_token = data
-                                    .token_storage
-                                    .new_token(&mut tx, user_row.id, client_row.id)
-                                    .await?;
-
-                                Ok(Json(Token {
-                                    access_token: new_token.access_token,
-                                    expires_in: new_token.expires_in,
-                                    token_type: BEARER.to_owned(),
-                                    scope: None,
-                                    refresh_token: new_token.refresh_token,
-                                }))
-                            } else {
-                                Err(ErrorBadRequest(oauth_error(
-                                    "invalid_client",
-                                    "The client credentials are invalid",
-                                )))
-                            }
-                        } else {
-                            Err(ErrorBadRequest(oauth_error(
-                                "invalid_grant",
-                                "Invalid username and password combination",
-                            )))
-                        }
-                    } else {
-                        Err(ErrorBadRequest(oauth_error(
-                            "invalid_client",
-                            "The client credentials are invalid",
-                        )))
-                    }
-                } else {
-                    Err(ErrorBadRequest(oauth_error(
-                        "invalid_client",
-                        "Client id was not found in the headers or body",
-                    )))
-                }
-            } else {
-                Err(ErrorBadRequest(oauth_error(
-                    "invalid_request",
-                    "Missing parameters. \"username\" and \"password\" required",
-                )))
-            }
-        }
-        Some(gt) if gt == "refresh_token" => {
-            if let Some(client_id) = request.client_id {
-                if let Some(client_secret) = request.client_secret {
-                    if clients::find_by_client_id_and_secret(&mut tx, &client_id, &client_secret)
-                        .await?
-                        .is_some()
-                    {
-                        if let Some(refresh_token) = request.refresh_token {
-                            if let Some(new_token) =
-                                data.token_storage.refresh(&mut tx, &refresh_token).await?
-                            {
-                                Ok(Json(Token {
-                                    access_token: new_token.access_token,
-                                    expires_in: new_token.expires_in,
-                                    token_type: "bearer".to_owned(),
-                                    scope: None,
-                                    refresh_token: new_token.refresh_token,
-                                }))
-                            } else {
-                                Err(ErrorBadRequest(oauth_error(
-                                    "invalid_grant",
-                                    "Invalid refresh token",
-                                )))
-                            }
-                        } else {
-                            Err(ErrorBadRequest(oauth_error(
-                                "invalid_request",
-                                "No \"refresh_token\" parameter found",
-                            )))
-                        }
-                    } else {
-                        Err(ErrorBadRequest(oauth_error(
-                            "invalid_client",
-                            "The client credentials are invalid",
-                        )))
-                    }
-                } else {
-                    Err(ErrorBadRequest(oauth_error(
-                        "invalid_client",
-                        "The client credentials are invalid",
-                    )))
-                }
-            } else {
-                Err(ErrorBadRequest(oauth_error(
-                    "invalid_client",
-                    "Client id was not found in the headers or body",
-                )))
-            }
-        }
+    match &request.grant_type {
+        Some(gt) if gt == "password" => new_token(&data, &mut tx, request).await,
+        Some(gt) if gt == "refresh_token" => refresh_token(data, tx, request).await,
         _ => Err(ErrorBadRequest(oauth_error(
             "invalid_request",
             "Invalid grant_type parameter or parameter missing",
         ))),
     }
+}
+
+async fn refresh_token(
+    data: web::Data<AppState>,
+    mut tx: crate::middleware::TransactionHolder<'_, '_>,
+    request: GetToken,
+) -> Result<Json<Token>, Error> {
+    let Some(client_id) = request.client_id else {
+        return Err(ErrorBadRequest(oauth_error(
+            "invalid_client",
+            "Client id was not found in the headers or body",
+        )));
+    };
+
+    let Some(client_secret) = request.client_secret else {
+        return Err(ErrorBadRequest(oauth_error(
+            "invalid_client",
+            "The client credentials are invalid",
+        )));
+    };
+
+    if clients::find_by_client_id_and_secret(&mut tx, &client_id, &client_secret)
+        .await?
+        .is_none()
+    {
+        return Err(ErrorBadRequest(oauth_error(
+            "invalid_client",
+            "The client credentials are invalid",
+        )));
+    }
+
+    let Some(refresh_token) = request.refresh_token else {
+        return Err(ErrorBadRequest(oauth_error(
+            "invalid_request",
+            "No \"refresh_token\" parameter found",
+        )));
+    };
+
+    let Some(new_token) = data.token_storage.refresh(&mut tx, &refresh_token).await? else {
+        return Err(ErrorBadRequest(oauth_error(
+            "invalid_grant",
+            "Invalid refresh token",
+        )));
+    };
+
+    Ok(Json(Token {
+        access_token: new_token.access_token,
+        expires_in: new_token.expires_in,
+        token_type: BEARER.to_owned(),
+        scope: None,
+        refresh_token: new_token.refresh_token,
+    }))
+}
+
+async fn new_token(
+    data: &web::Data<AppState>,
+    tx: &mut crate::middleware::TransactionHolder<'_, '_>,
+    request: GetToken,
+) -> Result<Json<Token>, Error> {
+    let Some(username) = request.username else {
+        return Err(ErrorBadRequest(oauth_error(
+            "invalid_request",
+            "Missing parameters. \"username\" and \"password\" required",
+        )));
+    };
+
+    let Some(password) = request.password else {
+        return Err(ErrorBadRequest(oauth_error(
+            "invalid_request",
+            "Missing parameters. \"username\" and \"password\" required",
+        )));
+    };
+
+    let Some(client_id) = request.client_id else {
+        return Err(ErrorBadRequest(oauth_error(
+            "invalid_client",
+            "Client id was not found in the headers or body",
+        )));
+    };
+
+    let Some(client_secret) = request.client_secret else {
+        return Err(ErrorBadRequest(oauth_error(
+            "invalid_client",
+            "The client credentials are invalid",
+        )));
+    };
+
+    let Some(user_row) = find_user(tx, &username, &password).await? else {
+        return Err(ErrorBadRequest(oauth_error(
+            "invalid_grant",
+            "Invalid username and password combination",
+        )));
+    };
+
+    let Some(client_row) =
+        clients::find_by_user_id_client_id_and_secret(tx, user_row.id, &client_id, &client_secret)
+            .await?
+    else {
+        return Err(ErrorBadRequest(oauth_error(
+            "invalid_client",
+            "The client credentials are invalid",
+        )));
+    };
+
+    let new_token = data
+        .token_storage
+        .new_token(tx, user_row.id, client_row.id)
+        .await?;
+
+    Ok(Json(Token {
+        access_token: new_token.access_token,
+        expires_in: new_token.expires_in,
+        token_type: BEARER.to_owned(),
+        scope: None,
+        refresh_token: new_token.refresh_token,
+    }))
 }
 
 pub(in crate::rest) async fn auth_extractor(
