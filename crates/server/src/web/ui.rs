@@ -424,8 +424,9 @@ async fn do_delete(
     session: Session,
     req: HttpRequest,
     form: web::Form<DeleteForm>,
+    app: web::Data<AppState>,
     tctx: web::ReqData<TransactionContext<'_>>,
-) -> actix_web::Result<impl Responder> {
+) -> actix_web::Result<HttpResponse> {
     let mut tx = tctx.tx()?;
 
     let user_id = check_user_id(&session)?;
@@ -434,9 +435,14 @@ async fn do_delete(
 
     entries::delete_by_id(&mut tx, user_id, form.article_id).await?;
 
-    let referer = form.back_location.unwrap_or(referer_or_root(&req));
-
-    Ok(Redirect::to(referer).see_other())
+    if is_htmx_request(&req) {
+        render_article_cards(&app, &mut tx, user_id, &req).await
+    } else {
+        let referer = form.back_location.unwrap_or(referer_or_root(&req));
+        Ok(HttpResponse::SeeOther()
+            .append_header((header::LOCATION, referer))
+            .finish())
+    }
 }
 
 async fn do_client_delete(

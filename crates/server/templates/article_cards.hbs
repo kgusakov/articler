@@ -36,7 +36,8 @@
                 </button>
                 {{/if}}
             </form>
-            <form method="post" action="/do_delete" class="flex items-center">
+            <form method="post" action="/do_delete" hx-post="/do_delete" hx-target="#article-cards"
+                hx-swap="morph:innerHTML" id="do_delete_form" class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <button class="hover:scale-110 transition-transform" title="Delete">
                     <img src="/static/images/Delete.svg" alt="Delete" />

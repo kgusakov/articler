@@ -862,6 +862,49 @@ async fn do_delete(pool: SqlitePool) {
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_delete_htmx(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
+    assert!(titles_set.contains("title1"));
+
+    let req = test::TestRequest::post()
+        .uri("/do_delete")
+        .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
+        .insert_header((header::REFERER, "/"))
+        .set_form([("article_id", "1")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(resp.headers().get(header::LOCATION).is_none());
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
+    assert_eq!(titles_set, HashSet::from(["title3", "title5"]));
+}
+
 #[sqlx::test(migrations = "../../migrations")]
 async fn clients_without_auth_must_redirect_to_login(pool: SqlitePool) {
     let app = init_ui_app(pool).await;
