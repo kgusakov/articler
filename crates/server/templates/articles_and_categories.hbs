@@ -1,7 +1,7 @@
 <!-- Sidebar -->
 <aside id="categories-menu"
     class="w-full lg:w-[348px] lg:pr-8 space-y-1 flex lg:block gap-2 overflow-x-auto lg:overflow-visible"
-    hx-swap="morph::innerHTML" hx-get="/partial/categories"
+    hx-swap="morph:innerHTML" hx-get="/partial/categories"
     hx-trigger="htmx:afterRequest from:#do_favourite_form,htmx:afterRequest from:#do_archive_form,htmx:afterRequest from:#do_delete_form">
     {{> categories}}
 </aside>
