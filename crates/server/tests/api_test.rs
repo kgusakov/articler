@@ -536,9 +536,8 @@ async fn delete_entry_expect_id(f: &str, #[ignore] pool: SqlitePool) {
         serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
     );
 
-    let mut tx = pool.begin().await.unwrap();
     assert!(
-        entries::find_by_id(&mut tx, 1, 1).await.unwrap().is_none(),
+        entries::find_by_id(&pool, 1, 1).await.unwrap().is_none(),
         "Entry should be deleted from database"
     );
 }
@@ -562,9 +561,8 @@ async fn delete_entry_expect_full(pool: SqlitePool) {
         serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
     );
 
-    let mut tx = pool.begin().await.unwrap();
     assert!(
-        entries::find_by_id(&mut tx, 1, 2).await.unwrap().is_none(),
+        entries::find_by_id(&pool, 1, 2).await.unwrap().is_none(),
         "Entry should be deleted from database"
     );
 }

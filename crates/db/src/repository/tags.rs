@@ -7,11 +7,14 @@ use super::{
 };
 
 /* Return Vec of tags, which was linked to entry_id. Vec consists of ALL tags, even tags, which was already linked before and included in tags argument. */
-pub async fn create_and_link(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn create_and_link<'c, C>(
+    conn: C,
     entry_id: Id,
     tags: &[CreateTag],
-) -> ArticlerResult<Vec<TagRow>> {
+) -> ArticlerResult<Vec<TagRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
     if tags.is_empty() {
         return Ok(vec![]);
     }
@@ -25,6 +28,8 @@ pub async fn create_and_link(
         .into());
     }
 
+    let mut conn = conn.acquire().await?;
+
     let mut tag_builder = QueryBuilder::new("INSERT INTO tags (user_id, label, slug) ");
     tag_builder.push_values(tags.iter(), |mut b, tag| {
         b.push_bind(tag.user_id)
@@ -32,7 +37,7 @@ pub async fn create_and_link(
             .push_bind(&tag.slug);
     });
     tag_builder.push(" ON CONFLICT DO NOTHING");
-    tag_builder.build().execute(&mut **tx).await?;
+    tag_builder.build().execute(&mut *conn).await?;
 
     let mut insert_query = QueryBuilder::new(format!(r"INSERT INTO {ENTRIES_TAG_TABLE} SELECT "));
     insert_query.push(entry_id);
@@ -45,7 +50,7 @@ pub async fn create_and_link(
     }
     separated.push_unseparated(") ON CONFLICT DO NOTHING");
 
-    insert_query.build().execute(&mut **tx).await?;
+    insert_query.build().execute(&mut *conn).await?;
 
     let mut get_tags = QueryBuilder::new(format!("SELECT * from {TAGS_TABLE} WHERE label IN ("));
 
@@ -57,17 +62,21 @@ pub async fn create_and_link(
 
     Ok(get_tags
         .build_query_as::<TagRow>()
-        .fetch_all(&mut **tx)
+        .fetch_all(&mut *conn)
         .await?)
 }
 
-pub async fn update_tags_by_entry_id(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn update_tags_by_entry_id<'c, C>(
+    conn: C,
     user_id: Id,
     entry_id: Id,
     tags: &[CreateTag],
-) -> ArticlerResult<Vec<TagRow>> {
-    let result_tags = create_and_link(tx, entry_id, tags).await?;
+) -> ArticlerResult<Vec<TagRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
+    let result_tags = create_and_link(&mut *conn, entry_id, tags).await?;
 
     let mut builder = QueryBuilder::new(format!(
         "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE entry_id =",
@@ -93,16 +102,20 @@ pub async fn update_tags_by_entry_id(
 
     separated.push_unseparated("))");
 
-    builder.build().execute(&mut **tx).await?;
+    builder.build().execute(&mut *conn).await?;
 
     Ok(result_tags)
 }
 
-pub async fn find_by_entry_id(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn find_by_entry_id<'c, C>(
+    conn: C,
     user_id: Id,
     entry_id: Id,
-) -> ArticlerResult<Vec<TagRow>> {
+) -> ArticlerResult<Vec<TagRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     Ok(sqlx::query_as::<_, TagRow>(&format!(
         r"
         SELECT t.* FROM {TAGS_TABLE} t
@@ -112,41 +125,50 @@ pub async fn find_by_entry_id(
     ))
     .bind(entry_id)
     .bind(user_id)
-    .fetch_all(&mut **tx)
+    .fetch_all(&mut *conn)
     .await?)
 }
 
-pub async fn get_all(
-    tx: &mut sqlx::Transaction<'_, Db>,
-    user_id: Id,
-) -> ArticlerResult<Vec<TagRow>> {
+pub async fn get_all<'c, C>(conn: C, user_id: Id) -> ArticlerResult<Vec<TagRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     Ok(
         sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {TAGS_TABLE} t WHERE user_id = ?",))
             .bind(user_id)
-            .fetch_all(&mut **tx)
+            .fetch_all(&mut *conn)
             .await?,
     )
 }
 
-pub async fn delete_by_label(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn delete_by_label<'c, C>(
+    conn: C,
     user_id: Id,
     label: &str,
-) -> ArticlerResult<Option<TagRow>> {
+) -> ArticlerResult<Option<TagRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     Ok(sqlx::query_as::<_, TagRow>(&format!(
         "DELETE FROM {TAGS_TABLE} WHERE user_id = ? AND label = ? RETURNING *",
     ))
     .bind(user_id)
     .bind(label)
-    .fetch_optional(&mut **tx)
+    .fetch_optional(&mut *conn)
     .await?)
 }
 
-pub async fn delete_all_by_label(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn delete_all_by_label<'c, C>(
+    conn: C,
     user_id: Id,
     labels: &[String],
-) -> ArticlerResult<Vec<TagRow>> {
+) -> ArticlerResult<Vec<TagRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     let mut builder = QueryBuilder::new(&format!("DELETE FROM {TAGS_TABLE} WHERE user_id ="));
 
     builder.push_bind(user_id);
@@ -161,21 +183,21 @@ pub async fn delete_all_by_label(
 
     Ok(builder
         .build_query_as::<TagRow>()
-        .fetch_all(&mut **tx)
+        .fetch_all(&mut *conn)
         .await?)
 }
 
-pub async fn delete_by_id(
-    tx: &mut sqlx::Transaction<'_, Db>,
-    user_id: Id,
-    id: Id,
-) -> ArticlerResult<Option<TagRow>> {
+pub async fn delete_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> ArticlerResult<Option<TagRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     Ok(sqlx::query_as::<_, TagRow>(&format!(
         "DELETE FROM {TAGS_TABLE} WHERE user_id = ? AND id = ? RETURNING *",
     ))
     .bind(user_id)
     .bind(id)
-    .fetch_optional(&mut **tx)
+    .fetch_optional(&mut *conn)
     .await?)
 }
 
@@ -215,11 +237,10 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_by_label(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-        let initial_tags = get_all(&mut tx, 1).await.unwrap();
+        let initial_tags = get_all(&pool, 1).await.unwrap();
         assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
 
-        let deleted_tag = delete_by_label(&mut tx, 1, "label1").await.unwrap();
+        let deleted_tag = delete_by_label(&pool, 1, "label1").await.unwrap();
         assert!(deleted_tag.is_some(), "Should return deleted tag");
         let deleted = deleted_tag.unwrap();
         assert_eq!(
@@ -231,10 +252,10 @@ mod tests {
             "Deleted tag should have slug 'slug1'"
         );
 
-        let tags_after = get_all(&mut tx, 1).await.unwrap();
+        let tags_after = get_all(&pool, 1).await.unwrap();
         assert_eq!(tags_after.len(), 5, "Should have 5 tags after deletion");
 
-        let entry_tags = find_by_entry_id(&mut tx, 1, 2).await.unwrap();
+        let entry_tags = find_by_entry_id(&pool, 1, 2).await.unwrap();
         assert_eq!(
             entry_tags.len(),
             1,
@@ -245,13 +266,13 @@ mod tests {
             "Entry 2 should only have label2"
         );
 
-        let not_deleted = delete_by_label(&mut tx, 1, "nonexistent").await.unwrap();
+        let not_deleted = delete_by_label(&pool, 1, "nonexistent").await.unwrap();
         assert!(
             not_deleted.is_none(),
             "Should return None for non-existent label"
         );
 
-        let final_tags = get_all(&mut tx, 1).await.unwrap();
+        let final_tags = get_all(&pool, 1).await.unwrap();
         assert_eq!(
             final_tags.len(),
             5,
@@ -264,8 +285,7 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_all_by_label(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-        let initial_tags = get_all(&mut tx, 1).await.unwrap();
+        let initial_tags = get_all(&pool, 1).await.unwrap();
         assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
 
         let labels_to_delete = vec![
@@ -273,7 +293,7 @@ mod tests {
             "label2".to_owned(),
             "label3".to_owned(),
         ];
-        let deleted_tags = delete_all_by_label(&mut tx, 1, &labels_to_delete)
+        let deleted_tags = delete_all_by_label(&pool, 1, &labels_to_delete)
             .await
             .unwrap();
 
@@ -284,7 +304,7 @@ mod tests {
         assert!(deleted_labels.contains(&"label2".to_owned()));
         assert!(deleted_labels.contains(&"label3".to_owned()));
 
-        let remaining_tags = get_all(&mut tx, 1).await.unwrap();
+        let remaining_tags = get_all(&pool, 1).await.unwrap();
         assert_eq!(remaining_tags.len(), 3, "Should have 3 tags after deletion");
 
         let remaining_labels: Vec<String> =
@@ -293,14 +313,14 @@ mod tests {
         assert!(remaining_labels.contains(&"label5".to_owned()));
         assert!(remaining_labels.contains(&"label6".to_owned()));
 
-        let entry_tags = find_by_entry_id(&mut tx, 1, 2).await.unwrap();
+        let entry_tags = find_by_entry_id(&pool, 1, 2).await.unwrap();
         assert_eq!(
             entry_tags.len(),
             0,
             "Entry 2 should have no tags after cascade"
         );
 
-        let empty_result = delete_all_by_label(&mut tx, 1, &[]).await.unwrap();
+        let empty_result = delete_all_by_label(&pool, 1, &[]).await.unwrap();
         assert_eq!(
             empty_result.len(),
             0,
@@ -312,9 +332,7 @@ mod tests {
             "nonexistent".to_owned(),
             "label5".to_owned(),
         ];
-        let mixed_deleted = delete_all_by_label(&mut tx, 1, &mixed_labels)
-            .await
-            .unwrap();
+        let mixed_deleted = delete_all_by_label(&pool, 1, &mixed_labels).await.unwrap();
         assert_eq!(mixed_deleted.len(), 2, "Should only delete existing tags");
 
         let mixed_deleted_labels: Vec<String> =
@@ -323,12 +341,12 @@ mod tests {
         assert!(mixed_deleted_labels.contains(&"label5".to_owned()));
         assert!(!mixed_deleted_labels.contains(&"nonexistent".to_owned()));
 
-        let final_tags = get_all(&mut tx, 1).await.unwrap();
+        let final_tags = get_all(&pool, 1).await.unwrap();
         assert_eq!(final_tags.len(), 1, "Should have 1 tag remaining");
         assert_eq!(final_tags[0].label, "label6");
 
         let nonexistent_labels = vec!["fake1".to_owned(), "fake2".to_owned()];
-        let none_deleted = delete_all_by_label(&mut tx, 1, &nonexistent_labels)
+        let none_deleted = delete_all_by_label(&pool, 1, &nonexistent_labels)
             .await
             .unwrap();
         assert_eq!(
@@ -337,7 +355,7 @@ mod tests {
             "Should return empty vector for non-existent labels"
         );
 
-        let unchanged_tags = get_all(&mut tx, 1).await.unwrap();
+        let unchanged_tags = get_all(&pool, 1).await.unwrap();
         assert_eq!(unchanged_tags.len(), 1, "Should still have 1 tag");
     }
 
@@ -346,8 +364,7 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_tag_delete_by_id(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-        let initial_tags = get_all(&mut tx, 1).await.unwrap();
+        let initial_tags = get_all(&pool, 1).await.unwrap();
         assert_eq!(initial_tags.len(), 6, "Should have 6 tags initially");
 
         let tag_to_delete = initial_tags
@@ -356,7 +373,7 @@ mod tests {
             .expect("label1 should exist in fixtures");
         let tag_id = tag_to_delete.id;
 
-        let deleted_tag = delete_by_id(&mut tx, 1, tag_id).await.unwrap();
+        let deleted_tag = delete_by_id(&pool, 1, tag_id).await.unwrap();
         assert!(deleted_tag.is_some(), "Should return deleted tag");
         let deleted = deleted_tag.unwrap();
         assert_eq!(deleted.id, tag_id, "Deleted tag should have correct ID");
@@ -369,7 +386,7 @@ mod tests {
             "Deleted tag should have slug 'slug1'"
         );
 
-        let remaining_tags = get_all(&mut tx, 1).await.unwrap();
+        let remaining_tags = get_all(&pool, 1).await.unwrap();
         assert_eq!(remaining_tags.len(), 5, "Should have 5 tags after deletion");
 
         assert!(
@@ -377,7 +394,7 @@ mod tests {
             "Deleted tag should not be in remaining tags"
         );
 
-        let entry_tags = find_by_entry_id(&mut tx, 1, 2).await.unwrap();
+        let entry_tags = find_by_entry_id(&pool, 1, 2).await.unwrap();
         assert_eq!(
             entry_tags.len(),
             1,
@@ -388,13 +405,13 @@ mod tests {
             "Entry 2 should only have label2"
         );
 
-        let not_deleted = delete_by_id(&mut tx, 1, 999).await.unwrap();
+        let not_deleted = delete_by_id(&pool, 1, 999).await.unwrap();
         assert!(
             not_deleted.is_none(),
             "Should return None for non-existent ID"
         );
 
-        let final_tags = get_all(&mut tx, 1).await.unwrap();
+        let final_tags = get_all(&pool, 1).await.unwrap();
         assert_eq!(
             final_tags.len(),
             5,

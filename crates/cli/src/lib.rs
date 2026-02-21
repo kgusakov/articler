@@ -31,13 +31,13 @@ pub async fn create_user(
         return Err(CliErrors::EmailInvalid.into());
     }
 
-    if users::find_by_username(&mut tx, username).await?.is_some() {
+    if users::find_by_username(&mut *tx, username).await?.is_some() {
         return Err(CliErrors::UsernameBusy.into());
     }
 
     let now = chrono::Utc::now().timestamp();
     users::create_user(
-        &mut tx,
+        &mut *tx,
         username,
         &hash_password(password)?,
         name,
@@ -59,10 +59,10 @@ pub async fn create_client(
 ) -> ArticlerResult<ClientRow> {
     let mut tx = pool.begin().await?;
 
-    if let Some(user) = users::find_by_username(&mut tx, username).await? {
+    if let Some(user) = users::find_by_username(&mut *tx, username).await? {
         let now = chrono::Utc::now().timestamp();
         let client = clients::create(
-            &mut tx,
+            &mut *tx,
             user.id,
             client_name,
             &generate_client_id(),

@@ -134,7 +134,7 @@ pub(in crate::rest::wallabag) async fn post_entries(
         .unwrap_or(vec![]);
 
     let mut tx = tctx.tx()?;
-    let (entry_row, tag_rows) = entries::create(&mut tx, create_entry, &create_tags).await?;
+    let (entry_row, tag_rows) = entries::create(&mut **tx, create_entry, &create_tags).await?;
 
     let tags = tag_rows.into_iter().map(Tag::from).collect();
 
@@ -177,7 +177,7 @@ pub(in crate::rest::wallabag) async fn entries(
 
     let mut tx = tctx.tx()?;
 
-    let count_without_paging = entries::count(&mut tx, &params).await?;
+    let count_without_paging = entries::count(&mut **tx, &params).await?;
 
     // TODO fix clippy
     #[expect(clippy::cast_precision_loss)]
@@ -189,7 +189,7 @@ pub(in crate::rest::wallabag) async fn entries(
     }
 
     // TODO implement all needed request filters and etc
-    let entries = entries::find_all(&mut tx, &params).await?;
+    let entries = entries::find_all(&mut **tx, &params).await?;
 
     let mut ents = vec![];
 
@@ -226,8 +226,8 @@ pub(in crate::rest::wallabag) async fn get_tags_by_entry(
 
     let mut tx = tctx.tx()?;
 
-    if entries::exists_by_id(&mut tx, user_info.user_id, entry_id).await? {
-        let result = tags::find_by_entry_id(&mut tx, user_info.user_id, entry_id)
+    if entries::exists_by_id(&mut **tx, user_info.user_id, entry_id).await? {
+        let result = tags::find_by_entry_id(&mut **tx, user_info.user_id, entry_id)
             .await?
             .into_iter()
             .map(std::convert::Into::into)
@@ -248,11 +248,11 @@ pub(in crate::rest::wallabag) async fn delete_tag_from_entry(
 
     let mut tx = tctx.tx()?;
 
-    if entries::exists_by_id(&mut tx, user_info.user_id, entry_id).await? {
-        entries::delete_tag_by_tag_id(&mut tx, user_info.user_id, entry_id, tag_id).await?;
+    if entries::exists_by_id(&mut **tx, user_info.user_id, entry_id).await? {
+        entries::delete_tag_by_tag_id(&mut **tx, user_info.user_id, entry_id, tag_id).await?;
 
         if let Some((entry_row, tag_rows)) =
-            entries::find_by_id(&mut tx, user_info.user_id, entry_id).await?
+            entries::find_by_id(&mut **tx, user_info.user_id, entry_id).await?
         {
             let tags = tag_rows.into_iter().map(std::convert::Into::into).collect();
 
@@ -279,7 +279,7 @@ pub(in crate::rest::wallabag) async fn delete_entry(
 
     match request.expect {
         Expect::Id => {
-            let deleted = entries::delete_by_id(&mut tx, user_info.user_id, entry_id).await?;
+            let deleted = entries::delete_by_id(&mut **tx, user_info.user_id, entry_id).await?;
 
             if !deleted {
                 return Err(ErrorNotFound("Entry not found"));
@@ -288,12 +288,12 @@ pub(in crate::rest::wallabag) async fn delete_entry(
             Ok(Json(DeleteEntryResponse::Id { id: entry_id }))
         }
         Expect::Full => {
-            let full_entry = entries::find_by_id(&mut tx, user_info.user_id, entry_id).await?;
+            let full_entry = entries::find_by_id(&mut **tx, user_info.user_id, entry_id).await?;
 
             let (entry_row, tag_rows) =
                 full_entry.ok_or_else(|| ErrorNotFound("Entry not found"))?;
 
-            let deleted = entries::delete_by_id(&mut tx, user_info.user_id, entry_id).await?;
+            let deleted = entries::delete_by_id(&mut **tx, user_info.user_id, entry_id).await?;
 
             if !deleted {
                 return Err(ErrorNotFound("Entry not found"));
@@ -321,7 +321,7 @@ pub(in crate::rest::wallabag) async fn post_entry_tags(
     let mut tx = tctx.tx()?;
 
     // TODO dirty design - looks like we need entry repository method for it
-    if entries::find_by_id(&mut tx, user_info.user_id, entry_id)
+    if entries::find_by_id(&mut **tx, user_info.user_id, entry_id)
         .await?
         .is_some()
     {
@@ -336,9 +336,9 @@ pub(in crate::rest::wallabag) async fn post_entry_tags(
             })
             .collect();
 
-        tags::update_tags_by_entry_id(&mut tx, user_info.user_id, entry_id, &full_tags).await?;
+        tags::update_tags_by_entry_id(&mut **tx, user_info.user_id, entry_id, &full_tags).await?;
 
-        let (entry_row, tag_rows) = entries::find_by_id(&mut tx, user_info.user_id, entry_id)
+        let (entry_row, tag_rows) = entries::find_by_id(&mut **tx, user_info.user_id, entry_id)
             .await?
             .ok_or(ErrorNotFound("Entry not found"))?;
 
@@ -395,7 +395,8 @@ pub(in crate::rest::wallabag) async fn patch_entry(
 
     let mut tx = tctx.tx()?;
 
-    let updated = entries::update_by_id(&mut tx, user_info.user_id, entry_id, repo_update).await?;
+    let updated =
+        entries::update_by_id(&mut **tx, user_info.user_id, entry_id, repo_update).await?;
 
     if !updated {
         return Err(ErrorNotFound("Entry not found"));
@@ -411,10 +412,10 @@ pub(in crate::rest::wallabag) async fn patch_entry(
             })
             .collect();
 
-        tags::update_tags_by_entry_id(&mut tx, user_info.user_id, entry_id, &full_tags).await?;
+        tags::update_tags_by_entry_id(&mut **tx, user_info.user_id, entry_id, &full_tags).await?;
     }
 
-    let (entry_row, tag_rows) = entries::find_by_id(&mut tx, user_info.user_id, entry_id)
+    let (entry_row, tag_rows) = entries::find_by_id(&mut **tx, user_info.user_id, entry_id)
         .await?
         .ok_or_else(|| ErrorNotFound("Entry not found"))?;
 

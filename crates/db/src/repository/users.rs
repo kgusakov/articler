@@ -1,19 +1,22 @@
-
 use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
 use result::ArticlerResult;
 
 use super::{Db, Id, Timestamp, USERS_TABLE};
 
-pub async fn create_user(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn create_user<'c, C>(
+    conn: C,
     username: &str,
     password_hash: &str,
     name: &str,
     email: &str,
     created_at: Timestamp,
     updated_at: Timestamp,
-) -> ArticlerResult<UserRow> {
+) -> ArticlerResult<UserRow>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     Ok(sqlx::query_as::<_, UserRow>(&format!("INSERT INTO {USERS_TABLE} (username, email, name, password_hash, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?) RETURNING *;"))
             .bind(username)
             .bind(email)
@@ -21,35 +24,40 @@ pub async fn create_user(
             .bind(password_hash)
             .bind(created_at)
             .bind(updated_at)
-            .fetch_one(&mut **tx)
+            .fetch_one(&mut *conn)
             .await?)
 }
 
-pub async fn find_by_username_and_password(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn find_by_username_and_password<'c, C>(
+    conn: C,
     username: &str,
     password_hash: &str,
-) -> ArticlerResult<Option<UserRow>> {
+) -> ArticlerResult<Option<UserRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     let result = sqlx::query_as::<_, UserRow>(&format!(
         "SELECT * FROM {} WHERE username = ? AND password_hash = ?",
         super::USERS_TABLE
     ))
     .bind(username)
     .bind(password_hash)
-    .fetch_optional(&mut **tx)
+    .fetch_optional(&mut *conn)
     .await?;
 
     Ok(result)
 }
 
-pub async fn find_by_username(
-    tx: &mut sqlx::Transaction<'_, Db>,
-    username: &str,
-) -> ArticlerResult<Option<UserRow>> {
+pub async fn find_by_username<'c, C>(conn: C, username: &str) -> ArticlerResult<Option<UserRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     let result =
         sqlx::query_as::<_, UserRow>(&format!("SELECT * FROM {USERS_TABLE} WHERE username = ?"))
             .bind(username)
-            .fetch_optional(&mut **tx)
+            .fetch_optional(&mut *conn)
             .await?;
 
     Ok(result)
@@ -87,13 +95,11 @@ mod tests {
 
     #[sqlx::test(migrations = "../../migrations")]
     async fn test_create_user(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-
         let now = chrono::Utc::now().timestamp();
         let password_hash = "$argon2id$v=19$m=19456,t=2,p=1$test$testhash";
 
         let user = create_user(
-            &mut tx,
+            &pool,
             "testuser",
             password_hash,
             "Test User",
@@ -112,7 +118,7 @@ mod tests {
         assert_eq!(user.updated_at, now);
         assert!(user.id > 0, "User should have a positive id");
 
-        let found_user = find_by_username(&mut tx, "testuser").await.unwrap();
+        let found_user = find_by_username(&pool, "testuser").await.unwrap();
 
         assert!(found_user.is_some(), "Should find newly created user");
         let found_user = found_user.unwrap();
@@ -129,7 +135,7 @@ mod tests {
         let password_hash = "$argon2id$v=19$m=19456,t=2,p=1$test$testhash";
 
         let first_user = create_user(
-            &mut tx,
+            &pool,
             "duplicateuser",
             password_hash,
             "First User",
@@ -143,7 +149,7 @@ mod tests {
         assert_eq!(first_user.username, "duplicateuser");
 
         let result = create_user(
-            &mut tx,
+            &mut *tx,
             "duplicateuser",
             "$argon2id$v=19$m=19456,t=2,p=1$other$otherhash",
             "Second User",
@@ -164,9 +170,7 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_username(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-
-        let user = find_by_username(&mut tx, "wallabag").await.unwrap();
+        let user = find_by_username(&pool, "wallabag").await.unwrap();
 
         assert!(user.is_some(), "Should find existing user");
         let user = user.unwrap();
@@ -180,7 +184,7 @@ mod tests {
             "Password hash should match"
         );
 
-        let no_user = find_by_username(&mut tx, "nonexistent").await.unwrap();
+        let no_user = find_by_username(&pool, "nonexistent").await.unwrap();
         assert!(no_user.is_none(), "Should not find non-existent user");
     }
 
@@ -189,10 +193,9 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_username_and_password(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
         let user =
             find_by_username_and_password(
-                &mut tx,
+                &pool,
                 "wallabag",
                 "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
             )
@@ -211,7 +214,7 @@ mod tests {
             "Password hash should match"
         );
 
-        let no_user = find_by_username_and_password(&mut tx, "wallabag", "wrong_hash")
+        let no_user = find_by_username_and_password(&pool, "wallabag", "wrong_hash")
             .await
             .unwrap();
 
@@ -222,7 +225,7 @@ mod tests {
 
         let no_user =
             find_by_username_and_password(
-                &mut tx,
+                &pool,
                 "nonexistent",
                 "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
             )
@@ -234,7 +237,7 @@ mod tests {
             "Should not find user with non-existent username"
         );
 
-        let no_user = find_by_username_and_password(&mut tx, "wrong_user", "wrong_hash")
+        let no_user = find_by_username_and_password(&pool, "wrong_user", "wrong_hash")
             .await
             .unwrap();
 

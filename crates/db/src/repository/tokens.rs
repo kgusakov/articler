@@ -3,14 +3,18 @@ use sqlx::{prelude::*, sqlite::SqliteRow};
 
 use crate::repository::{Db, Id, TOKENS_TABLE, Timestamp};
 
-pub async fn create(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn create<'c, C>(
+    conn: C,
     token: &str,
     user_id: Id,
     client_id: Id,
     created_at: Timestamp,
     expires_in: i64,
-) -> ArticlerResult<TokenRow> {
+) -> ArticlerResult<TokenRow>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     Ok(sqlx::query_as::<_, TokenRow>(&format!(
         "INSERT INTO {TOKENS_TABLE} (token, created_at, expires_at, user_id, client_id) VALUES(?, ?, strftime('%s', 'now') + ?, ?, ?) RETURNING *;"
     ))
@@ -19,40 +23,52 @@ pub async fn create(
     .bind(expires_in)
     .bind(user_id)
     .bind(client_id)
-    .fetch_one(&mut **tx)
+    .fetch_one(&mut *conn)
     .await?)
 }
 
-pub async fn delete(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn delete<'c, C>(
+    conn: C,
     token: &str,
-) -> ArticlerResult<Option<TokenRow>> {
+) -> ArticlerResult<Option<TokenRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     Ok(
-        sqlx::query_as::<_, TokenRow>(&format!("DELETE FROM {TOKENS_TABLE} WHERE token = ?"))
+        sqlx::query_as::<_, TokenRow>(&format!("DELETE FROM {TOKENS_TABLE} WHERE token = ? RETURNING *"))
             .bind(token)
-            .fetch_optional(&mut **tx)
+            .fetch_optional(&mut *conn)
             .await?,
     )
 }
 
-pub async fn delete_expired(tx: &mut sqlx::Transaction<'_, Db>) -> ArticlerResult<()> {
-    sqlx::query_as::<_, TokenRow>(&format!(
+pub async fn delete_expired<'c, C>(conn: C) -> ArticlerResult<()>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
+    sqlx::query(&format!(
         "DELETE FROM {TOKENS_TABLE} WHERE expires_at <= strftime('%s', 'now');"
     ))
-    .fetch_optional(&mut **tx)
+    .execute(&mut *conn)
     .await?;
 
     Ok(())
 }
 
-pub async fn find(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn find<'c, C>(
+    conn: C,
     token: &str,
-) -> ArticlerResult<Option<TokenRow>> {
+) -> ArticlerResult<Option<TokenRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     Ok(
         sqlx::query_as::<_, TokenRow>(&format!("SELECT * FROM {TOKENS_TABLE} WHERE token = ?;"))
             .bind(token)
-            .fetch_optional(&mut **tx)
+            .fetch_optional(&mut *conn)
             .await?,
     )
 }
@@ -89,8 +105,6 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_create_token(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-
         let token_str = "test_token_123";
         let user_id = 1;
         let client_id = 1;
@@ -98,7 +112,7 @@ mod tests {
         let expires_in = 3600; // 1 hour
 
         let token = create(
-            &mut tx, token_str, user_id, client_id, created_at, expires_in,
+            &pool, token_str, user_id, client_id, created_at, expires_in,
         )
         .await
         .unwrap();
@@ -119,8 +133,6 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_find_token_success(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-
         let token_str = "findable_token";
         let user_id = 1;
         let client_id = 1;
@@ -128,12 +140,12 @@ mod tests {
         let expires_in = 3600;
 
         let created = create(
-            &mut tx, token_str, user_id, client_id, created_at, expires_in,
+            &pool, token_str, user_id, client_id, created_at, expires_in,
         )
         .await
         .unwrap();
 
-        let found = find(&mut tx, token_str).await.unwrap();
+        let found = find(&pool, token_str).await.unwrap();
 
         assert!(found.is_some(), "Should find the created token");
         let found = found.unwrap();
@@ -148,9 +160,7 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_find_token_not_found(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-
-        let found = find(&mut tx, "nonexistent_token").await.unwrap();
+        let found = find(&pool, "nonexistent_token").await.unwrap();
 
         assert!(found.is_none(), "Should not find nonexistent token");
     }
@@ -160,11 +170,9 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_delete_token_success(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-
         let token_str = "deletable_token";
         create(
-            &mut tx,
+            &pool,
             token_str,
             1,
             1,
@@ -174,15 +182,15 @@ mod tests {
         .await
         .unwrap();
 
-        let before_delete = find(&mut tx, token_str).await.unwrap();
+        let before_delete = find(&pool, token_str).await.unwrap();
         assert!(
             before_delete.is_some(),
             "Token should exist before deletion"
         );
 
-        delete(&mut tx, token_str).await.unwrap();
+        delete(&pool, token_str).await.unwrap();
 
-        let found = find(&mut tx, token_str).await.unwrap();
+        let found = find(&pool, token_str).await.unwrap();
         assert!(found.is_none(), "Token should be deleted");
     }
 
@@ -191,9 +199,7 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_delete_token_not_found(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-
-        let deleted = delete(&mut tx, "nonexistent_token").await.unwrap();
+        let deleted = delete(&pool, "nonexistent_token").await.unwrap();
 
         assert!(
             deleted.is_none(),
@@ -206,24 +212,22 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_delete_expired_tokens(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-
         let now = chrono::Utc::now().timestamp();
 
         let expired_token = "expired_token";
-        create(&mut tx, expired_token, 1, 1, now, -7200)
+        create(&pool, expired_token, 1, 1, now, -7200)
             .await
             .unwrap();
 
         let valid_token = "valid_token";
-        create(&mut tx, valid_token, 1, 1, now, 3600).await.unwrap();
+        create(&pool, valid_token, 1, 1, now, 3600).await.unwrap();
 
-        delete_expired(&mut tx).await.unwrap();
+        delete_expired(&pool).await.unwrap();
 
-        let found_expired = find(&mut tx, expired_token).await.unwrap();
+        let found_expired = find(&pool, expired_token).await.unwrap();
         assert!(found_expired.is_none(), "Expired token should be deleted");
 
-        let found_valid = find(&mut tx, valid_token).await.unwrap();
+        let found_valid = find(&pool, valid_token).await.unwrap();
         assert!(found_valid.is_some(), "Valid token should not be deleted");
     }
 
@@ -232,13 +236,11 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_create_token_with_different_users_and_clients(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-
         let now = chrono::Utc::now().timestamp();
 
-        let token1 = create(&mut tx, "token_1_1", 1, 1, now, 3600).await.unwrap();
-        let token2 = create(&mut tx, "token_1_2", 1, 2, now, 3600).await.unwrap();
-        let token3 = create(&mut tx, "token_2_4", 2, 4, now, 3600).await.unwrap();
+        let token1 = create(&pool, "token_1_1", 1, 1, now, 3600).await.unwrap();
+        let token2 = create(&pool, "token_1_2", 1, 2, now, 3600).await.unwrap();
+        let token3 = create(&pool, "token_2_4", 2, 4, now, 3600).await.unwrap();
 
         assert_eq!(token1.user_id, 1);
         assert_eq!(token1.client_id, 1);

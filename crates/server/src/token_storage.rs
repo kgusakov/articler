@@ -72,12 +72,15 @@ impl TokenStorage {
         }
     }
 
-    pub async fn new_token(
+    pub async fn new_token<'c, C>(
         &self,
-        tx: &mut sqlx::Transaction<'_, Db>,
+        conn: C,
         user_id: Id,
         client_id: Id,
-    ) -> ArticlerResult<NewToken> {
+    ) -> ArticlerResult<NewToken>
+    where
+        C: sqlx::Acquire<'c, Database = Db>,
+    {
         let mut inner = self.inner.lock().await;
         let access_token = generate_token();
         let refresh_token = generate_token();
@@ -93,7 +96,7 @@ impl TokenStorage {
         );
 
         let token_row = tokens::create(
-            tx,
+            conn,
             &refresh_token,
             user_id,
             client_id,
@@ -130,17 +133,22 @@ impl TokenStorage {
         }
     }
 
-    pub async fn refresh(
+    pub async fn refresh<'c, C>(
         &self,
-        tx: &mut sqlx::Transaction<'_, Db>,
+        conn: C,
         refresh_token: &str,
-    ) -> ArticlerResult<Option<NewToken>> {
+    ) -> ArticlerResult<Option<NewToken>>
+    where
+        C: sqlx::Acquire<'c, Database = Db>,
+    {
         // It's ok to unwrap - poison should be propagated
         let mut inner = self.inner.lock().await;
 
-        tokens::delete_expired(tx).await?;
+        let mut conn = conn.acquire().await?;
 
-        if let Some(internal_token) = tokens::find(tx, refresh_token).await? {
+        tokens::delete_expired(&mut *conn).await?;
+
+        if let Some(internal_token) = tokens::find(&mut *conn, refresh_token).await? {
             let now = self.now();
 
             let access_token = generate_token();
@@ -152,7 +160,7 @@ impl TokenStorage {
             };
 
             inner.refresh_tokens.remove(refresh_token);
-            tokens::delete(tx, refresh_token).await?;
+            tokens::delete(&mut *conn, refresh_token).await?;
 
             inner.access_tokens.insert(
                 access_token.clone(),
@@ -163,7 +171,7 @@ impl TokenStorage {
             );
 
             tokens::create(
-                tx,
+                &mut *conn,
                 &new_refresh_token,
                 internal_token.user_id,
                 internal_token.client_id,
@@ -224,12 +232,7 @@ mod tests {
         let user_id = 1;
         let client_id = 1;
 
-        let mut tx = pool.begin().await.unwrap();
-
-        let token = storage
-            .new_token(&mut tx, user_id, client_id)
-            .await
-            .unwrap();
+        let token = storage.new_token(&pool, user_id, client_id).await.unwrap();
 
         assert!(
             token.access_token.chars().all(char::is_alphanumeric),
@@ -256,12 +259,7 @@ mod tests {
         let user_id = 1;
         let client_id = 1;
 
-        let mut tx = pool.begin().await.unwrap();
-
-        let token = storage
-            .new_token(&mut tx, user_id, client_id)
-            .await
-            .unwrap();
+        let token = storage.new_token(&pool, user_id, client_id).await.unwrap();
 
         let claim = storage.validate(&token.access_token).await.unwrap();
 
@@ -286,8 +284,7 @@ mod tests {
     )]
     async fn test_validate_refresh_token_as_access_token(pool: SqlitePool) {
         let storage = TokenStorage::new();
-        let mut tx = pool.begin().await.unwrap();
-        let token = storage.new_token(&mut tx, 1, 1).await.unwrap();
+        let token = storage.new_token(&pool, 1, 1).await.unwrap();
 
         let claim = storage.validate(&token.refresh_token).await.unwrap();
 
@@ -306,15 +303,11 @@ mod tests {
         let user_id = 1;
         let client_id = 1;
 
-        let mut tx = pool.begin().await.unwrap();
-        let original_token = storage
-            .new_token(&mut tx, user_id, client_id)
-            .await
-            .unwrap();
+        let original_token = storage.new_token(&pool, user_id, client_id).await.unwrap();
         let original_access = original_token.access_token.clone();
         let original_refresh = original_token.refresh_token.clone();
 
-        let new_token = storage.refresh(&mut tx, &original_refresh).await.unwrap();
+        let new_token = storage.refresh(&pool, &original_refresh).await.unwrap();
 
         assert!(new_token.is_some(), "Should successfully refresh token");
         let new_token = new_token.unwrap();
@@ -332,14 +325,14 @@ mod tests {
         assert!(claim.is_some(), "New access token should be valid");
         assert_eq!(claim.unwrap().user_id, user_id);
 
-        let refreshed_again = storage.refresh(&mut tx, &original_refresh).await.unwrap();
+        let refreshed_again = storage.refresh(&pool, &original_refresh).await.unwrap();
         assert!(
             refreshed_again.is_none(),
             "Original refresh token should be invalidated"
         );
 
         let refreshed_with_new = storage
-            .refresh(&mut tx, &new_token.refresh_token)
+            .refresh(&pool, &new_token.refresh_token)
             .await
             .unwrap();
         assert!(
@@ -355,10 +348,8 @@ mod tests {
     async fn test_refresh_invalid_token(pool: SqlitePool) {
         let storage = TokenStorage::new();
 
-        let mut tx = pool.begin().await.unwrap();
-
         let result = storage
-            .refresh(&mut tx, "invalid_refresh_token")
+            .refresh(&pool, "invalid_refresh_token")
             .await
             .unwrap();
 
@@ -371,10 +362,9 @@ mod tests {
     )]
     async fn test_refresh_access_token_as_refresh_token(pool: SqlitePool) {
         let storage = TokenStorage::new();
-        let mut tx = pool.begin().await.unwrap();
-        let token = storage.new_token(&mut tx, 1, 1).await.unwrap();
+        let token = storage.new_token(&pool, 1, 1).await.unwrap();
 
-        let result = storage.refresh(&mut tx, &token.access_token).await.unwrap();
+        let result = storage.refresh(&pool, &token.access_token).await.unwrap();
 
         assert!(
             result.is_none(),
@@ -391,18 +381,14 @@ mod tests {
         let user_id = 1;
         let client_id = 1;
 
-        let mut tx = pool.begin().await.unwrap();
-        let token1 = storage
-            .new_token(&mut tx, user_id, client_id)
-            .await
-            .unwrap();
+        let token1 = storage.new_token(&pool, user_id, client_id).await.unwrap();
         let token2 = storage
-            .refresh(&mut tx, &token1.refresh_token)
+            .refresh(&pool, &token1.refresh_token)
             .await
             .unwrap()
             .unwrap();
         let token3 = storage
-            .refresh(&mut tx, &token2.refresh_token)
+            .refresh(&pool, &token2.refresh_token)
             .await
             .unwrap()
             .unwrap();
@@ -424,7 +410,7 @@ mod tests {
         );
         assert!(
             storage
-                .refresh(&mut tx, &token1.refresh_token)
+                .refresh(&pool, &token1.refresh_token)
                 .await
                 .unwrap()
                 .is_none(),
@@ -432,7 +418,7 @@ mod tests {
         );
         assert!(
             storage
-                .refresh(&mut tx, &token2.refresh_token)
+                .refresh(&pool, &token2.refresh_token)
                 .await
                 .unwrap()
                 .is_none(),
@@ -447,9 +433,8 @@ mod tests {
     async fn test_concurrent_tokens_different_users(pool: SqlitePool) {
         let storage = TokenStorage::new();
 
-        let mut tx = pool.begin().await.unwrap();
-        let token1 = storage.new_token(&mut tx, 1, 1).await.unwrap();
-        let token2 = storage.new_token(&mut tx, 2, 4).await.unwrap();
+        let token1 = storage.new_token(&pool, 1, 1).await.unwrap();
+        let token2 = storage.new_token(&pool, 2, 4).await.unwrap();
 
         let claim1 = storage
             .validate(&token1.access_token)
@@ -467,10 +452,7 @@ mod tests {
         assert_eq!(claim2.user_id, 2);
         assert_eq!(claim2.client_id, 4);
 
-        storage
-            .refresh(&mut tx, &token1.refresh_token)
-            .await
-            .unwrap();
+        storage.refresh(&pool, &token1.refresh_token).await.unwrap();
 
         let claim2_after = storage
             .validate(&token2.access_token)
@@ -495,8 +477,7 @@ mod tests {
             time_clone.load(atomic::Ordering::Relaxed)
         }));
 
-        let mut tx = pool.begin().await.unwrap();
-        let token = storage.new_token(&mut tx, 1, 1).await.unwrap();
+        let token = storage.new_token(&pool, 1, 1).await.unwrap();
 
         let claim = storage.validate(&token.access_token).await.unwrap();
         assert!(claim.is_some(), "Token should be valid when just created");
@@ -531,13 +512,9 @@ mod tests {
             time_clone.load(atomic::Ordering::Relaxed)
         }));
 
-        let mut tx = pool.begin().await.unwrap();
-        let token = storage.new_token(&mut tx, 1, 1).await.unwrap();
+        let token = storage.new_token(&pool, 1, 1).await.unwrap();
 
-        let new_token = storage
-            .refresh(&mut tx, &token.refresh_token)
-            .await
-            .unwrap();
+        let new_token = storage.refresh(&pool, &token.refresh_token).await.unwrap();
         assert!(
             new_token.is_some(),
             "Refresh token should work when just created"
@@ -547,14 +524,14 @@ mod tests {
         current_time.store(1000 + REFRESH_TOKEN_EXPIRATION_TIME + 1, Relaxed);
 
         let result = storage
-            .refresh(&mut tx, &new_token.refresh_token)
+            .refresh(&pool, &new_token.refresh_token)
             .await
             .unwrap();
         assert!(result.is_none(), "Expired refresh token should return None");
 
         current_time.store(1000, Relaxed);
         let result = storage
-            .refresh(&mut tx, &new_token.refresh_token)
+            .refresh(&pool, &new_token.refresh_token)
             .await
             .unwrap();
         assert!(
@@ -575,8 +552,7 @@ mod tests {
             time_clone.load(atomic::Ordering::Relaxed)
         }));
 
-        let mut tx = pool.begin().await.unwrap();
-        let token = storage.new_token(&mut tx, 1, 1).await.unwrap();
+        let token = storage.new_token(&pool, 1, 1).await.unwrap();
 
         current_time.store(1000 + EXPIRATION_TIME - 1, Relaxed);
 
@@ -594,17 +570,11 @@ mod tests {
     async fn test_refresh_token_still_valid_after_reboot(pool: SqlitePool) {
         let storage = TokenStorage::new();
 
-        let mut tx = pool.begin().await.unwrap();
-        let token = storage.new_token(&mut tx, 1, 1).await.unwrap();
-        tx.commit().await.unwrap();
+        let token = storage.new_token(&pool, 1, 1).await.unwrap();
 
         let storage = TokenStorage::new();
 
-        let mut tx = pool.begin().await.unwrap();
-        let new_refresh_token = storage
-            .refresh(&mut tx, &token.refresh_token)
-            .await
-            .unwrap();
+        let new_refresh_token = storage.refresh(&pool, &token.refresh_token).await.unwrap();
 
         assert!(new_refresh_token.is_some(), "New refresh token received");
         assert_ne!(
@@ -626,12 +596,11 @@ mod tests {
             time_clone.load(atomic::Ordering::Relaxed)
         }));
 
-        let mut tx = pool.begin().await.unwrap();
-        let token1 = storage.new_token(&mut tx, 1, 1).await.unwrap();
+        let token1 = storage.new_token(&pool, 1, 1).await.unwrap();
 
         current_time.store(1000 + EXPIRATION_TIME + 1, atomic::Ordering::Relaxed);
 
-        let token2 = storage.new_token(&mut tx, 2, 4).await.unwrap();
+        let token2 = storage.new_token(&pool, 2, 4).await.unwrap();
 
         let claim2 = storage.validate(&token2.access_token).await.unwrap();
         assert!(claim2.is_some(), "Token2 should be valid");
@@ -653,9 +622,8 @@ mod tests {
             time_clone.load(atomic::Ordering::Relaxed)
         }));
 
-        let mut tx = pool.begin().await.unwrap();
-        let token1 = storage.new_token(&mut tx, 1, 1).await.unwrap();
-        let token2 = storage.new_token(&mut tx, 2, 4).await.unwrap();
+        let token1 = storage.new_token(&pool, 1, 1).await.unwrap();
+        let token2 = storage.new_token(&pool, 2, 4).await.unwrap();
 
         // Move time forward but not enough to expire tokens
         current_time.store(1000 + EXPIRATION_TIME / 2, Relaxed);

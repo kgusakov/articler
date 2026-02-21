@@ -5,99 +5,123 @@ use result::ArticlerResult;
 
 use super::{CLIENTS_TABLE, Db, Id, Timestamp};
 
-pub async fn create(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn create<'c, C>(
+    conn: C,
     user_id: Id,
     client_name: &str,
     client_id: &str,
     client_secret: &str,
     created_at: Timestamp,
-) -> ArticlerResult<ClientRow> {
+) -> ArticlerResult<ClientRow>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     Ok(sqlx::query_as::<_, ClientRow>(&format!("INSERT INTO {CLIENTS_TABLE} (name, client_id, client_secret, user_id, created_at) VALUES(?, ?, ?, ?, ?) RETURNING *;"))
             .bind(client_name)
             .bind(client_id)
             .bind(client_secret)
             .bind(user_id)
             .bind(created_at)
-            .fetch_one(&mut **tx)
+            .fetch_one(&mut *conn)
             .await?)
 }
 
-pub async fn delete_by_id(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn delete_by_id<'c, C>(
+    conn: C,
     user_id: Id,
     id: Id,
-) -> ArticlerResult<bool> {
+) -> ArticlerResult<bool>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     let result = sqlx::query(&format!(
         "DELETE FROM {CLIENTS_TABLE} WHERE user_id = ? AND id = ?"
     ))
     .bind(user_id)
     .bind(id)
-    .execute(&mut **tx)
+    .execute(&mut *conn)
     .await?;
 
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn find_by_user_id_client_id_and_secret(
-    executor: &mut sqlx::Transaction<'_, Db>,
+pub async fn find_by_user_id_client_id_and_secret<'c, C>(
+    conn: C,
     user_id: Id,
     client_id: &str,
     client_secret: &str,
-) -> ArticlerResult<Option<ClientRow>> {
+) -> ArticlerResult<Option<ClientRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     let result = sqlx::query_as::<_, ClientRow>(&format!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? AND client_id = ? AND client_secret = ?"
     ))
     .bind(user_id)
     .bind(client_id)
     .bind(client_secret)
-    .fetch_optional(&mut **executor)
+    .fetch_optional(&mut *conn)
     .await?;
 
     Ok(result)
 }
 
-pub async fn find_by_client_id_and_secret(
-    executor: &mut sqlx::Transaction<'_, Db>,
+pub async fn find_by_client_id_and_secret<'c, C>(
+    conn: C,
     client_id: &str,
     client_secret: &str,
-) -> ArticlerResult<Option<ClientRow>> {
+) -> ArticlerResult<Option<ClientRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     let result = sqlx::query_as::<_, ClientRow>(&format!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE client_id = ? AND client_secret = ?"
     ))
     .bind(client_id)
     .bind(client_secret)
-    .fetch_optional(&mut **executor)
+    .fetch_optional(&mut *conn)
     .await?;
 
     Ok(result)
 }
 
-pub async fn find_by_client_name_and_user_id(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn find_by_client_name_and_user_id<'c, C>(
+    conn: C,
     user_id: Id,
     client_name: &str,
-) -> ArticlerResult<Option<ClientRow>> {
+) -> ArticlerResult<Option<ClientRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     let result = sqlx::query_as::<_, ClientRow>(&format!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? AND name = ?"
     ))
     .bind(user_id)
     .bind(client_name)
-    .fetch_optional(&mut **tx)
+    .fetch_optional(&mut *conn)
     .await?;
 
     Ok(result)
 }
 
-pub async fn find_by_user_id(
-    tx: &mut sqlx::Transaction<'_, Db>,
+pub async fn find_by_user_id<'c, C>(
+    conn: C,
     user_id: Id,
-) -> ArticlerResult<Vec<ClientRow>> {
+) -> ArticlerResult<Vec<ClientRow>>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
     let result = sqlx::query_as::<_, ClientRow>(&format!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? ORDER BY id;"
     ))
     .bind(user_id)
-    .fetch_all(&mut **tx)
+    .fetch_all(&mut *conn)
     .await?;
 
     Ok(result)
@@ -136,13 +160,11 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_create_client(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-
         let now = chrono::Utc::now().timestamp();
         let user_id = 1;
 
         let client = create(
-            &mut tx,
+            &pool,
             user_id,
             "Test Client",
             "test_client_id",
@@ -165,7 +187,7 @@ mod tests {
         assert_eq!(client, expected_client);
 
         let found_client = find_by_user_id_client_id_and_secret(
-            &mut tx,
+            &pool,
             user_id,
             "test_client_id",
             "test_client_secret",
@@ -182,8 +204,7 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_user_id_client_id_and_secret(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-        let client = find_by_user_id_client_id_and_secret(&mut tx, 1, "client_1", "secret_1")
+        let client = find_by_user_id_client_id_and_secret(&pool, 1, "client_1", "secret_1")
             .await
             .unwrap();
 
@@ -198,7 +219,7 @@ mod tests {
 
         assert_eq!(client, Some(expected_client));
 
-        let client = find_by_user_id_client_id_and_secret(&mut tx, 1, "client_2", "secret_2")
+        let client = find_by_user_id_client_id_and_secret(&pool, 1, "client_2", "secret_2")
             .await
             .unwrap();
 
@@ -214,28 +235,27 @@ mod tests {
         assert_eq!(client, Some(expected_client_2));
 
         let no_client =
-            find_by_user_id_client_id_and_secret(&mut tx, 1, "client_1", "wrong_secret")
+            find_by_user_id_client_id_and_secret(&pool, 1, "client_1", "wrong_secret")
                 .await
                 .unwrap();
 
         assert_eq!(no_client, None);
 
         let no_client =
-            find_by_user_id_client_id_and_secret(&mut tx, 1, "wrong_client", "secret_1")
+            find_by_user_id_client_id_and_secret(&pool, 1, "wrong_client", "secret_1")
                 .await
                 .unwrap();
 
         assert_eq!(no_client, None);
 
-        let no_client = find_by_user_id_client_id_and_secret(&mut tx, 999, "client_1", "secret_1")
+        let no_client = find_by_user_id_client_id_and_secret(&pool, 999, "client_1", "secret_1")
             .await
             .unwrap();
 
         assert_eq!(no_client, None);
 
-        let mut tx = pool.begin().await.unwrap();
         let no_client =
-            find_by_user_id_client_id_and_secret(&mut tx, 999, "wrong_client", "wrong_secret")
+            find_by_user_id_client_id_and_secret(&pool, 999, "wrong_client", "wrong_secret")
                 .await
                 .unwrap();
 
@@ -247,8 +267,7 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_client_name_and_user_id(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-        let client = find_by_client_name_and_user_id(&mut tx, 1, "Android app")
+        let client = find_by_client_name_and_user_id(&pool, 1, "Android app")
             .await
             .unwrap();
 
@@ -263,19 +282,19 @@ mod tests {
 
         assert_eq!(client, Some(expected_client));
 
-        let no_client = find_by_client_name_and_user_id(&mut tx, 999, "Android app")
+        let no_client = find_by_client_name_and_user_id(&pool, 999, "Android app")
             .await
             .unwrap();
 
         assert_eq!(no_client, None);
 
-        let no_client = find_by_client_name_and_user_id(&mut tx, 1, "Nonexistent App")
+        let no_client = find_by_client_name_and_user_id(&pool, 1, "Nonexistent App")
             .await
             .unwrap();
 
         assert_eq!(no_client, None);
 
-        let no_client = find_by_client_name_and_user_id(&mut tx, 999, "Nonexistent App")
+        let no_client = find_by_client_name_and_user_id(&pool, 999, "Nonexistent App")
             .await
             .unwrap();
 
@@ -287,8 +306,7 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_find_by_user_id(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-        let mut clients = find_by_user_id(&mut tx, 1).await.unwrap();
+        let mut clients = find_by_user_id(&pool, 1).await.unwrap();
         clients.sort_by_key(|c| c.id);
 
         let expected_clients = vec![
@@ -320,8 +338,7 @@ mod tests {
 
         assert_eq!(clients, expected_clients);
 
-        let mut tx = pool.begin().await.unwrap();
-        let clients = find_by_user_id(&mut tx, 2).await.unwrap();
+        let clients = find_by_user_id(&pool, 2).await.unwrap();
 
         let expected_clients = vec![ClientRow {
             id: 4,
@@ -340,8 +357,7 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_find_by_user_id_nonexistent_user(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-        let clients = find_by_user_id(&mut tx, 999).await.unwrap();
+        let clients = find_by_user_id(&pool, 999).await.unwrap();
 
         assert_eq!(clients, Vec::<ClientRow>::new());
     }
@@ -351,9 +367,7 @@ mod tests {
         fixtures("../../tests/fixtures/users.sql")
     )]
     async fn test_delete_by_id(pool: SqlitePool) {
-        let mut tx = pool.begin().await.unwrap();
-
-        let client_before = find_by_client_name_and_user_id(&mut tx, 1, "Client 1")
+        let client_before = find_by_client_name_and_user_id(&pool, 1, "Client 1")
             .await
             .unwrap();
         assert!(
@@ -361,27 +375,27 @@ mod tests {
             "Client should exist before deletion"
         );
 
-        let deleted = delete_by_id(&mut tx, 1, 1).await.unwrap();
+        let deleted = delete_by_id(&pool, 1, 1).await.unwrap();
         assert!(deleted, "Delete should return true when client exists");
 
-        let client_after = find_by_client_name_and_user_id(&mut tx, 1, "Client 1")
+        let client_after = find_by_client_name_and_user_id(&pool, 1, "Client 1")
             .await
             .unwrap();
         assert_eq!(client_after, None, "Client should not exist after deletion");
 
-        let deleted_again = delete_by_id(&mut tx, 1, 1).await.unwrap();
+        let deleted_again = delete_by_id(&pool, 1, 1).await.unwrap();
         assert!(
             !deleted_again,
             "Delete should return false when client doesn't exist"
         );
 
-        let deleted_wrong_user = delete_by_id(&mut tx, 2, 2).await.unwrap();
+        let deleted_wrong_user = delete_by_id(&pool, 2, 2).await.unwrap();
         assert!(
             !deleted_wrong_user,
             "Delete should return false when user_id doesn't match"
         );
 
-        let client_2_still_exists = find_by_client_name_and_user_id(&mut tx, 1, "Client 2")
+        let client_2_still_exists = find_by_client_name_and_user_id(&pool, 1, "Client 2")
             .await
             .unwrap();
         assert!(
@@ -389,7 +403,7 @@ mod tests {
             "Client 2 should still exist"
         );
 
-        let deleted_nonexistent = delete_by_id(&mut tx, 1, 999).await.unwrap();
+        let deleted_nonexistent = delete_by_id(&pool, 1, 999).await.unwrap();
         assert!(
             !deleted_nonexistent,
             "Delete should return false for nonexistent client"

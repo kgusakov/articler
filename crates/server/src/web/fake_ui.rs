@@ -34,7 +34,7 @@ async fn developer(
             }
         };
 
-        if let Ok(client_rows) = clients::find_by_user_id(&mut tx, user_id).await {
+        if let Ok(client_rows) = clients::find_by_user_id(&mut **tx, user_id).await {
             match app.handlebars.render(
                 "fake_development",
                 &Clients {

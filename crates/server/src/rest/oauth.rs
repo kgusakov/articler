@@ -29,10 +29,10 @@ async fn post_token(
     data: web::Data<AppState>,
     request: Either<web::Form<GetToken>, web::Json<GetToken>>,
 ) -> actix_web::Result<Json<Token>> {
-    let mut tx = tctx.tx()?;
+    let tx = tctx.tx()?;
     let request = request.into_inner();
     match &request.grant_type {
-        Some(gt) if gt == "password" => new_token(&data, &mut tx, request).await,
+        Some(gt) if gt == "password" => new_token(data, tx, request).await,
         Some(gt) if gt == "refresh_token" => refresh_token(data, tx, request).await,
         _ => Err(ErrorBadRequest(oauth_error(
             "invalid_request",
@@ -60,7 +60,7 @@ async fn refresh_token(
         )));
     };
 
-    if clients::find_by_client_id_and_secret(&mut tx, &client_id, &client_secret)
+    if clients::find_by_client_id_and_secret(&mut **tx, &client_id, &client_secret)
         .await?
         .is_none()
     {
@@ -77,7 +77,11 @@ async fn refresh_token(
         )));
     };
 
-    let Some(new_token) = data.token_storage.refresh(&mut tx, &refresh_token).await? else {
+    let Some(new_token) = data
+        .token_storage
+        .refresh(&mut **tx, &refresh_token)
+        .await?
+    else {
         return Err(ErrorBadRequest(oauth_error(
             "invalid_grant",
             "Invalid refresh token",
@@ -94,8 +98,8 @@ async fn refresh_token(
 }
 
 async fn new_token(
-    data: &web::Data<AppState>,
-    tx: &mut crate::middleware::TransactionHolder<'_, '_>,
+    data: web::Data<AppState>,
+    mut tx: crate::middleware::TransactionHolder<'_, '_>,
     request: GetToken,
 ) -> Result<Json<Token>, Error> {
     let Some(username) = request.username else {
@@ -126,16 +130,20 @@ async fn new_token(
         )));
     };
 
-    let Some(user_row) = find_user(tx, &username, &password).await? else {
+    let Some(user_row) = find_user(&mut **tx, &username, &password).await? else {
         return Err(ErrorBadRequest(oauth_error(
             "invalid_grant",
             "Invalid username and password combination",
         )));
     };
 
-    let Some(client_row) =
-        clients::find_by_user_id_client_id_and_secret(tx, user_row.id, &client_id, &client_secret)
-            .await?
+    let Some(client_row) = clients::find_by_user_id_client_id_and_secret(
+        &mut **tx,
+        user_row.id,
+        &client_id,
+        &client_secret,
+    )
+    .await?
     else {
         return Err(ErrorBadRequest(oauth_error(
             "invalid_client",
@@ -145,7 +153,7 @@ async fn new_token(
 
     let new_token = data
         .token_storage
-        .new_token(tx, user_row.id, client_row.id)
+        .new_token(&mut **tx, user_row.id, client_row.id)
         .await?;
 
     Ok(Json(Token {
