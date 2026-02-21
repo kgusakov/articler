@@ -7,7 +7,7 @@ use actix_web::{
 };
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 
-use crate::{app::AppState, auth::find_user, middleware::TransactionContext, rest::UserInfo};
+use crate::{app::AppState, auth::find_user, rest::UserInfo};
 use db::repository::clients;
 use dto::{GetToken, OauthError, Token};
 
@@ -25,11 +25,9 @@ pub fn routes(cfg: &mut ServiceConfig) {
 }
 
 async fn post_token(
-    tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
     request: Either<web::Form<GetToken>, web::Json<GetToken>>,
 ) -> actix_web::Result<Json<Token>> {
-    let tx = tctx.tx()?;
     let request = request.into_inner();
     match &request.grant_type {
         Some(gt) if gt == "password" => new_token(data, request).await,
