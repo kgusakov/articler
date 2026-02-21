@@ -35,7 +35,6 @@ struct InternalToken {
 
 struct TokenStorageInner {
     access_tokens: HashMap<String, InternalToken>,
-    refresh_tokens: HashMap<String, InternalToken>,
 }
 
 pub struct TokenStorage {
@@ -55,7 +54,6 @@ impl TokenStorage {
         TokenStorage {
             inner: Mutex::new(TokenStorageInner {
                 access_tokens: HashMap::new(),
-                refresh_tokens: HashMap::new(),
             }),
             now: Box::new(|| Utc::now().timestamp()),
         }
@@ -66,7 +64,6 @@ impl TokenStorage {
         TokenStorage {
             inner: Mutex::new(TokenStorageInner {
                 access_tokens: HashMap::new(),
-                refresh_tokens: HashMap::new(),
             }),
             now: provider,
         }
@@ -159,7 +156,6 @@ impl TokenStorage {
                 client_id: internal_token.client_id,
             };
 
-            inner.refresh_tokens.remove(refresh_token);
             tokens::delete(&mut *conn, refresh_token).await?;
 
             inner.access_tokens.insert(
@@ -199,7 +195,6 @@ impl TokenStorage {
         let now = self.now();
 
         inner.access_tokens.retain(|_, v| v.expires_at > now);
-        inner.refresh_tokens.retain(|_, v| v.expires_at > now);
     }
 }
 
