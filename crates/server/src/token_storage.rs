@@ -5,11 +5,12 @@ use db::repository::{Db, tokens};
 use rand::{distr::Alphanumeric, prelude::*};
 
 use result::ArticlerResult;
+use sqlx::Connection;
 use tokio::sync::Mutex;
 
 type Id = i64;
 
-const EXPIRATION_TIME: i64 = 60 * 60; // one hour in seconds
+const EXPIRATION_TIME: i64 = 1; // one hour in seconds
 const REFRESH_TOKEN_EXPIRATION_TIME: i64 = 30 * 24 * 60 * 60; // one month in seconds
 
 // TODO fix global mutex and gc on every call (without calls it will produce memory leaks moreover)
@@ -138,14 +139,17 @@ impl TokenStorage {
     where
         C: sqlx::Acquire<'c, Database = Db>,
     {
-        // It's ok to unwrap - poison should be propagated
         let mut inner = self.inner.lock().await;
 
         let mut conn = conn.acquire().await?;
 
-        tokens::delete_expired(&mut *conn).await?;
+        let mut tx = conn.begin().await?;
+        tokens::delete_expired(&mut tx).await?;
+        tx.commit().await?;
 
-        if let Some(internal_token) = tokens::find(&mut *conn, refresh_token).await? {
+        let mut tx = conn.begin().await?;
+
+        let result = if let Some(internal_token) = tokens::find(&mut tx, refresh_token).await? {
             let now = self.now();
 
             let access_token = generate_token();
@@ -156,7 +160,7 @@ impl TokenStorage {
                 client_id: internal_token.client_id,
             };
 
-            tokens::delete(&mut *conn, refresh_token).await?;
+            tokens::delete(&mut tx, refresh_token).await?;
 
             inner.access_tokens.insert(
                 access_token.clone(),
@@ -167,7 +171,7 @@ impl TokenStorage {
             );
 
             tokens::create(
-                &mut *conn,
+                &mut tx,
                 &new_refresh_token,
                 internal_token.user_id,
                 internal_token.client_id,
@@ -183,7 +187,11 @@ impl TokenStorage {
             }))
         } else {
             Ok(None)
-        }
+        };
+
+        tx.commit().await?;
+
+        result
     }
 
     fn now(&self) -> i64 {
