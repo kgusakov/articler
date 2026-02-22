@@ -10,7 +10,7 @@ use tokio::sync::Mutex;
 
 type Id = i64;
 
-const EXPIRATION_TIME: i64 = 1; // one hour in seconds
+const EXPIRATION_TIME: i64 = 60 * 60; // one hour in seconds
 const REFRESH_TOKEN_EXPIRATION_TIME: i64 = 30 * 24 * 60 * 60; // one month in seconds
 
 // TODO fix global mutex and gc on every call (without calls it will produce memory leaks moreover)

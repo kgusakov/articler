@@ -4,7 +4,7 @@ use actix_web::{
 };
 
 use crate::{
-    middleware::TransactionContext,
+    app::AppState,
     models::Tag,
     rest::{UserInfo, wallabag::Id},
 };
@@ -12,12 +12,10 @@ use db::repository::tags;
 use dto::{TagLabel, TagsLabel};
 
 pub(in crate::rest::wallabag) async fn get_tags(
-    tctx: web::ReqData<TransactionContext<'_>>,
+    data: web::Data<AppState>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
-    let mut tx = tctx.tx()?;
-
-    let result = tags::get_all(&mut **tx, user_info.user_id)
+    let result = tags::get_all(&data.pool, user_info.user_id)
         .await?
         .into_iter()
         .map(std::convert::Into::into)
@@ -27,13 +25,11 @@ pub(in crate::rest::wallabag) async fn get_tags(
 }
 
 pub(in crate::rest::wallabag) async fn delete_tags_by_label(
-    tctx: web::ReqData<TransactionContext<'_>>,
+    data: web::Data<AppState>,
     label: web::Query<TagsLabel>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
-    let mut tx = tctx.tx()?;
-
-    let result = tags::delete_all_by_label(&mut **tx, user_info.user_id, &label.labels)
+    let result = tags::delete_all_by_label(&data.pool, user_info.user_id, &label.labels)
         .await?
         .into_iter()
         .map(std::convert::Into::into)
@@ -43,13 +39,11 @@ pub(in crate::rest::wallabag) async fn delete_tags_by_label(
 }
 
 pub(in crate::rest::wallabag) async fn delete_tag_by_id(
-    tctx: web::ReqData<TransactionContext<'_>>,
+    data: web::Data<AppState>,
     tag_id: web::Path<Id>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Tag>> {
-    let mut tx = tctx.tx()?;
-
-    let result = tags::delete_by_id(&mut **tx, user_info.user_id, tag_id.into_inner())
+    let result = tags::delete_by_id(&data.pool, user_info.user_id, tag_id.into_inner())
         .await?
         .map(std::convert::Into::into);
 
@@ -61,13 +55,11 @@ pub(in crate::rest::wallabag) async fn delete_tag_by_id(
 }
 
 pub(in crate::rest::wallabag) async fn delete_tag_by_label(
-    tctx: web::ReqData<TransactionContext<'_>>,
+    data: web::Data<AppState>,
     label: web::Query<TagLabel>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Tag>> {
-    let mut tx = tctx.tx()?;
-
-    let result = tags::delete_by_label(&mut **tx, user_info.user_id, &label.label)
+    let result = tags::delete_by_label(&data.pool, user_info.user_id, &label.label)
         .await?
         .map(std::convert::Into::into);
 

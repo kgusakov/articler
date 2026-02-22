@@ -4,14 +4,14 @@ use actix_web::{
     body::MessageBody,
     cookie::Key,
     dev::{Server, ServiceRequest, ServiceResponse},
-    middleware::{Logger, from_fn},
+    middleware::Logger,
     web,
 };
 use actix_web_static_files::ResourceFiles;
 use handlebars::{Handlebars, TemplateError};
 use sqlx::{Pool, Sqlite};
 
-use crate::{middleware::wrap_with_tx, scraper::Scraper, token_storage::TokenStorage};
+use crate::{scraper::Scraper, token_storage::TokenStorage};
 use db::repository;
 
 #[expect(clippy::module_name_repetitions)]
@@ -52,7 +52,6 @@ pub fn app(
     App::new()
         .app_data(app_data)
         .wrap(Logger::default())
-        .wrap(from_fn(wrap_with_tx))
         .configure(crate::rest::oauth::routes)
         .configure(crate::rest::wallabag::routes)
         .service(ResourceFiles::new("/static", generated))

@@ -139,6 +139,7 @@ where
     C: Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     let result: i32 = sqlx::query_scalar(&format!(
         "SELECT EXISTS(SELECT 1 FROM {ENTRIES_TABLE} WHERE user_id = ? AND id = ?)",
     ))
@@ -160,6 +161,7 @@ where
     C: Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     let result = sqlx::query(&format!(
         r"DELETE FROM {ENTRIES_TAG_TABLE} WHERE tag_id = ? AND entry_id in (SELECT id FROM {ENTRIES_TABLE} WHERE id = ? AND user_id = ?)"
     ))
@@ -177,6 +179,7 @@ where
     C: Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     // TODO rewrite this funny stupid count
     let mut q_builder = QueryBuilder::new(format!(
         r"SELECT COUNT(DISTINCT e.id) FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id",
@@ -307,6 +310,8 @@ where
 {
     let mut conn = conn.acquire().await?;
 
+    let mut conn = conn.begin().await?;
+
     let entry = sqlx::query_as::<_, EntryRow>(&format!(
         "SELECT * FROM {ENTRIES_TABLE} WHERE user_id = ? AND id = ?"
     ))
@@ -330,6 +335,8 @@ where
     .fetch_all(&mut *conn)
     .await?;
 
+    conn.commit().await?;
+
     Ok(Some((entry, tags)))
 }
 
@@ -343,6 +350,7 @@ where
     C: Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     let mut query_builder = QueryBuilder::new(format!("UPDATE {ENTRIES_TABLE} SET "));
 
     let mut separated = query_builder.separated(", ");
@@ -436,6 +444,7 @@ where
     C: Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     let result = sqlx::query("DELETE FROM entries WHERE user_id = ? AND id = ?")
         .bind(user_id)
         .bind(id)

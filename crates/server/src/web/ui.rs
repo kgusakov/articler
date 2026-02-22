@@ -18,7 +18,6 @@ use url::Url;
 use crate::{
     app::AppState,
     auth::find_user,
-    middleware::TransactionContext,
     scraper::extract_title,
     web::{
         dto::{Client, LoginForm},
@@ -67,15 +66,9 @@ async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
     }
 }
 
-async fn clients(
-    session: Session,
-    app: web::Data<AppState>,
-    tctx: web::ReqData<TransactionContext<'_>>,
-) -> actix_web::Result<HttpResponse> {
+async fn clients(session: Session, app: web::Data<AppState>) -> actix_web::Result<HttpResponse> {
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
-        let mut tx = tctx.tx()?;
-
-        let clients = clients::find_by_user_id(&mut **tx, user_id)
+        let clients = clients::find_by_user_id(&app.pool, user_id)
             .await?
             .into_iter()
             .map(Client::from)
@@ -112,12 +105,10 @@ async fn logout(session: Session) -> actix_web::Result<impl Responder> {
 async fn article(
     session: Session,
     app: web::Data<AppState>,
-    tctx: web::ReqData<TransactionContext<'_>>,
     id: web::Path<Id>,
 ) -> actix_web::Result<HttpResponse> {
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
-        let mut tx = tctx.tx()?;
-        if let Some((article, _)) = entries::find_by_id(&mut **tx, user_id, id.into_inner()).await?
+        if let Some((article, _)) = entries::find_by_id(&app.pool, user_id, id.into_inner()).await?
         {
             let article_page = ArticlePageData {
                 id: article.id,
@@ -133,6 +124,7 @@ async fn article(
                     main_partial: "article".to_owned(),
                 },
             };
+
             match app.handlebars.render("index", &article_page) {
                 Ok(rendered) => Ok(HttpResponse::Ok()
                     .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
@@ -150,16 +142,11 @@ async fn article(
     }
 }
 
-async fn index(
-    session: Session,
-    app: web::Data<AppState>,
-    tctx: web::ReqData<TransactionContext<'_>>,
-) -> actix_web::Result<HttpResponse> {
+async fn index(session: Session, app: web::Data<AppState>) -> actix_web::Result<HttpResponse> {
     // TODO check if user still exsists
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
         main(
             app,
-            tctx,
             user_id,
             FindParams {
                 user_id,
@@ -178,15 +165,10 @@ async fn index(
     }
 }
 
-async fn all(
-    session: Session,
-    app: web::Data<AppState>,
-    tctx: web::ReqData<TransactionContext<'_>>,
-) -> actix_web::Result<HttpResponse> {
+async fn all(session: Session, app: web::Data<AppState>) -> actix_web::Result<HttpResponse> {
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
         main(
             app,
-            tctx,
             user_id,
             FindParams {
                 user_id,
@@ -204,15 +186,10 @@ async fn all(
     }
 }
 
-async fn favourite(
-    session: Session,
-    app: web::Data<AppState>,
-    tctx: web::ReqData<TransactionContext<'_>>,
-) -> actix_web::Result<HttpResponse> {
+async fn favourite(session: Session, app: web::Data<AppState>) -> actix_web::Result<HttpResponse> {
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
         main(
             app,
-            tctx,
             user_id,
             FindParams {
                 user_id,
@@ -231,15 +208,10 @@ async fn favourite(
     }
 }
 
-async fn archive(
-    session: Session,
-    app: web::Data<AppState>,
-    tctx: web::ReqData<TransactionContext<'_>>,
-) -> actix_web::Result<HttpResponse> {
+async fn archive(session: Session, app: web::Data<AppState>) -> actix_web::Result<HttpResponse> {
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
         main(
             app,
-            tctx,
             user_id,
             FindParams {
                 user_id,
@@ -260,15 +232,14 @@ async fn archive(
 
 async fn main(
     app: web::Data<AppState>,
-    tctx: web::ReqData<TransactionContext<'_>>,
     user_id: Id,
     entries_filter: FindParams,
     active_category: Category,
 ) -> actix_web::Result<HttpResponse> {
-    let mut tx = tctx.tx()?;
+    let mut tx = app.pool.begin().await.map_err(ErrorInternalServerError)?;
 
     // TODO must load only metadata
-    let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut **tx, &entries_filter)
+    let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut *tx, &entries_filter)
         .await?
         .into_iter()
         .map(|e| e.0.into())
@@ -284,6 +255,8 @@ async fn main(
         active_category,
     };
 
+    tx.commit().await.map_err(ErrorInternalServerError)?;
+
     let rendered = app
         .handlebars
         .render("index", &context)
@@ -297,15 +270,14 @@ async fn partial_articles(
     session: Session,
     app: web::Data<AppState>,
     category: web::Path<Category>,
-    tctx: web::ReqData<TransactionContext<'_>>,
 ) -> actix_web::Result<HttpResponse> {
-    let mut tx = tctx.tx()?;
+    let mut tx = app.pool.begin().await.map_err(ErrorInternalServerError)?;
 
     let user_id = check_user_id(&session)?;
     let params = find_params_for_category(user_id, &category);
 
     // TODO must load only metadata
-    let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut **tx, &params)
+    let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut *tx, &params)
         .await?
         .into_iter()
         .map(|e| e.0.into())
@@ -316,6 +288,8 @@ async fn partial_articles(
         counters: ArticleCounters::load(&mut *tx, user_id).await?,
         active_category: category.into_inner(),
     };
+
+    tx.commit().await.map_err(ErrorInternalServerError)?;
 
     let rendered = app
         .handlebars
@@ -330,18 +304,15 @@ async fn partial_categories(
     session: Session,
     req: HttpRequest,
     app: web::Data<AppState>,
-    tctx: web::ReqData<TransactionContext<'_>>,
 ) -> actix_web::Result<HttpResponse> {
     let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? else {
         return Ok(HttpResponse::Forbidden().finish());
     };
 
-    let mut tx = tctx.tx()?;
-
     let active_category = Category::from(&req);
 
     let context = PartialCategoriesContext {
-        counters: ArticleCounters::load(&mut *tx, user_id).await?,
+        counters: ArticleCounters::load(&app.pool, user_id).await?,
         active_category,
     };
 
@@ -359,10 +330,7 @@ async fn do_archive(
     req: HttpRequest,
     form: web::Form<ArchiveForm>,
     app: web::Data<AppState>,
-    tctx: web::ReqData<TransactionContext<'_>>,
 ) -> actix_web::Result<HttpResponse> {
-    let mut tx = tctx.tx()?;
-
     let user_id = check_user_id(&session)?;
 
     let form = form.into_inner();
@@ -377,10 +345,10 @@ async fn do_archive(
         ..Default::default()
     };
 
-    entries::update_by_id(&mut **tx, user_id, form.article_id, update).await?;
+    entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
 
     if is_htmx_request(&req) {
-        render_article_cards(&app, &mut *tx, user_id, &req).await
+        render_article_cards(&app, &app.pool, user_id, &req).await
     } else {
         Ok(HttpResponse::SeeOther()
             .append_header((header::LOCATION, referer_or_root(&req)))
@@ -393,10 +361,7 @@ async fn do_favourite(
     req: HttpRequest,
     form: web::Form<FavouriteForm>,
     app: web::Data<AppState>,
-    tctx: web::ReqData<TransactionContext<'_>>,
 ) -> actix_web::Result<HttpResponse> {
-    let mut tx = tctx.tx()?;
-
     let user_id = check_user_id(&session)?;
 
     let form = form.into_inner();
@@ -411,10 +376,10 @@ async fn do_favourite(
         ..Default::default()
     };
 
-    entries::update_by_id(&mut **tx, user_id, form.article_id, update).await?;
+    entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
 
     if is_htmx_request(&req) {
-        render_article_cards(&app, &mut *tx, user_id, &req).await
+        render_article_cards(&app, &app.pool, user_id, &req).await
     } else {
         Ok(HttpResponse::SeeOther()
             .append_header((header::LOCATION, referer_or_root(&req)))
@@ -427,18 +392,15 @@ async fn do_delete(
     req: HttpRequest,
     form: web::Form<DeleteForm>,
     app: web::Data<AppState>,
-    tctx: web::ReqData<TransactionContext<'_>>,
 ) -> actix_web::Result<HttpResponse> {
-    let mut tx = tctx.tx()?;
-
     let user_id = check_user_id(&session)?;
 
     let form = form.into_inner();
 
-    entries::delete_by_id(&mut **tx, user_id, form.article_id).await?;
+    entries::delete_by_id(&app.pool, user_id, form.article_id).await?;
 
     if is_htmx_request(&req) {
-        render_article_cards(&app, &mut *tx, user_id, &req).await
+        render_article_cards(&app, &app.pool, user_id, &req).await
     } else {
         let referer = form.back_location.unwrap_or(referer_or_root(&req));
         Ok(HttpResponse::SeeOther()
@@ -451,15 +413,13 @@ async fn do_client_delete(
     session: Session,
     req: HttpRequest,
     form: web::Form<ClientDeleteForm>,
-    tctx: web::ReqData<TransactionContext<'_>>,
+    app: web::Data<AppState>,
 ) -> actix_web::Result<impl Responder> {
-    let mut tx = tctx.tx()?;
-
     let user_id = check_user_id(&session)?;
 
     let form = form.into_inner();
 
-    clients::delete_by_id(&mut **tx, user_id, form.id).await?;
+    clients::delete_by_id(&app.pool, user_id, form.id).await?;
 
     Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
@@ -468,15 +428,13 @@ async fn do_create_client(
     session: Session,
     req: HttpRequest,
     form: web::Form<CreateClientForm>,
-    tctx: web::ReqData<TransactionContext<'_>>,
+    app: web::Data<AppState>,
 ) -> actix_web::Result<impl Responder> {
-    let mut tx = tctx.tx()?;
-
     let user_id = check_user_id(&session)?;
 
     let now = chrono::Utc::now().timestamp();
     let _ = clients::create(
-        &mut **tx,
+        &app.pool,
         user_id,
         &form.client_name,
         &generate_client_id(),
@@ -491,7 +449,7 @@ async fn do_create_client(
 async fn do_add(
     session: Session,
     req: HttpRequest,
-    data: web::Data<AppState>,
+    app: web::Data<AppState>,
     form: web::Form<AddArticleForm>,
 ) -> actix_web::Result<impl Responder> {
     let user_id = check_user_id(&session)?;
@@ -503,7 +461,7 @@ async fn do_add(
         .map_err(ErrorInternalServerError)?;
 
     let (title, content, mime_type, published_at, language, preview_picture) =
-        match data.scraper.extract(&url).await {
+        match app.scraper.extract(&url).await {
             Ok(document) => (
                 document.title,
                 document.content_html,
@@ -554,30 +512,30 @@ async fn do_add(
         uid: None,
     };
 
-    entries::create(&data.pool, create_entry, &[]).await?;
+    entries::create(&app.pool, create_entry, &[]).await?;
 
     Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
 
 pub(in crate::web) async fn do_login(
-    tctx: web::ReqData<TransactionContext<'_>>,
+    app: web::Data<AppState>,
     form: web::Form<LoginForm>,
+    req: HttpRequest,
     session: Session,
-) -> impl Responder {
-    let mut tx = match tctx.tx() {
-        Ok(tx) => tx,
-        Err(e) => return HttpResponse::from_error(ErrorInternalServerError(e)),
-    };
+) -> actix_web::Result<impl Responder> {
+    if let Some(user) = find_user(&app.pool, &form.username, &form.password).await? {
+        session
+            .insert("user_id", user.id)
+            .map_err(ErrorInternalServerError)?;
 
-    if let Ok(Some(user)) = find_user(&mut *tx, &form.username, &form.password).await
-        && let Err(err) = session.insert("user_id", user.id)
-    {
-        return HttpResponse::from_error(ErrorInternalServerError(err));
+        Ok(HttpResponse::Found()
+            .append_header(("Location", "/"))
+            .finish())
+    } else {
+        Ok(HttpResponse::Found()
+            .append_header(("Location", referer_or_root(&req)))
+            .finish())
     }
-
-    HttpResponse::Found()
-        .append_header(("Location", "/"))
-        .finish()
 }
 
 fn check_user_id(session: &Session) -> Result<i64, actix_web::Error> {
@@ -641,6 +599,7 @@ where
 
     let params = find_params_for_category(user_id, &Category::from(req));
 
+    // TODO must load only metadata
     let articles: Vec<ArticleMetadata> = entries::find_all(&mut *conn, &params)
         .await
         .map_err(ErrorInternalServerError)?

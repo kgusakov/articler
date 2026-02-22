@@ -1,4 +1,4 @@
-use sqlx::{Acquire, FromRow, QueryBuilder, Row, sqlite::SqliteRow};
+use sqlx::{FromRow, QueryBuilder, Row, sqlite::SqliteRow};
 
 use result::ArticlerResult;
 

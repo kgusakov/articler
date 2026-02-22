@@ -1,4 +1,3 @@
-
 use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
 use result::ArticlerResult;
@@ -17,6 +16,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     Ok(sqlx::query_as::<_, ClientRow>(&format!("INSERT INTO {CLIENTS_TABLE} (name, client_id, client_secret, user_id, created_at) VALUES(?, ?, ?, ?, ?) RETURNING *;"))
             .bind(client_name)
             .bind(client_id)
@@ -27,15 +27,12 @@ where
             .await?)
 }
 
-pub async fn delete_by_id<'c, C>(
-    conn: C,
-    user_id: Id,
-    id: Id,
-) -> ArticlerResult<bool>
+pub async fn delete_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> ArticlerResult<bool>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     let result = sqlx::query(&format!(
         "DELETE FROM {CLIENTS_TABLE} WHERE user_id = ? AND id = ?"
     ))
@@ -57,6 +54,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     let result = sqlx::query_as::<_, ClientRow>(&format!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? AND client_id = ? AND client_secret = ?"
     ))
@@ -78,6 +76,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     let result = sqlx::query_as::<_, ClientRow>(&format!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE client_id = ? AND client_secret = ?"
     ))
@@ -98,6 +97,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     let result = sqlx::query_as::<_, ClientRow>(&format!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? AND name = ?"
     ))
@@ -109,14 +109,12 @@ where
     Ok(result)
 }
 
-pub async fn find_by_user_id<'c, C>(
-    conn: C,
-    user_id: Id,
-) -> ArticlerResult<Vec<ClientRow>>
+pub async fn find_by_user_id<'c, C>(conn: C, user_id: Id) -> ArticlerResult<Vec<ClientRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     let result = sqlx::query_as::<_, ClientRow>(&format!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? ORDER BY id;"
     ))
@@ -234,17 +232,15 @@ mod tests {
 
         assert_eq!(client, Some(expected_client_2));
 
-        let no_client =
-            find_by_user_id_client_id_and_secret(&pool, 1, "client_1", "wrong_secret")
-                .await
-                .unwrap();
+        let no_client = find_by_user_id_client_id_and_secret(&pool, 1, "client_1", "wrong_secret")
+            .await
+            .unwrap();
 
         assert_eq!(no_client, None);
 
-        let no_client =
-            find_by_user_id_client_id_and_secret(&pool, 1, "wrong_client", "secret_1")
-                .await
-                .unwrap();
+        let no_client = find_by_user_id_client_id_and_secret(&pool, 1, "wrong_client", "secret_1")
+            .await
+            .unwrap();
 
         assert_eq!(no_client, None);
 

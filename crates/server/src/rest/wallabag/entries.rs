@@ -10,7 +10,6 @@ use url::Url;
 
 use crate::{
     app::AppState,
-    middleware::TransactionContext,
     models::{Entry, Tag},
     rest::{UserInfo, wallabag::Id},
     scraper::extract_title,
@@ -152,7 +151,7 @@ pub(in crate::rest::wallabag) async fn post_entries(
 }
 
 pub(in crate::rest::wallabag) async fn entries(
-    tctx: web::ReqData<TransactionContext<'_>>,
+    data: web::Data<AppState>,
     request: Query<EntriesRequest>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Entries>> {
@@ -173,9 +172,14 @@ pub(in crate::rest::wallabag) async fn entries(
         domain_name: request.domain_name,
     };
 
-    let mut tx = tctx.tx()?;
+    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
 
-    let count_without_paging = entries::count(&mut **tx, &params).await?;
+    let count_without_paging = entries::count(&mut *tx, &params).await?;
+
+    // TODO implement all needed request filters and etc
+    let entries = entries::find_all(&mut *tx, &params).await?;
+
+    tx.commit().await.map_err(ErrorInternalServerError)?;
 
     // TODO fix clippy
     #[expect(clippy::cast_precision_loss)]
@@ -185,9 +189,6 @@ pub(in crate::rest::wallabag) async fn entries(
     if request.page > pages {
         return Err(ErrorNotFound("Page not found"));
     }
-
-    // TODO implement all needed request filters and etc
-    let entries = entries::find_all(&mut **tx, &params).await?;
 
     let mut ents = vec![];
 
@@ -216,16 +217,16 @@ pub(in crate::rest::wallabag) async fn entries(
 }
 
 pub(in crate::rest::wallabag) async fn get_tags_by_entry(
-    tctx: web::ReqData<TransactionContext<'_>>,
+    data: web::Data<AppState>,
     entry_id: web::Path<Id>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
     let entry_id = entry_id.into_inner();
 
-    let mut tx = tctx.tx()?;
+    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
 
-    if entries::exists_by_id(&mut **tx, user_info.user_id, entry_id).await? {
-        let result = tags::find_by_entry_id(&mut **tx, user_info.user_id, entry_id)
+    let result = if entries::exists_by_id(&mut *tx, user_info.user_id, entry_id).await? {
+        let result = tags::find_by_entry_id(&mut *tx, user_info.user_id, entry_id)
             .await?
             .into_iter()
             .map(std::convert::Into::into)
@@ -234,23 +235,27 @@ pub(in crate::rest::wallabag) async fn get_tags_by_entry(
         Ok(Json(result))
     } else {
         Err(ErrorNotFound("Entry not found"))
-    }
+    };
+
+    tx.commit().await.map_err(ErrorInternalServerError)?;
+
+    result
 }
 
 pub(in crate::rest::wallabag) async fn delete_tag_from_entry(
-    tctx: web::ReqData<TransactionContext<'_>>,
+    data: web::Data<AppState>,
     ids: web::Path<(Id, Id)>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Entry>> {
     let (entry_id, tag_id) = ids.into_inner();
 
-    let mut tx = tctx.tx()?;
+    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
 
-    if entries::exists_by_id(&mut **tx, user_info.user_id, entry_id).await? {
-        entries::delete_tag_by_tag_id(&mut **tx, user_info.user_id, entry_id, tag_id).await?;
+    let result = if entries::exists_by_id(&mut *tx, user_info.user_id, entry_id).await? {
+        entries::delete_tag_by_tag_id(&mut *tx, user_info.user_id, entry_id, tag_id).await?;
 
         if let Some((entry_row, tag_rows)) =
-            entries::find_by_id(&mut **tx, user_info.user_id, entry_id).await?
+            entries::find_by_id(&mut *tx, user_info.user_id, entry_id).await?
         {
             let tags = tag_rows.into_iter().map(std::convert::Into::into).collect();
 
@@ -261,11 +266,15 @@ pub(in crate::rest::wallabag) async fn delete_tag_from_entry(
         }
     } else {
         Err(ErrorNotFound("Entry not found"))
-    }
+    };
+
+    tx.commit().await.map_err(ErrorInternalServerError)?;
+
+    result
 }
 
 pub(in crate::rest::wallabag) async fn delete_entry(
-    tctx: web::ReqData<TransactionContext<'_>>,
+    data: web::Data<AppState>,
     entry_id: web::Path<i64>,
     request: Query<DeleteEntryRequest>,
     user_info: UserInfo,
@@ -273,11 +282,11 @@ pub(in crate::rest::wallabag) async fn delete_entry(
     let request = request.into_inner();
     let entry_id = entry_id.into_inner();
 
-    let mut tx = tctx.tx()?;
+    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
 
-    match request.expect {
+    let result = match request.expect {
         Expect::Id => {
-            let deleted = entries::delete_by_id(&mut **tx, user_info.user_id, entry_id).await?;
+            let deleted = entries::delete_by_id(&mut *tx, user_info.user_id, entry_id).await?;
 
             if !deleted {
                 return Err(ErrorNotFound("Entry not found"));
@@ -286,12 +295,12 @@ pub(in crate::rest::wallabag) async fn delete_entry(
             Ok(Json(DeleteEntryResponse::Id { id: entry_id }))
         }
         Expect::Full => {
-            let full_entry = entries::find_by_id(&mut **tx, user_info.user_id, entry_id).await?;
+            let full_entry = entries::find_by_id(&mut *tx, user_info.user_id, entry_id).await?;
 
             let (entry_row, tag_rows) =
                 full_entry.ok_or_else(|| ErrorNotFound("Entry not found"))?;
 
-            let deleted = entries::delete_by_id(&mut **tx, user_info.user_id, entry_id).await?;
+            let deleted = entries::delete_by_id(&mut *tx, user_info.user_id, entry_id).await?;
 
             if !deleted {
                 return Err(ErrorNotFound("Entry not found"));
@@ -304,22 +313,26 @@ pub(in crate::rest::wallabag) async fn delete_entry(
                 entry: Box::new(entry),
             }))
         }
-    }
+    };
+
+    tx.commit().await.map_err(ErrorInternalServerError)?;
+
+    result
 }
 
 // TODO implement Either based version for Json input data also
 pub(in crate::rest::wallabag) async fn post_entry_tags(
-    tctx: web::ReqData<TransactionContext<'_>>,
+    data: web::Data<AppState>,
     entry_id: web::Path<Id>,
     request: web::Form<EntryTags>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Entry>> {
     let entry_id = entry_id.into_inner();
 
-    let mut tx = tctx.tx()?;
+    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
 
     // TODO dirty design - looks like we need entry repository method for it
-    if entries::find_by_id(&mut **tx, user_info.user_id, entry_id)
+    let result: actix_web::Result<Json<Entry>> = if entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
         .await?
         .is_some()
     {
@@ -334,9 +347,9 @@ pub(in crate::rest::wallabag) async fn post_entry_tags(
             })
             .collect();
 
-        tags::update_tags_by_entry_id(&mut **tx, user_info.user_id, entry_id, &full_tags).await?;
+        tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags).await?;
 
-        let (entry_row, tag_rows) = entries::find_by_id(&mut **tx, user_info.user_id, entry_id)
+        let (entry_row, tag_rows) = entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
             .await?
             .ok_or(ErrorNotFound("Entry not found"))?;
 
@@ -345,11 +358,15 @@ pub(in crate::rest::wallabag) async fn post_entry_tags(
         Ok(Json(Entry::try_from((entry_row, entry_tags))?))
     } else {
         Err(ErrorNotFound("Entry not found"))
-    }
+    };
+
+    tx.commit().await.map_err(ErrorInternalServerError)?;
+
+    result
 }
 
 pub(in crate::rest::wallabag) async fn patch_entry(
-    tctx: web::ReqData<TransactionContext<'_>>,
+    data: web::Data<AppState>,
     entry_id: web::Path<i64>,
     request: Either<web::Json<UpdateEntry>, web::Form<UpdateEntry>>,
     user_info: UserInfo,
@@ -391,12 +408,12 @@ pub(in crate::rest::wallabag) async fn patch_entry(
         },
     };
 
-    let mut tx = tctx.tx()?;
+    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
 
-    let updated =
-        entries::update_by_id(&mut **tx, user_info.user_id, entry_id, repo_update).await?;
+    let updated = entries::update_by_id(&mut *tx, user_info.user_id, entry_id, repo_update).await?;
 
     if !updated {
+        tx.rollback().await.map_err(ErrorInternalServerError)?;
         return Err(ErrorNotFound("Entry not found"));
     }
 
@@ -410,16 +427,18 @@ pub(in crate::rest::wallabag) async fn patch_entry(
             })
             .collect();
 
-        tags::update_tags_by_entry_id(&mut **tx, user_info.user_id, entry_id, &full_tags).await?;
+        tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags).await?;
     }
 
-    let (entry_row, tag_rows) = entries::find_by_id(&mut **tx, user_info.user_id, entry_id)
+    let (entry_row, tag_rows) = entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
         .await?
         .ok_or_else(|| ErrorNotFound("Entry not found"))?;
 
     let entry_tags = tag_rows.into_iter().map(std::convert::Into::into).collect();
 
     let entry = Entry::try_from((entry_row, entry_tags))?;
+
+    tx.commit().await.map_err(ErrorInternalServerError)?;
 
     Ok(Json(entry))
 }

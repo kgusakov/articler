@@ -15,6 +15,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     Ok(sqlx::query_as::<_, TokenRow>(&format!(
         "INSERT INTO {TOKENS_TABLE} (token, created_at, expires_at, user_id, client_id) VALUES(?, ?, strftime('%s', 'now') + ?, ?, ?) RETURNING *;"
     ))
@@ -27,20 +28,18 @@ where
     .await?)
 }
 
-pub async fn delete<'c, C>(
-    conn: C,
-    token: &str,
-) -> ArticlerResult<Option<TokenRow>>
+pub async fn delete<'c, C>(conn: C, token: &str) -> ArticlerResult<Option<TokenRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
-    Ok(
-        sqlx::query_as::<_, TokenRow>(&format!("DELETE FROM {TOKENS_TABLE} WHERE token = ? RETURNING *"))
-            .bind(token)
-            .fetch_optional(&mut *conn)
-            .await?,
-    )
+
+    Ok(sqlx::query_as::<_, TokenRow>(&format!(
+        "DELETE FROM {TOKENS_TABLE} WHERE token = ? RETURNING *"
+    ))
+    .bind(token)
+    .fetch_optional(&mut *conn)
+    .await?)
 }
 
 pub async fn delete_expired<'c, C>(conn: C) -> ArticlerResult<()>
@@ -48,6 +47,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     sqlx::query(&format!(
         "DELETE FROM {TOKENS_TABLE} WHERE expires_at <= strftime('%s', 'now');"
     ))
@@ -57,14 +57,12 @@ where
     Ok(())
 }
 
-pub async fn find<'c, C>(
-    conn: C,
-    token: &str,
-) -> ArticlerResult<Option<TokenRow>>
+pub async fn find<'c, C>(conn: C, token: &str) -> ArticlerResult<Option<TokenRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     Ok(
         sqlx::query_as::<_, TokenRow>(&format!("SELECT * FROM {TOKENS_TABLE} WHERE token = ?;"))
             .bind(token)
@@ -111,11 +109,9 @@ mod tests {
         let created_at = chrono::Utc::now().timestamp();
         let expires_in = 3600; // 1 hour
 
-        let token = create(
-            &pool, token_str, user_id, client_id, created_at, expires_in,
-        )
-        .await
-        .unwrap();
+        let token = create(&pool, token_str, user_id, client_id, created_at, expires_in)
+            .await
+            .unwrap();
 
         assert!(token.id > 0, "Token should have a positive id");
         assert_eq!(token.token, token_str);
@@ -139,11 +135,9 @@ mod tests {
         let created_at = chrono::Utc::now().timestamp();
         let expires_in = 3600;
 
-        let created = create(
-            &pool, token_str, user_id, client_id, created_at, expires_in,
-        )
-        .await
-        .unwrap();
+        let created = create(&pool, token_str, user_id, client_id, created_at, expires_in)
+            .await
+            .unwrap();
 
         let found = find(&pool, token_str).await.unwrap();
 
@@ -171,16 +165,9 @@ mod tests {
     )]
     async fn test_delete_token_success(pool: SqlitePool) {
         let token_str = "deletable_token";
-        create(
-            &pool,
-            token_str,
-            1,
-            1,
-            chrono::Utc::now().timestamp(),
-            3600,
-        )
-        .await
-        .unwrap();
+        create(&pool, token_str, 1, 1, chrono::Utc::now().timestamp(), 3600)
+            .await
+            .unwrap();
 
         let before_delete = find(&pool, token_str).await.unwrap();
         assert!(

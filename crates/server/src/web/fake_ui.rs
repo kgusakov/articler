@@ -9,7 +9,6 @@ use actix_web::{
 
 use crate::{
     app::AppState,
-    middleware::TransactionContext,
     web::{dto::Client, fake_ui::dto::Clients, ui::do_login},
 };
 use db::repository::clients::{self};
@@ -21,20 +20,9 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/developer", get().to(developer));
 }
 
-async fn developer(
-    app: web::Data<AppState>,
-    session: Session,
-    tctx: web::ReqData<TransactionContext<'_>>,
-) -> impl Responder {
+async fn developer(app: web::Data<AppState>, session: Session) -> impl Responder {
     if let Ok(Some(user_id)) = session.get("user_id") {
-        let mut tx = match tctx.tx() {
-            Ok(tx) => tx,
-            Err(err) => {
-                return HttpResponse::InternalServerError().body(err.to_string());
-            }
-        };
-
-        if let Ok(client_rows) = clients::find_by_user_id(&mut **tx, user_id).await {
+        if let Ok(client_rows) = clients::find_by_user_id(&app.pool, user_id).await {
             match app.handlebars.render(
                 "fake_development",
                 &Clients {

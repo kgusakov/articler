@@ -17,6 +17,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     Ok(sqlx::query_as::<_, UserRow>(&format!("INSERT INTO {USERS_TABLE} (username, email, name, password_hash, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?) RETURNING *;"))
             .bind(username)
             .bind(email)
@@ -37,6 +38,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     let result = sqlx::query_as::<_, UserRow>(&format!(
         "SELECT * FROM {} WHERE username = ? AND password_hash = ?",
         super::USERS_TABLE
@@ -54,6 +56,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
+
     let result =
         sqlx::query_as::<_, UserRow>(&format!("SELECT * FROM {USERS_TABLE} WHERE username = ?"))
             .bind(username)
