@@ -293,7 +293,6 @@ async fn get_entries_public(pool: SqlitePool) {
 
     let req = test::TestRequest::default()
         .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
-        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
         .uri("/api/entries?public=1")
         .to_request();
 

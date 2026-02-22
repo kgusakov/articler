@@ -3,8 +3,8 @@ use std::fmt::Display;
 use chrono::Utc;
 use indexmap::IndexMap;
 use sqlx::{
-    Acquire, Database, Encode, FromRow, QueryBuilder, Row, Type,
-    query_builder::Separated, sqlite::SqliteRow,
+    Acquire, Database, Encode, FromRow, QueryBuilder, Row, Type, query_builder::Separated,
+    sqlite::SqliteRow,
 };
 
 use result::ArticlerResult;
@@ -237,7 +237,7 @@ pub async fn create<'c, C>(
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
-    let mut conn = conn.acquire().await?;
+    let mut tx = conn.begin().await?;
 
     let id: i64 = sqlx::query_scalar(
         r"
@@ -273,16 +273,16 @@ where
     .bind(entry.published_by)
     .bind(entry.is_public)
     .bind(entry.uid)
-    .fetch_one(&mut *conn)
+    .fetch_one(&mut *tx)
     .await?;
 
     if !tags.is_empty() {
-        crate::repository::tags::create_and_link(&mut *conn, id, tags).await?;
+        crate::repository::tags::create_and_link(&mut *tx, id, tags).await?;
     }
 
     let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
         .bind(id)
-        .fetch_one(&mut *conn)
+        .fetch_one(&mut *tx)
         .await?;
 
     let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(&format!(
@@ -293,17 +293,15 @@ where
         "
     ))
     .bind(entry.id)
-    .fetch_all(&mut *conn)
+    .fetch_all(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     Ok((entry, tags))
 }
 
-pub async fn find_by_id<'c, C>(
-    conn: C,
-    user_id: Id,
-    id: Id,
-) -> ArticlerResult<Option<FullEntry>>
+pub async fn find_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> ArticlerResult<Option<FullEntry>>
 where
     C: Acquire<'c, Database = Db>,
 {

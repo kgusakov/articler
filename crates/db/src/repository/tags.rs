@@ -1,4 +1,4 @@
-use sqlx::{FromRow, QueryBuilder, Row, sqlite::SqliteRow};
+use sqlx::{Acquire, FromRow, QueryBuilder, Row, sqlite::SqliteRow};
 
 use result::ArticlerResult;
 
@@ -28,7 +28,7 @@ where
         .into());
     }
 
-    let mut conn = conn.acquire().await?;
+    let mut tx = conn.begin().await?;
 
     let mut tag_builder = QueryBuilder::new("INSERT INTO tags (user_id, label, slug) ");
     tag_builder.push_values(tags.iter(), |mut b, tag| {
@@ -37,7 +37,7 @@ where
             .push_bind(&tag.slug);
     });
     tag_builder.push(" ON CONFLICT DO NOTHING");
-    tag_builder.build().execute(&mut *conn).await?;
+    tag_builder.build().execute(&mut *tx).await?;
 
     let mut insert_query = QueryBuilder::new(format!(r"INSERT INTO {ENTRIES_TAG_TABLE} SELECT "));
     insert_query.push(entry_id);
@@ -50,7 +50,7 @@ where
     }
     separated.push_unseparated(") ON CONFLICT DO NOTHING");
 
-    insert_query.build().execute(&mut *conn).await?;
+    insert_query.build().execute(&mut *tx).await?;
 
     let mut get_tags = QueryBuilder::new(format!("SELECT * from {TAGS_TABLE} WHERE label IN ("));
 
@@ -60,10 +60,14 @@ where
     }
     tags_separated.push_unseparated(")");
 
-    Ok(get_tags
+    let result = get_tags
         .build_query_as::<TagRow>()
-        .fetch_all(&mut *conn)
-        .await?)
+        .fetch_all(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+
+    Ok(result)
 }
 
 pub async fn update_tags_by_entry_id<'c, C>(

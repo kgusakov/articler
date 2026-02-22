@@ -493,10 +493,7 @@ async fn do_add(
     req: HttpRequest,
     data: web::Data<AppState>,
     form: web::Form<AddArticleForm>,
-    tctx: web::ReqData<TransactionContext<'_>>,
 ) -> actix_web::Result<impl Responder> {
-    let mut tx = tctx.tx()?;
-
     let user_id = check_user_id(&session)?;
 
     let url: Url = form
@@ -557,7 +554,7 @@ async fn do_add(
         uid: None,
     };
 
-    entries::create(&mut **tx, create_entry, &[]).await?;
+    entries::create(&data.pool, create_entry, &[]).await?;
 
     Ok(Redirect::to(referer_or_root(&req)).see_other())
 }

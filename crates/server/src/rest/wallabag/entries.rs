@@ -29,7 +29,6 @@ pub(in crate::rest::wallabag) async fn exists() -> actix_web::Result<Json<Exists
 }
 
 pub(in crate::rest::wallabag) async fn post_entries(
-    tctx: web::ReqData<TransactionContext<'_>>,
     data: web::Data<AppState>,
     request: Either<web::Json<AddEntry>, web::Form<AddEntry>>,
     user_info: UserInfo,
@@ -133,8 +132,7 @@ pub(in crate::rest::wallabag) async fn post_entries(
         // TODO if it is not new entry - we will force empty tags. It should be fixed when this method will support not only entry creations
         .unwrap_or(vec![]);
 
-    let mut tx = tctx.tx()?;
-    let (entry_row, tag_rows) = entries::create(&mut **tx, create_entry, &create_tags).await?;
+    let (entry_row, tag_rows) = entries::create(&data.pool, create_entry, &create_tags).await?;
 
     let tags = tag_rows.into_iter().map(Tag::from).collect();
 
