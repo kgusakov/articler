@@ -1,28 +1,35 @@
-<nav class="flex-1 flex items-center gap-6">
-    <form action="/add" method="post" class="flex-1 max-w-lg mx-auto">
-        <input type="url" name="url" placeholder="Paste article URL..."
-            class="w-full px-4 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-primary" />
-    </form>
-    <div class="flex items-center gap-4">
-        {{!--
-        <button class="text-secondary hover:text-primary">
-            <img src="/static/images/Search.svg" />
-        </button>
-        <div class="w-px h-6 bg-border"></div>
-        <button class="text-secondary hover:text-primary">
-            <img src="/static/images/Settings.svg" />
-        </button>
-        --}}
-        <div class="relative">
-            <button class="cursor-pointer" id="profile-menu-button" class="text-secondary hover:text-primary"
-                title="Open user menu">
-                <img src="/static/images/Profile.svg" />
+<!-- Header -->
+<header class="h-[72px] px-4 md:px-8 lg:px-[120px] flex items-center justify-between border-b border-surface">
+    <a href="/" class="flex items-center gap-3">
+        <img src="/static/images/Logo.svg" class="h-12" />
+    </a>
+    <nav class="flex-1 flex items-center gap-6">
+        <form action="/add" method="post" class="flex-1 max-w-lg mx-auto">
+            <input type="url" name="url" placeholder="Paste article URL..."
+                class="w-full px-4 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-primary" />
+        </form>
+        <div class="flex items-center gap-4">
+            {{!--
+            <button class="text-secondary hover:text-primary">
+                <img src="/static/images/Search.svg" />
             </button>
-            <div id="profile-menu" class="hidden absolute right-0 translate-y-2 bg-white border border-border rounded"
-                style="min-width: 160px;">
-                <a href="/clients" class="block px-4 py-3 text-sm hover:bg-surface">Clients</a>
-                <a href="/logout" class="block px-4 py-3 text-sm hover:bg-surface">Logout</a>
+            <div class="w-px h-6 bg-border"></div>
+            <button class="text-secondary hover:text-primary">
+                <img src="/static/images/Settings.svg" />
+            </button>
+            --}}
+            <div class="relative">
+                <button class="cursor-pointer" id="profile-menu-button" class="text-secondary hover:text-primary"
+                    title="Open user menu">
+                    <img src="/static/images/Profile.svg" />
+                </button>
+                <div id="profile-menu"
+                    class="hidden absolute right-0 translate-y-2 bg-white border border-border rounded"
+                    style="min-width: 160px;">
+                    <a href="/clients" class="block px-4 py-3 text-sm hover:bg-surface">Clients</a>
+                    <a href="/logout" class="block px-4 py-3 text-sm hover:bg-surface">Logout</a>
+                </div>
             </div>
         </div>
-    </div>
-</nav>
+    </nav>
+</header>

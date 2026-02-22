@@ -1,24 +1,28 @@
 <main class="flex-1 flex items-center justify-center px-4 py-12">
-    <div class="w-full max-w-[360px]">
-        <h1 class="text-2xl font-semibold mb-8 text-center">Sign in</h1>
+    <div
+        class="px-10 pt-10 pb-12 bg-white rounded-xl shadow-[0px_10px_24px_4px_rgba(91,107,134,0.12)] inline-flex flex-col justify-center items-center overflow-hidden">
+        <div class="mb-10">
+            <img src="/static/images/Logo.svg" alt="Logo" class="h-16 w-auto" />
+        </div>
 
-        <form action="/do_login" method="post" class="space-y-5" id="main-form">
-            <div>
-                <label for="login" class="block text-sm font-medium mb-1.5">Login</label>
+        <form action="/do_login" method="post" class="flex flex-col items-center gap-6 self-center" id="main-form">
+            <div class="w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
+                <img src="/static/images/Profile.svg" alt="Profile" />
                 <input type="text" id="main-login" name="_username" autocomplete="username" required
-                    class="w-full h-11 px-3 rounded border border-border bg-white text-primary placeholder:text-muted text-sm outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition"
-                    placeholder="Enter your login" />
+                    class="flex-1 text-Token-Grey_2 text-base font-normal font-sans leading-6 outline-none bg-transparent"
+                    placeholder="Login" />
             </div>
 
-            <div>
-                <label for="password" class="block text-sm font-medium mb-1.5">Password</label>
-                <input type="password" id="main-password" name="_password" autocomplete="current-password" required
-                    class="w-full h-11 px-3 rounded border border-border bg-white text-primary placeholder:text-muted text-sm outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition"
-                    placeholder="Enter your password" />
+            <div class="w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
+                <img src="/static/images/Password.svg" alt="Password" />
+                <input type="password" id="main-password" name="_password" autocomplete="current-password"
+                    required
+                    class="flex-1 text-Token-Grey_2 text-base font-normal font-sans leading-6 outline-none bg-transparent"
+                    placeholder="Password" />
             </div>
 
             <button type="submit"
-                class="w-full h-11 bg-primary text-white text-sm font-medium rounded hover:bg-secondary transition">
+                class="px-8 py-2 bg-secondary rounded flex justify-start items-center gap-1 text-white text-base font-medium font-sans leading-5 hover:bg-muted hover:cursor-pointer transition">
                 Login
             </button>
         </form>
@@ -31,22 +35,18 @@
     <form action="/login_check" method="post" name="loginform">
         <div class="card-content">
             <div class="row">
-
                 <div class="input-field col s12">
                     <label for="username" class="">Username</label>
                     <input type="text" id="username" name="_username" value="" autofocus="">
                 </div>
-
                 <div class="input-field col s12">
                     <label for="password">Password</label>
                     <input type="password" id="password" name="_password">
                 </div>
-
                 <div class="input-field col s12">
                     <input type="checkbox" id="remember_me" name="_remember_me" checked="">
                     <label for="remember_me">Keep me logged in</label>
                 </div>
-
             </div>
         </div>
         <div class="card-action center">

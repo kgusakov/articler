@@ -11,17 +11,10 @@
   <script src="/static/js/idiomorph-ext.min.js"></script>
 </head>
 
-<body hx-ext="morph" class="bg-white text-primary">
-  <!-- Header -->
-  <header class="h-[72px] px-4 md:px-8 lg:px-[120px] flex items-center justify-between border-b border-surface">
-    <a href="/" class="flex items-center gap-3">
-      <img src="/static/images/Logo.svg" />
-    </a>
-
-    {{#if nav_partial}}
-    {{> (lookup this 'nav_partial') }}
-    {{/if}}
-  </header>
+<body hx-ext="morph" class="bg-white text-primary h-screen flex flex-col">
+  {{#if nav_partial}}
+  {{> (lookup this 'nav_partial') }}
+  {{/if}}
 
   {{> (lookup this 'main_partial') }}
 

@@ -2,10 +2,26 @@
 @plugin "@tailwindcss/typography";
 @source "../templates/";
 
+@font-face {
+    font-family: 'Roboto';
+    src: url('/static/fonts/Roboto-Regular.ttf') format('ttf');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Roboto';
+    src: url('/static/fonts/Roboto-Medium.ttf') format('ttf');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
 @theme {
     --color-primary: #191D24;
     --color-secondary: #384252;
     --color-muted: #6C727F;
     --color-border: #E0E4EA;
     --color-surface: #F1F3F6;
+    --font-sans: 'Roboto', ui-sans-serif, system-ui, sans-serif;
 }
