@@ -4,7 +4,7 @@
         style="background-image: url('/static/images/NoImage.svg'); background-size: cover; background-position: center;">
         <a href="/article/{{id}}" class="block w-full h-full">
             {{#if image_url}}
-            <img src="{{image_url}}" class="w-full h-full object-cover" alt="">
+            <img src="{{image_url}}" class="w-full h-full object-cover" onload="this.style.backgroundColor='white'" alt="">
             {{/if}}
         </a>
         <div class="absolute bottom-0 right-0 flex items-center gap-5 pl-5 pr-4 py-2.5 rounded-tl-lg"
