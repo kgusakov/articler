@@ -427,12 +427,15 @@ async fn do_delete_htmx_from_article_page(pool: SqlitePool) {
         .uri("/do_delete")
         .cookie(cookie.clone())
         .insert_header(("HX-Request", "true"))
-        .insert_header((header::REFERER, "/article/1"))
         .set_form([("article_id", "1"), ("source", "article")])
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        resp.headers().get("HX-Redirect").unwrap().to_str().unwrap(),
+        String::from("/")
+    );
 }
 
 #[sqlx::test(

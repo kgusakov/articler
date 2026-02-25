@@ -355,7 +355,7 @@ async fn do_archive(
         if let Some(HxSource::Article) = form.source {
             render_article(&app, &app.pool, user_id, form.article_id).await
         } else {
-            render_article_cards(&app, &app.pool, user_id, &req).await
+            render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
         }
     } else {
         Ok(HttpResponse::SeeOther()
@@ -390,7 +390,7 @@ async fn do_favourite(
         if let Some(HxSource::Article) = form.source {
             render_article(&app, &app.pool, user_id, form.article_id).await
         } else {
-            render_article_cards(&app, &app.pool, user_id, &req).await
+            render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
         }
     } else {
         Ok(HttpResponse::SeeOther()
@@ -413,9 +413,12 @@ async fn do_delete(
 
     if is_htmx_request(&req) {
         if let Some(HxSource::Article) = form.source {
-            render_article(&app, &app.pool, user_id, form.article_id).await
+            let referer = form.back_location.unwrap_or(String::from("/"));
+            Ok(HttpResponse::Ok()
+                .append_header(("HX-Redirect", referer))
+                .finish())
         } else {
-            render_article_cards(&app, &app.pool, user_id, &req).await
+            render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
         }
     } else {
         let referer = form.back_location.unwrap_or(referer_or_root(&req));
@@ -606,14 +609,14 @@ async fn render_article_cards<'c, C>(
     app: &AppState,
     conn: C,
     user_id: Id,
-    req: &HttpRequest,
+    category: &Category,
 ) -> actix_web::Result<HttpResponse>
 where
     C: Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await.map_err(ErrorInternalServerError)?;
 
-    let params = find_params_for_category(user_id, &Category::from(req));
+    let params = find_params_for_category(user_id, category);
 
     // TODO must load only metadata
     let articles: Vec<ArticleMetadata> = entries::find_all(&mut *conn, &params)

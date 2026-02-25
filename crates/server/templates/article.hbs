@@ -40,8 +40,9 @@
             <form method="post" action="/do_delete" hx-post="/do_delete" hx-target="#article-page"
                 hx-swap="morph:outerHTML" hx-vals='{"source": "{{source}}"}' class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
+                <!-- TODO make this back location dependent -->
                 <input type="hidden" name="back_location" value="/" />
-                <button type="submit" class="hover:scale-110" title="Delete">
+                <button type=" submit" class="hover:scale-110" title="Delete">
                     <img src="/static/images/Delete.svg" alt="Delete" />
                 </button>
             </form>
