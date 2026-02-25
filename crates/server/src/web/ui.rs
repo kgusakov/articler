@@ -12,7 +12,7 @@ use db::repository::{
     entries::{self, FindParams, SortOrder, UpdateEntry},
 };
 use helpers::{generate_client_id, generate_client_secret, hash_url};
-use sqlx::Acquire;
+use sqlx::{Acquire, SqlitePool};
 use url::Url;
 
 use crate::{
@@ -21,14 +21,15 @@ use crate::{
     scraper::extract_title,
     web::{
         dto::{Client, LoginForm},
-        ui::dto::{PartialArticlesContext, PartialCategoriesContext},
+        ui::dto::{
+            HxSource, PartialArticleContext, PartialArticlesContext, PartialCategoriesContext,
+        },
     },
 };
 
 use dto::{
-    AddArticleForm, ArchiveForm, ArticleCounters, ArticleMetadata, ArticlePageData,
-    ArticlesContext, Category, ClientDeleteForm, Clients, CreateClientForm, DeleteForm,
-    FavouriteForm, Page,
+    AddArticleForm, ArchiveForm, ArticleContext, ArticleCounters, ArticleMetadata, ArticlesContext,
+    Category, ClientDeleteForm, Clients, CreateClientForm, DeleteForm, FavouriteForm, Page,
 };
 
 pub fn routes(cfg: &mut ServiceConfig) {
@@ -110,15 +111,18 @@ async fn article(
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
         if let Some((article, _)) = entries::find_by_id(&app.pool, user_id, id.into_inner()).await?
         {
-            let article_page = ArticlePageData {
-                id: article.id,
-                title: article.title,
-                content: article.content,
-                domain: article.domain_name,
-                url: article.url,
-                reading_time: article.reading_time,
-                is_archived: article.is_archived,
-                is_starred: article.is_starred,
+            let article_page = ArticleContext {
+                article: PartialArticleContext {
+                    id: article.id,
+                    title: article.title,
+                    content: article.content,
+                    domain: article.domain_name,
+                    url: article.url,
+                    reading_time: article.reading_time,
+                    is_archived: article.is_archived,
+                    is_starred: article.is_starred,
+                    source: HxSource::Article,
+                },
                 page: Page {
                     nav_partial: Some("navigation".to_owned()),
                     main_partial: "article".to_owned(),
@@ -348,7 +352,11 @@ async fn do_archive(
     entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
 
     if is_htmx_request(&req) {
-        render_article_cards(&app, &app.pool, user_id, &req).await
+        if let Some(HxSource::Article) = form.source {
+            render_article(&app, &app.pool, user_id, form.article_id).await
+        } else {
+            render_article_cards(&app, &app.pool, user_id, &req).await
+        }
     } else {
         Ok(HttpResponse::SeeOther()
             .append_header((header::LOCATION, referer_or_root(&req)))
@@ -379,7 +387,11 @@ async fn do_favourite(
     entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
 
     if is_htmx_request(&req) {
-        render_article_cards(&app, &app.pool, user_id, &req).await
+        if let Some(HxSource::Article) = form.source {
+            render_article(&app, &app.pool, user_id, form.article_id).await
+        } else {
+            render_article_cards(&app, &app.pool, user_id, &req).await
+        }
     } else {
         Ok(HttpResponse::SeeOther()
             .append_header((header::LOCATION, referer_or_root(&req)))
@@ -400,7 +412,11 @@ async fn do_delete(
     entries::delete_by_id(&app.pool, user_id, form.article_id).await?;
 
     if is_htmx_request(&req) {
-        render_article_cards(&app, &app.pool, user_id, &req).await
+        if let Some(HxSource::Article) = form.source {
+            render_article(&app, &app.pool, user_id, form.article_id).await
+        } else {
+            render_article_cards(&app, &app.pool, user_id, &req).await
+        }
     } else {
         let referer = form.back_location.unwrap_or(referer_or_root(&req));
         Ok(HttpResponse::SeeOther()
@@ -620,6 +636,38 @@ where
         .body(rendered))
 }
 
+async fn render_article(
+    app: &AppState,
+    pool: &SqlitePool,
+    user_id: Id,
+    article_id: Id,
+) -> actix_web::Result<HttpResponse> {
+    if let Some((article, _)) = entries::find_by_id(pool, user_id, article_id).await? {
+        let article_contenxt = PartialArticleContext {
+            id: article.id,
+            title: article.title,
+            content: article.content,
+            domain: article.domain_name,
+            url: article.url,
+            reading_time: article.reading_time,
+            is_archived: article.is_archived,
+            is_starred: article.is_starred,
+            source: HxSource::Article,
+        };
+
+        let rendered = app
+            .handlebars
+            .render("article", &article_contenxt)
+            .map_err(ErrorInternalServerError)?;
+
+        Ok(HttpResponse::Ok()
+            .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+            .body(rendered))
+    } else {
+        Err(ErrorNotFound("Article not found"))
+    }
+}
+
 mod dto {
     use actix_http::header;
     use actix_web::HttpRequest;
@@ -639,18 +687,21 @@ mod dto {
     pub struct DeleteForm {
         pub article_id: repository::Id,
         pub back_location: Option<String>,
+        pub source: Option<HxSource>,
     }
 
     #[derive(Deserialize)]
     pub struct ArchiveForm {
         pub article_id: repository::Id,
         pub archived: bool,
+        pub source: Option<HxSource>,
     }
 
     #[derive(Deserialize)]
     pub struct FavouriteForm {
         pub article_id: repository::Id,
         pub starred: bool,
+        pub source: Option<HxSource>,
     }
 
     #[derive(Serialize)]
@@ -676,7 +727,7 @@ mod dto {
     }
 
     #[derive(Serialize)]
-    pub struct ArticlePageData {
+    pub struct PartialArticleContext {
         pub id: Id,
         pub title: String,
         pub content: String,
@@ -685,6 +736,13 @@ mod dto {
         pub reading_time: i32,
         pub is_archived: bool,
         pub is_starred: bool,
+        pub source: HxSource,
+    }
+
+    #[derive(Serialize)]
+    pub struct ArticleContext {
+        #[serde(flatten)]
+        pub article: PartialArticleContext,
         #[serde(flatten)]
         pub page: Page,
     }
@@ -824,5 +882,11 @@ mod dto {
         #[serde(flatten)]
         pub counters: ArticleCounters,
         pub active_category: Category,
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Eq)]
+    #[serde(rename_all = "lowercase")]
+    pub enum HxSource {
+        Article,
     }
 }

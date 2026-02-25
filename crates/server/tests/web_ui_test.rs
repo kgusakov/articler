@@ -305,6 +305,167 @@ async fn do_archive_htmx(pool: SqlitePool) {
     migrations = "../../migrations",
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
+async fn do_archive_htmx_from_article_page(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/article/1")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    assert!(content.contains("title1"));
+
+    let archive_icon = helpers::find_archive_icons(content);
+    assert_eq!(archive_icon.len(), 1);
+    assert_eq!(archive_icon[0], "/static/images/MarkUnRead.svg");
+
+    let req = test::TestRequest::post()
+        .uri("/do_archive")
+        .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
+        .insert_header((header::REFERER, "/article/1"))
+        .set_form([
+            ("article_id", "1"),
+            ("archived", "true"),
+            ("source", "article"),
+        ])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    assert!(content.contains("title1"));
+    let archive_icon = helpers::find_archive_icons(content);
+    assert_eq!(archive_icon.len(), 1);
+    assert_eq!(archive_icon[0], "/static/images/MarkRead.svg");
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_favourite_htmx_from_article_page(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/article/1")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    assert!(content.contains("title1"));
+
+    let fav_icons = helpers::find_favourite_icons_by_article(content);
+    assert_eq!(fav_icons.len(), 1);
+    assert_eq!(
+        fav_icons[0],
+        ("1".to_owned(), "/static/images/FavoriteOff.svg".to_owned())
+    );
+
+    let req = test::TestRequest::post()
+        .uri("/do_favourite")
+        .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
+        .insert_header((header::REFERER, "/article/1"))
+        .set_form([
+            ("article_id", "1"),
+            ("starred", "true"),
+            ("source", "article"),
+        ])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    assert!(content.contains("title1"));
+    let fav_icons = helpers::find_favourite_icons_by_article(content);
+    assert_eq!(fav_icons.len(), 1);
+    assert_eq!(
+        fav_icons[0],
+        ("1".to_owned(), "/static/images/FavoriteOn.svg".to_owned())
+    );
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_delete_htmx_from_article_page(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/article/1")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    assert!(content.contains("title1"));
+
+    let req = test::TestRequest::post()
+        .uri("/do_delete")
+        .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
+        .insert_header((header::REFERER, "/article/1"))
+        .set_form([("article_id", "1"), ("source", "article")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_delete_with_back_location(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/article/1")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let req = test::TestRequest::post()
+        .uri("/do_delete")
+        .cookie(cookie.clone())
+        .set_form([("article_id", "1"), ("back_location", "/archive")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/archive");
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
 async fn do_unarchive(pool: SqlitePool) {
     let app = init_ui_app(pool).await;
 

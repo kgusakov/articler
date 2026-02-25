@@ -1,4 +1,4 @@
-<main class="max-w-3xl mx-auto px-4 md:px-8 pt-6 lg:pt-[76px] pb-8 lg:pb-12">
+<main id="article-page" class="max-w-3xl mx-auto px-4 md:px-8 pt-6 lg:pt-[76px] pb-8 lg:pb-12">
     <!-- Top bar -->
     <div class="flex items-center justify-between mb-8">
         <a href="javascript:history.back()"
@@ -9,7 +9,8 @@
             Back
         </a>
         <div class="flex items-center gap-4">
-            <form method="post" action="/do_favourite" class="flex items-center">
+            <form method="post" action="/do_favourite" hx-post="/do_favourite" hx-target="#article-page"
+                hx-swap="morph:outerHTML" hx-vals='{"source": "{{source}}"}' class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <input type="hidden" name="starred" value="{{#unless is_starred}}true{{else}}false{{/unless}}" />
                 {{#if is_starred}}
@@ -22,7 +23,8 @@
                 </button>
                 {{/if}}
             </form>
-            <form method="post" action="/do_archive" class="flex items-center">
+            <form method="post" action="/do_archive" hx-post="/do_archive" hx-target="#article-page"
+                hx-swap="morph:outerHTML" hx-vals='{"source": "{{source}}"}' class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <input type="hidden" name="archived" value="{{#unless is_archived}}true{{else}}false{{/unless}}" />
                 {{#if is_archived}}
@@ -35,7 +37,8 @@
                 </button>
                 {{/if}}
             </form>
-            <form method="post" action="/do_delete" class="flex items-center">
+            <form method="post" action="/do_delete" hx-post="/do_delete" hx-target="#article-page"
+                hx-swap="morph:outerHTML" hx-vals='{"source": "{{source}}"}' class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <input type="hidden" name="back_location" value="/" />
                 <button type="submit" class="hover:scale-110" title="Delete">
