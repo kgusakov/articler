@@ -8,14 +8,17 @@ workspace = true
 
 [dependencies]
 result.workspace = true
+types.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 dom_smoothie = "0.15.0"
 dateparser = "0.2.1"
 reqwest = { version = "0.13.1", features = ["socks"] }
 url = { version = "2.5.7" }
+icu_segmenter = "2.1.2"
 
 [dev-dependencies]
+insta = "1.46.3"
 tokio.workspace = true
 wiremock = "0.6.5"
 

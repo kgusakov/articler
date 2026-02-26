@@ -3,6 +3,8 @@ use chrono::Utc;
 use dateparser::parse;
 use dom_smoothie::ReadabilityError;
 use dom_smoothie::{Article, CandidateSelectMode, Config, Readability};
+use icu_segmenter::WordSegmenter;
+use icu_segmenter::options::WordBreakInvariantOptions;
 use reqwest::Client;
 use reqwest::Proxy;
 use reqwest::header;
@@ -10,10 +12,12 @@ use reqwest::header::USER_AGENT;
 use std::ops::Deref;
 use std::time::Duration;
 use thiserror::Error;
+use types::ReadingTime;
 use url::Url;
 
 use result::ArticlerResult;
 
+const AVERAGE_READING_SPEED: i32 = 230;
 const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
 
 impl Scraper {
@@ -49,10 +53,12 @@ impl Scraper {
             return Ok(Document {
                 title: extract_title(url).to_owned(),
                 content_html: String::new(),
+                content_text: String::new(),
                 image_url: None,
                 mime_type,
                 language: None,
                 published_at: None,
+                reading_time: 0,
             });
         }
 
@@ -89,13 +95,19 @@ impl Scraper {
             extract_title(url).to_owned().clone_into(&mut title);
         }
 
+        let content_text = article.text_content.deref().to_owned();
+        // If i32 overflows - maybe you should read this article LATER
+        let reading_time = count_words(&content_text) as i32 / AVERAGE_READING_SPEED;
+
         Ok(Document {
             title,
             content_html: article.content.deref().to_owned(),
+            content_text,
             image_url,
             mime_type,
             language: article.lang,
             published_at,
+            reading_time,
         })
     }
 }
@@ -120,6 +132,16 @@ pub fn extract_title(url: &Url) -> &str {
     url.as_str()
 }
 
+fn count_words(text: &str) -> usize {
+    let segmenter = WordSegmenter::new_auto(WordBreakInvariantOptions::default());
+
+    segmenter
+        .segment_str(text)
+        .iter_with_word_type()
+        .filter(|(_, word_type)| word_type.is_word_like())
+        .count()
+}
+
 #[derive(Error, Debug)]
 enum ScraperError {
     #[error("Can't receive readable text from url {1}: {0:?}")]
@@ -134,10 +156,12 @@ pub struct Scraper {
 pub struct Document {
     pub title: String,
     pub content_html: String,
+    pub content_text: String,
     pub image_url: Option<Url>,
     pub mime_type: Option<String>,
     pub language: Option<String>,
     pub published_at: Option<DateTime<Utc>>,
+    pub reading_time: ReadingTime,
 }
 
 #[cfg(test)]
@@ -176,6 +200,7 @@ mod tests {
             content_html:
                 "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>"
                     .into(),
+            content_text: "Test Content\n        ".into(),
             image_url: Some(Url::parse("http://example.com/main.jpg").unwrap()),
             mime_type: Some("text/html".to_owned()),
             language: Some("en".to_owned()),
@@ -183,8 +208,54 @@ mod tests {
                 NaiveDateTime::parse_from_str("2020-11-24T02:43:22+00:00", "%Y-%m-%dT%H:%M:%S%:z")
                     .unwrap()
                     .and_utc()
-            )
+            ),
+            reading_time: 0
         }, document);
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn test_reading_time() {
+        let mock_server = MockServer::start().await;
+
+        let content = include_str!("../test_articles/joe_pass.html");
+
+        Mock::given(method("GET"))
+            .and(path("/test-article"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(content, "text/html"))
+            .mount(&mock_server)
+            .await;
+
+        let url = Url::parse(format!("{}/test-article", mock_server.uri()).as_str()).unwrap();
+
+        let scraper = Scraper::new(None).unwrap();
+
+        let document = scraper.extract(&url).await.unwrap();
+
+        insta::assert_snapshot!(document.title, @"Was Joe Pass a “Genius” of Jazz Guitar?");
+
+        insta::assert_snapshot!(document.content_html);
+
+        insta::assert_snapshot!(document.content_text);
+
+        insta::assert_snapshot!(document.reading_time, @"5");
+
+        // assert_eq!(Document {
+        //     title: "Test Title".to_owned(),
+        //     content_html:
+        //         "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>"
+        //             .into(),
+        //     content_text: "Test Content\n        ".into(),
+        //     image_url: Some(Url::parse("http://example.com/main.jpg").unwrap()),
+        //     mime_type: Some("text/html".to_owned()),
+        //     language: Some("en".to_owned()),
+        //     published_at: Some(
+        //         NaiveDateTime::parse_from_str("2020-11-24T02:43:22+00:00", "%Y-%m-%dT%H:%M:%S%:z")
+        //             .unwrap()
+        //             .and_utc()
+        //     ),
+        //     reading_time: 0
+        // }, document);
         mock_server.verify().await;
     }
 
@@ -278,5 +349,35 @@ mod tests {
             "127.0.0.1",
             extract_title(&Url::parse("http://127.0.0.1").unwrap())
         );
+    }
+
+    #[test]
+    fn test_count_words_english() {
+        let text = "Hello world. This is a test sentence.";
+        assert_eq!(7, super::count_words(text));
+    }
+
+    #[test]
+    fn test_count_words_german() {
+        let text = "Das ist ein Testartikel. Er enthält mehrere Sätze.";
+        assert_eq!(8, super::count_words(text));
+    }
+
+    #[test]
+    fn test_count_words_russian() {
+        let text = "Это тестовая статья. Она содержит несколько предложений.";
+        assert_eq!(7, super::count_words(text));
+    }
+
+    #[test]
+    fn test_count_words_chinese() {
+        let text = "这是一篇测试文章。它包含多个句子。";
+        assert_eq!(7, super::count_words(text));
+    }
+
+    #[test]
+    fn test_count_words_korean() {
+        let text = "이것은 테스트 기사입니다. 여러 문장이 포함되어 있습니다.";
+        assert_eq!(7, super::count_words(text));
     }
 }
