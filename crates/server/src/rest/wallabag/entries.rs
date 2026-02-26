@@ -4,7 +4,6 @@ use actix_web::{
     web::{self, Json, Query},
 };
 use chrono::Utc;
-use log::error;
 use slug::slugify;
 use url::Url;
 
@@ -13,7 +12,6 @@ use crate::{
     models::{Entry, Tag},
     rest::{UserInfo, wallabag::Id},
 };
-use article_scraper::extract_title;
 use db::repository::{entries, tags};
 use dto::{
     AddEntry, AddEntryResponse, DeleteEntryRequest, DeleteEntryResponse, Embedded, Entries,
@@ -45,7 +43,7 @@ pub(in crate::rest::wallabag) async fn post_entries(
         return Err(ErrorBadRequest(
             "Title and content fields is not supported yet",
         ));
-    };
+    }
 
     let document = data.scraper.extract_or_fallback(&add_entry.url).await;
 
@@ -549,7 +547,7 @@ mod dto {
                 updated_at: try_parse_timestamp(e.updated_at)?,
                 // TODO implement annotations support
                 annotations: vec![],
-                mimetype: e.mimetype.unwrap_or("".to_owned()),
+                mimetype: e.mimetype.unwrap_or(String::new()),
                 language: e.language,
                 reading_time: e.reading_time,
                 domain_name: e.domain_name,

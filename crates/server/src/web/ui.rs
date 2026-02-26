@@ -26,7 +26,6 @@ use crate::{
         },
     },
 };
-use article_scraper::extract_title;
 
 use dto::{
     AddArticleForm, ArchiveForm, ArticleContext, ArticleCounters, ArticleMetadata, ArticlesContext,

@@ -56,9 +56,8 @@ impl Scraper {
 
         let buf = response.bytes().await?;
 
-        let article = self
-            .extract_from_data(url, &String::from_utf8_lossy(&buf).into_owned())
-            .await?;
+        // Double article html allocation here. At the moment looks like no ways to remove it
+        let article = self.extract_from_data(url, &String::from_utf8_lossy(&buf))?;
 
         let image_url = match article.image {
             Some(u) => Url::parse(&u).ok(),
@@ -77,8 +76,7 @@ impl Scraper {
         }
 
         let content_text = article.text_content.deref().to_owned();
-        // If i32 overflows - maybe you should read this article LATER
-        let reading_time = count_words(&content_text) as i32 / AVERAGE_READING_SPEED;
+        let reading_time = i32::try_from(count_words(&content_text))? / AVERAGE_READING_SPEED;
 
         Ok(Document {
             title,
@@ -92,13 +90,13 @@ impl Scraper {
         })
     }
 
-    pub async fn extract_from_data(&self, url: &Url, data: &str) -> ArticlerResult<Article> {
+    pub fn extract_from_data(&self, url: &Url, data: &str) -> ArticlerResult<Article> {
         let cfg = Config {
             candidate_select_mode: CandidateSelectMode::DomSmoothie,
             ..Default::default()
         };
 
-        let mut readability = Readability::new(data.to_owned(), Some(url.as_str()), Some(cfg))?;
+        let mut readability = Readability::new(data, Some(url.as_str()), Some(cfg))?;
 
         Ok(readability
             .parse()
@@ -109,7 +107,7 @@ impl Scraper {
         match self.extract(url).await {
             Ok(document) => document,
             Err(err) => {
-                error!("Error while parsing url {}: {:?}", url, err);
+                error!("Error while parsing url {url}: {err:?}");
 
                 Document {
                     title: extract_title(url).to_owned(),

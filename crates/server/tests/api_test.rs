@@ -503,8 +503,6 @@ async fn post_entries_with_scraping_real_article(pool: SqlitePool) {
     insta::assert_snapshot!(result.get("title").unwrap());
     insta::assert_snapshot!(result.get("content").unwrap());
 
-    dbg!(&result.get("reading_time"));
-
     assert_eq!(url, result.get("url").unwrap().as_str().unwrap());
     assert_eq!(
         hash_url(&Url::parse(&url).unwrap()),
