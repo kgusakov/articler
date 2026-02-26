@@ -8,7 +8,7 @@ type BoxDynError = Box<dyn std::error::Error>;
 
 #[derive(Debug)]
 pub struct ArticlerError {
-    source: BoxDynError,
+    pub source: BoxDynError,
     #[allow(dead_code)]
     location: &'static Location<'static>,
 }

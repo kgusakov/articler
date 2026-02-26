@@ -480,28 +480,7 @@ async fn do_add(
         .parse()
         .map_err(ErrorInternalServerError)?;
 
-    let (title, content, mime_type, published_at, language, preview_picture) =
-        match app.scraper.extract(&url).await {
-            Ok(document) => (
-                document.title,
-                document.content_html,
-                document.mime_type.unwrap_or_default(),
-                document.published_at,
-                document.language,
-                document.image_url,
-            ),
-            Err(err) => {
-                log::error!("Error while parsing url {url}: {err:?}");
-                (
-                    extract_title(&url).to_owned(),
-                    String::new(),
-                    String::new(),
-                    None,
-                    None,
-                    None,
-                )
-            }
-        };
+    let document = app.scraper.extract_or_fallback(&url).await;
 
     let now = Utc::now().timestamp();
     let domain_name = url.domain().or(url.host_str()).unwrap_or("").to_owned();
@@ -512,21 +491,21 @@ async fn do_add(
         hashed_url: hash_url(&url),
         given_url: url.to_string(),
         hashed_given_url: hash_url(&url),
-        title,
-        content,
+        title: document.title,
+        content: document.content_html,
         is_archived: false,
         archived_at: None,
         is_starred: false,
         starred_at: None,
         created_at: now,
         updated_at: now,
-        mimetype: Some(mime_type),
-        language,
+        mimetype: document.mime_type,
+        language: document.language,
         reading_time: 0,
         domain_name,
-        preview_picture: preview_picture.map(|u| u.to_string()),
+        preview_picture: document.image_url.map(|u| u.to_string()),
         origin_url: None,
-        published_at: published_at.map(|v| v.timestamp()),
+        published_at: document.published_at.map(|v| v.timestamp()),
         published_by: None,
         is_public: None,
         uid: None,

@@ -5,6 +5,7 @@ use dom_smoothie::ReadabilityError;
 use dom_smoothie::{Article, CandidateSelectMode, Config, Readability};
 use icu_segmenter::WordSegmenter;
 use icu_segmenter::options::WordBreakInvariantOptions;
+use log::error;
 use reqwest::Client;
 use reqwest::Proxy;
 use reqwest::header;
@@ -50,34 +51,14 @@ impl Scraper {
         if let Some(m) = &mime_type
             && !m.contains("text/html")
         {
-            return Ok(Document {
-                title: extract_title(url).to_owned(),
-                content_html: String::new(),
-                content_text: String::new(),
-                image_url: None,
-                mime_type,
-                language: None,
-                published_at: None,
-                reading_time: 0,
-            });
+            return Err(ScraperError::MimeTypeNotSupported(m.to_owned(), url.clone()).into());
         }
 
         let buf = response.bytes().await?;
 
-        let cfg = Config {
-            candidate_select_mode: CandidateSelectMode::DomSmoothie,
-            ..Default::default()
-        };
-
-        let mut readability = Readability::new(
-            String::from_utf8_lossy(&buf).into_owned(),
-            Some(url.as_str()),
-            Some(cfg),
-        )?;
-
-        let article: Article = readability
-            .parse()
-            .map_err(|e| ScraperError::ArticleTextParsingError(e, url.clone()))?;
+        let article = self
+            .extract_from_data(url, &String::from_utf8_lossy(&buf).into_owned())
+            .await?;
 
         let image_url = match article.image {
             Some(u) => Url::parse(&u).ok(),
@@ -109,6 +90,39 @@ impl Scraper {
             published_at,
             reading_time,
         })
+    }
+
+    pub async fn extract_from_data(&self, url: &Url, data: &str) -> ArticlerResult<Article> {
+        let cfg = Config {
+            candidate_select_mode: CandidateSelectMode::DomSmoothie,
+            ..Default::default()
+        };
+
+        let mut readability = Readability::new(data.to_owned(), Some(url.as_str()), Some(cfg))?;
+
+        Ok(readability
+            .parse()
+            .map_err(|e| ScraperError::ArticleTextParsingError(e, url.clone()))?)
+    }
+
+    pub async fn extract_or_fallback(&self, url: &Url) -> Document {
+        match self.extract(url).await {
+            Ok(document) => document,
+            Err(err) => {
+                error!("Error while parsing url {}: {:?}", url, err);
+
+                Document {
+                    title: extract_title(url).to_owned(),
+                    content_html: String::new(),
+                    content_text: String::new(),
+                    image_url: None,
+                    mime_type: None,
+                    language: None,
+                    published_at: None,
+                    reading_time: 0,
+                }
+            }
+        }
     }
 }
 
@@ -146,6 +160,8 @@ fn count_words(text: &str) -> usize {
 enum ScraperError {
     #[error("Can't receive readable text from url {1}: {0:?}")]
     ArticleTextParsingError(ReadabilityError, Url),
+    #[error("Mime type {1} is not supported {0:?}")]
+    MimeTypeNotSupported(String, Url),
 }
 
 pub struct Scraper {
@@ -310,7 +326,35 @@ mod tests {
 
         let scraper = Scraper::new(None).unwrap();
 
-        let document = scraper.extract(&url).await.unwrap();
+        let document = scraper.extract(&url).await;
+
+        assert!(document.is_err());
+        assert_eq!(
+            format!("{}", document.err().unwrap().source),
+            format!(r#"Mime type {url} is not supported "application/pdf""#)
+        );
+
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn test_non_html_mime_type_with_fallback() {
+        let mock_server = MockServer::start().await;
+
+        let content = "no valid content";
+
+        Mock::given(method("GET"))
+            .and(path("/test-article/new.pdf"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(content, "application/pdf"))
+            .mount(&mock_server)
+            .await;
+
+        let url =
+            Url::parse(format!("{}/test-article/new.pdf", mock_server.uri()).as_str()).unwrap();
+
+        let scraper = Scraper::new(None).unwrap();
+
+        let document = scraper.extract_or_fallback(&url).await;
 
         assert_eq!("new.pdf", document.title);
         assert_eq!("", document.content_html);

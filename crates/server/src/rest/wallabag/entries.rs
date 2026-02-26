@@ -1,6 +1,6 @@
 use actix_web::{
     Either,
-    error::{ErrorInternalServerError, ErrorNotFound},
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     web::{self, Json, Query},
 };
 use chrono::Utc;
@@ -40,43 +40,14 @@ pub(in crate::rest::wallabag) async fn post_entries(
     // In both case if title and/or content is not set - both will be retrieved from the internet again
     let add_entry = request.into_inner();
 
-    let (title, content, mime_type, published_at, language, preview_picture) =
-        if let (Some(t), Some(c)) = (add_entry.title, add_entry.content) {
-            (
-                t,
-                c,
-                String::new(),
-                add_entry.published_at,
-                add_entry.language,
-                add_entry.preview_picture,
-            )
-        } else {
-            match data.scraper.extract(&add_entry.url).await {
-                Ok(document) => (
-                    document.title,
-                    document.content_html,
-                    document.mime_type.unwrap_or(String::new()),
-                    document.published_at,
-                    document.language,
-                    document.image_url,
-                ),
-                Err(err) => {
-                    error!("Error while parsing url {}: {:?}", add_entry.url, err);
-                    (
-                        // TODO abstraction is leaking here - we need to generalize handling of parsing errors
-                        extract_title(&add_entry.url).to_owned(),
-                        String::new(),
-                        String::new(),
-                        None,
-                        None,
-                        None,
-                    )
-                }
-            }
-        };
+    if let (Some(_), Some(_)) = (add_entry.title, add_entry.content) {
+        // TODO add support of receiving title and html to skip data crawling outside step
+        return Err(ErrorBadRequest(
+            "Title and content fields is not supported yet",
+        ));
+    };
 
-    // TODO must be calculated
-    let reading_time = 0;
+    let document = data.scraper.extract_or_fallback(&add_entry.url).await;
 
     let domain_name = add_entry.url.domain().or(add_entry.url.host_str());
 
@@ -84,6 +55,10 @@ pub(in crate::rest::wallabag) async fn post_entries(
 
     let archived = add_entry.archive.unwrap_or(false);
     let starred = add_entry.starred.unwrap_or(false);
+
+    let preview_picture = document.image_url.map(|u| u.to_string());
+
+    let published_at = document.published_at.map(|v| v.timestamp());
 
     // TODO can we remove all these ugly to_string?
     let create_entry = entries::CreateEntry {
@@ -93,21 +68,21 @@ pub(in crate::rest::wallabag) async fn post_entries(
         hashed_url: hash_url(&add_entry.url),
         given_url: add_entry.url.to_string(),
         hashed_given_url: hash_url(&add_entry.url),
-        title,
-        content,
+        title: document.title,
+        content: document.content_html,
         is_archived: archived,
         archived_at: if archived { Some(now) } else { None },
         is_starred: starred,
         starred_at: if starred { Some(now) } else { None },
         created_at: now,
         updated_at: now,
-        mimetype: Some(mime_type),
-        language,
-        reading_time,
+        mimetype: document.mime_type,
+        language: document.language,
+        reading_time: document.reading_time,
         domain_name: domain_name.unwrap_or("").to_owned(),
-        preview_picture: preview_picture.map(|u| u.to_string()),
+        preview_picture,
         origin_url: add_entry.origin_url,
-        published_at: published_at.map(|v| v.timestamp()),
+        published_at,
         published_by: add_entry.authors.map(|a| a.join(",")),
         is_public: add_entry.public,
         uid: add_entry.public.filter(|p| *p).map(|_b| generate_uid()),
@@ -574,7 +549,7 @@ mod dto {
                 updated_at: try_parse_timestamp(e.updated_at)?,
                 // TODO implement annotations support
                 annotations: vec![],
-                mimetype: e.mimetype,
+                mimetype: e.mimetype.unwrap_or("".to_owned()),
                 language: e.language,
                 reading_time: e.reading_time,
                 domain_name: e.domain_name,
@@ -660,6 +635,7 @@ mod dto {
     #[derive(Deserialize, PartialEq, Debug)]
     pub struct AddEntry {
         pub title: Option<String>,
+        /// Raw html content, not processed by readability yet
         pub content: Option<String>,
         #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
         pub tags: Option<Vec<String>>,

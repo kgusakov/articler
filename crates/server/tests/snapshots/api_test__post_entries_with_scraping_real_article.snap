@@ -1,0 +1,5 @@
+---
+source: crates/server/tests/api_test.rs
+expression: "result.get(\"title\").unwrap()"
+---
+"Was Joe Pass a “Genius” of Jazz Guitar?"

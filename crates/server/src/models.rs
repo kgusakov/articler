@@ -27,7 +27,7 @@ pub struct Entry {
     pub updated_at: DateTime<Utc>,
     // TODO implement annotations
     pub annotations: Vec<String>,
-    pub mimetype: Option<String>,
+    pub mimetype: String,
     pub language: Option<String>,
     pub reading_time: ReadingTime,
     pub domain_name: String,

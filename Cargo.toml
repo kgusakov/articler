@@ -26,6 +26,7 @@ serde_json = "1.0.145"
 serde_with = "3.16.1"
 log = "0.4.29"
 rand = "0.10.0"
+insta = "1.46.3"
 
 result = { path = "crates/result" }
 helpers = { path = "crates/helpers" }
