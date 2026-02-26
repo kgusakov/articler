@@ -543,7 +543,7 @@ pub struct CreateEntry {
     pub updated_at: Timestamp,
     pub mimetype: Option<String>,
     pub language: Option<String>,
-    pub reading_time: i32,
+    pub reading_time: ReadingTime,
     pub domain_name: String,
     pub preview_picture: Option<String>,
     pub origin_url: Option<String>,

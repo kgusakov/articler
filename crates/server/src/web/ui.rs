@@ -683,7 +683,7 @@ mod dto {
         },
     };
     use serde::{Deserialize, Serialize};
-    use types::Id;
+    use types::{Id, ReadingTime};
     use url::Url;
 
     use crate::web::dto::Client;
@@ -738,7 +738,7 @@ mod dto {
         pub content: String,
         pub domain: String,
         pub url: String,
-        pub reading_time: i32,
+        pub reading_time: ReadingTime,
         pub is_archived: bool,
         pub is_starred: bool,
         pub source: HxSource,
@@ -764,7 +764,7 @@ mod dto {
         pub title: String,
         pub image_url: Option<String>,
         pub domain: String,
-        pub reading_time: i32,
+        pub reading_time: ReadingTime,
         pub is_archived: bool,
         pub is_starred: bool,
     }

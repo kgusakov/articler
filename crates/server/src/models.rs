@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_with::{BoolFromInt, serde_as};
+use types::ReadingTime;
 use url::Url;
 
 type Id = i64;
@@ -28,7 +29,7 @@ pub struct Entry {
     pub annotations: Vec<String>,
     pub mimetype: Option<String>,
     pub language: Option<String>,
-    pub reading_time: i32,
+    pub reading_time: ReadingTime,
     pub domain_name: String,
     pub preview_picture: Option<Url>,
     pub origin_url: Option<Url>,
