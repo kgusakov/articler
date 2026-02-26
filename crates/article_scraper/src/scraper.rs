@@ -240,22 +240,6 @@ mod tests {
 
         insta::assert_snapshot!(document.reading_time, @"5");
 
-        // assert_eq!(Document {
-        //     title: "Test Title".to_owned(),
-        //     content_html:
-        //         "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>"
-        //             .into(),
-        //     content_text: "Test Content\n        ".into(),
-        //     image_url: Some(Url::parse("http://example.com/main.jpg").unwrap()),
-        //     mime_type: Some("text/html".to_owned()),
-        //     language: Some("en".to_owned()),
-        //     published_at: Some(
-        //         NaiveDateTime::parse_from_str("2020-11-24T02:43:22+00:00", "%Y-%m-%dT%H:%M:%S%:z")
-        //             .unwrap()
-        //             .and_utc()
-        //     ),
-        //     reading_time: 0
-        // }, document);
         mock_server.verify().await;
     }
 
