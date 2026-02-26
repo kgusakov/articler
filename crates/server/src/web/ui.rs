@@ -18,7 +18,6 @@ use url::Url;
 use crate::{
     app::AppState,
     auth::find_user,
-    scraper::extract_title,
     web::{
         dto::{Client, LoginForm},
         ui::dto::{
@@ -26,6 +25,7 @@ use crate::{
         },
     },
 };
+use article_scraper::extract_title;
 
 use dto::{
     AddArticleForm, ArchiveForm, ArticleContext, ArticleCounters, ArticleMetadata, ArticlesContext,

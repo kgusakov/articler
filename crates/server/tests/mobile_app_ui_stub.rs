@@ -10,11 +10,9 @@ use actix_web::{
     test,
     web::{self},
 };
+use article_scraper::Scraper;
 use regex::Regex;
-use server::{
-    app::{AppState, app, init_handlebars},
-    scraper::Scraper,
-};
+use server::app::{AppState, app, init_handlebars};
 use sqlx::SqlitePool;
 
 static INIT: Once = Once::new();

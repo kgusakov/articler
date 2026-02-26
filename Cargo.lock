@@ -394,6 +394,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "article_scraper"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dateparser",
+ "dom_smoothie",
+ "reqwest",
+ "result",
+ "thiserror 2.0.17",
+ "tokio",
+ "url",
+ "wiremock",
+]
+
+[[package]]
 name = "assert-json-diff"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3304,17 +3319,15 @@ dependencies = [
  "actix-web",
  "actix-web-httpauth",
  "actix-web-static-files",
+ "article_scraper",
  "chrono",
- "dateparser",
  "db",
- "dom_smoothie",
  "env_logger",
  "handlebars",
  "helpers",
  "log",
  "rand 0.9.2",
  "regex",
- "reqwest",
  "result",
  "rstest",
  "rstest_reuse",

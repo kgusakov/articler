@@ -8,11 +8,9 @@ use actix_web::{
     http::header,
     test, web,
 };
+use article_scraper::Scraper;
 use scraper::{Html, Selector};
-use server::{
-    app::{AppState, app, init_handlebars},
-    scraper::Scraper,
-};
+use server::app::{AppState, app, init_handlebars};
 use sqlx::SqlitePool;
 use std::{collections::HashSet, sync::Once};
 

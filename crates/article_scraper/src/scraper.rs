@@ -151,7 +151,7 @@ mod tests {
 
     use crate::scraper::{Document, Scraper, extract_title};
 
-    #[actix_web::test]
+    #[tokio::test]
     async fn test_success() {
         let mock_server = MockServer::start().await;
 
@@ -188,7 +188,7 @@ mod tests {
         mock_server.verify().await;
     }
 
-    #[actix_web::test]
+    #[tokio::test]
     async fn test_relative_image() {
         let mock_server = MockServer::start().await;
 
@@ -212,7 +212,7 @@ mod tests {
         mock_server.verify().await;
     }
 
-    #[actix_web::test]
+    #[tokio::test]
     async fn test_empty_title() {
         let mock_server = MockServer::start().await;
 
@@ -238,7 +238,7 @@ mod tests {
         mock_server.verify().await;
     }
 
-    #[actix_web::test]
+    #[tokio::test]
     async fn test_non_html_mime_type() {
         let mock_server = MockServer::start().await;
 

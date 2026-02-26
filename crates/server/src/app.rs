@@ -11,7 +11,8 @@ use actix_web_static_files::ResourceFiles;
 use handlebars::{Handlebars, TemplateError};
 use sqlx::{Pool, Sqlite};
 
-use crate::{scraper::Scraper, token_storage::TokenStorage};
+use crate::token_storage::TokenStorage;
+use article_scraper::Scraper;
 use db::repository;
 
 #[expect(clippy::module_name_repetitions)]

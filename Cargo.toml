@@ -6,6 +6,7 @@ members = [
     "crates/db",
     "crates/server",
     "crates/cli",
+    "crates/article_scraper",
 ]
 
 [workspace.package]
@@ -29,6 +30,7 @@ helpers = { path = "crates/helpers" }
 db = { path = "crates/db" }
 server = { path = "crates/server" }
 cli = { path = "crates/cli" }
+article_scraper = { path = "crates/article_scraper" }
 
 [profile.release]
 strip = true

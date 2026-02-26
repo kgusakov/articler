@@ -12,8 +12,8 @@ use crate::{
     app::AppState,
     models::{Entry, Tag},
     rest::{UserInfo, wallabag::Id},
-    scraper::extract_title,
 };
+use article_scraper::extract_title;
 use db::repository::{entries, tags};
 use dto::{
     AddEntry, AddEntryResponse, DeleteEntryRequest, DeleteEntryResponse, Embedded, Entries,
@@ -332,33 +332,35 @@ pub(in crate::rest::wallabag) async fn post_entry_tags(
     let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
 
     // TODO dirty design - looks like we need entry repository method for it
-    let result: actix_web::Result<Json<Entry>> = if entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
-        .await?
-        .is_some()
-    {
-        let full_tags: Vec<tags::CreateTag> = request
-            .into_inner()
-            .labels
-            .into_iter()
-            .map(|l| tags::CreateTag {
-                user_id: user_info.user_id,
-                slug: slugify(&l),
-                label: l,
-            })
-            .collect();
-
-        tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags).await?;
-
-        let (entry_row, tag_rows) = entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
+    let result: actix_web::Result<Json<Entry>> =
+        if entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
             .await?
-            .ok_or(ErrorNotFound("Entry not found"))?;
+            .is_some()
+        {
+            let full_tags: Vec<tags::CreateTag> = request
+                .into_inner()
+                .labels
+                .into_iter()
+                .map(|l| tags::CreateTag {
+                    user_id: user_info.user_id,
+                    slug: slugify(&l),
+                    label: l,
+                })
+                .collect();
 
-        let entry_tags = tag_rows.into_iter().map(Tag::from).collect();
+            tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags)
+                .await?;
 
-        Ok(Json(Entry::try_from((entry_row, entry_tags))?))
-    } else {
-        Err(ErrorNotFound("Entry not found"))
-    };
+            let (entry_row, tag_rows) = entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
+                .await?
+                .ok_or(ErrorNotFound("Entry not found"))?;
+
+            let entry_tags = tag_rows.into_iter().map(Tag::from).collect();
+
+            Ok(Json(Entry::try_from((entry_row, entry_tags))?))
+        } else {
+            Err(ErrorNotFound("Entry not found"))
+        };
 
     tx.commit().await.map_err(ErrorInternalServerError)?;
 

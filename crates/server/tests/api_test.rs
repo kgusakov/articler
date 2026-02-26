@@ -10,6 +10,7 @@ use actix_web::{
     web::{self},
 };
 
+use article_scraper::Scraper;
 use chrono::{DateTime, Utc};
 use db::repository::entries;
 use helpers::hash_url;
@@ -17,10 +18,7 @@ use rstest::rstest;
 use rstest_reuse::apply;
 use serde_json::{Value, json};
 use serde_json_assert::{assert_json_eq, assert_json_include};
-use server::{
-    app::{AppState, app, init_handlebars},
-    scraper::Scraper,
-};
+use server::app::{AppState, app, init_handlebars};
 use sqlx::SqlitePool;
 use url::Url;
 use wiremock::{
