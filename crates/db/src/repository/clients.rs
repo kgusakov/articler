@@ -2,7 +2,8 @@ use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
 use result::ArticlerResult;
 
-use super::{CLIENTS_TABLE, Db, Id, Timestamp};
+use super::{CLIENTS_TABLE, Db, Timestamp};
+use types::Id;
 
 pub async fn create<'c, C>(
     conn: C,

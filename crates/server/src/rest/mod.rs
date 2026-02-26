@@ -1,4 +1,4 @@
-use db::repository::Id;
+use types::Id;
 
 pub mod oauth;
 pub mod wallabag;

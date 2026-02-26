@@ -15,6 +15,7 @@ result.workspace = true
 db.workspace = true
 helpers.workspace = true
 article_scraper.workspace = true
+types.workspace = true
 sqlx.workspace = true
 actix-web.workspace = true
 actix-web-httpauth = "0.8.2"

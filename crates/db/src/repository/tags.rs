@@ -3,8 +3,9 @@ use sqlx::{FromRow, QueryBuilder, Row, sqlite::SqliteRow};
 use result::ArticlerResult;
 
 use super::{
-    Db, DbErrorType, ENTRIES_TABLE, ENTRIES_TAG_TABLE, Id, SQLITE_LIMIT_VARIABLE_NUMBER, TAGS_TABLE,
+    Db, DbErrorType, ENTRIES_TABLE, ENTRIES_TAG_TABLE, SQLITE_LIMIT_VARIABLE_NUMBER, TAGS_TABLE,
 };
+use types::Id;
 
 /* Return Vec of tags, which was linked to entry_id. Vec consists of ALL tags, even tags, which was already linked before and included in tags argument. */
 pub async fn create_and_link<'c, C>(

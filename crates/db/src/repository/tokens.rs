@@ -1,7 +1,8 @@
 use result::ArticlerResult;
 use sqlx::{prelude::*, sqlite::SqliteRow};
 
-use crate::repository::{Db, Id, TOKENS_TABLE, Timestamp};
+use crate::repository::{Db, TOKENS_TABLE, Timestamp};
+use types::Id;
 
 pub async fn create<'c, C>(
     conn: C,

@@ -9,9 +9,8 @@ use sqlx::{
 
 use result::ArticlerResult;
 
-use super::{
-    Db, DbErrorType, ENTRIES_TABLE, ENTRIES_TAG_TABLE, Id, ReadingTime, TAGS_TABLE, Timestamp,
-};
+use super::{Db, DbErrorType, ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE, Timestamp};
+use types::{Id, ReadingTime};
 
 pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
 

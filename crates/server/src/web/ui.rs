@@ -8,11 +8,12 @@ use actix_web::{
 };
 use chrono::Utc;
 use db::repository::{
-    Db, Id, clients,
+    Db, clients,
     entries::{self, FindParams, SortOrder, UpdateEntry},
 };
 use helpers::{generate_client_id, generate_client_secret, hash_url};
 use sqlx::{Acquire, SqlitePool};
+use types::Id;
 use url::Url;
 
 use crate::{
@@ -677,32 +678,33 @@ mod dto {
     use db::{
         ArticlerResult,
         repository::{
-            self, Db, Id,
+            Db,
             entries::{self, EntryRow, FindParams},
         },
     };
     use serde::{Deserialize, Serialize};
+    use types::Id;
     use url::Url;
 
     use crate::web::dto::Client;
 
     #[derive(Deserialize)]
     pub struct DeleteForm {
-        pub article_id: repository::Id,
+        pub article_id: Id,
         pub back_location: Option<String>,
         pub source: Option<HxSource>,
     }
 
     #[derive(Deserialize)]
     pub struct ArchiveForm {
-        pub article_id: repository::Id,
+        pub article_id: Id,
         pub archived: bool,
         pub source: Option<HxSource>,
     }
 
     #[derive(Deserialize)]
     pub struct FavouriteForm {
-        pub article_id: repository::Id,
+        pub article_id: Id,
         pub starred: bool,
         pub source: Option<HxSource>,
     }
@@ -758,7 +760,7 @@ mod dto {
 
     #[derive(Serialize)]
     pub struct ArticleMetadata {
-        pub id: repository::Id,
+        pub id: Id,
         pub title: String,
         pub image_url: Option<String>,
         pub domain: String,

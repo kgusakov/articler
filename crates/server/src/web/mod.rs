@@ -18,8 +18,9 @@ pub fn routes(cfg: &mut web::ServiceConfig, cookie_key: Key) {
 }
 
 mod dto {
-    use db::repository::{Id, clients::ClientRow};
+    use db::repository::clients::ClientRow;
     use serde::{Deserialize, Serialize};
+    use types::Id;
 
     #[derive(Serialize)]
     pub struct Client {
