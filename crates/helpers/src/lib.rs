@@ -4,7 +4,8 @@ use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
     password_hash::{PasswordHashString, SaltString, rand_core::OsRng},
 };
-use rand::{Rng, distr::Alphanumeric};
+use rand::RngExt;
+use rand::distr::Alphanumeric;
 use sha1::{Digest, Sha1};
 use url::Url;
 
