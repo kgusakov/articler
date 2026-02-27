@@ -501,7 +501,7 @@ async fn do_add(
         updated_at: now,
         mimetype: document.mime_type,
         language: document.language,
-        reading_time: 0,
+        reading_time: document.reading_time,
         domain_name,
         preview_picture: document.image_url.map(|u| u.to_string()),
         origin_url: None,

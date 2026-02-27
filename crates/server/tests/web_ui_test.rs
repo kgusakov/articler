@@ -913,8 +913,7 @@ async fn article_page_unarchived_unstarred(pool: SqlitePool) {
     assert_eq!(domain_text, "a.com");
     assert_eq!(domain_href, "https://a.com/1");
 
-    // TODO replace by actual html path searching
-    assert!(content.contains("8 min read"));
+    assert_eq!(helpers::find_reading_time(content), Some(8));
 
     let (_, fav_icon) = helpers::find_favourite_icons_by_article(content)
         .into_iter()
@@ -966,7 +965,7 @@ async fn article_page_archived_starred(pool: SqlitePool) {
     assert_eq!(domain_text, "d.com");
     assert_eq!(domain_href, "https://d.com/4");
 
-    assert!(content.contains("15 min read"));
+    assert_eq!(helpers::find_reading_time(content), Some(15));
 
     let (_, fav_icon) = helpers::find_favourite_icons_by_article(content)
         .into_iter()
@@ -1304,7 +1303,7 @@ async fn do_add(pool: SqlitePool) {
 
     let mock_server = wiremock::MockServer::start().await;
 
-    let content = r#"<!DOCTYPE html><html lang="en"><head><title>Scraped Article Title</title></head><body><p>Article body content</p></body></html>"#;
+    let content = include_str!("articles/joe_pass.html");
 
     wiremock::Mock::given(wiremock::matchers::method("GET"))
         .and(wiremock::matchers::path("/test-article"))
@@ -1336,13 +1335,18 @@ async fn do_add(pool: SqlitePool) {
     assert_eq!(resp.status(), StatusCode::OK);
 
     let body = test::read_body(resp).await;
-    let page_content = str::from_utf8(&body).unwrap();
+    let content = str::from_utf8(&body).unwrap();
 
-    let titles = helpers::find_article_titles(page_content);
+    let titles = helpers::find_article_titles(content);
 
     assert!(
-        titles.contains(&"Scraped Article Title".to_owned()),
+        titles.contains(&"Was Joe Pass a “Genius” of Jazz Guitar?".to_owned()),
         "Expected 'Scraped Article Title' in {titles:?}"
+    );
+
+    assert_eq!(
+        helpers::find_reading_time_by_title(content, "Was Joe Pass a “Genius” of Jazz Guitar?"),
+        Some(5)
     );
 }
 
@@ -1480,6 +1484,7 @@ async fn login(
 
 mod helpers {
     use scraper::{Html, Selector};
+    use types::ReadingTime;
 
     pub fn find_article_titles(content: &str) -> Vec<String> {
         let document = Html::parse_document(content);
@@ -1651,6 +1656,49 @@ mod helpers {
                 Some((name, client_id, client_secret))
             })
             .collect()
+    }
+
+    /// Returns the reading time in minutes for a specific article by title (from listing page).
+    pub fn find_reading_time_by_title(content: &str, title: &str) -> Option<ReadingTime> {
+        let document = Html::parse_document(content);
+
+        let article_sel = Selector::parse("article").unwrap();
+        for article in document.select(&article_sel) {
+            let title_sel = Selector::parse("h3").unwrap();
+            let article_title = article
+                .select(&title_sel)
+                .next()?
+                .text()
+                .collect::<String>();
+
+            if article_title == title {
+                let div_sel = Selector::parse("div.text-xs.text-muted").unwrap();
+                let div = article.select(&div_sel).next()?;
+                let span_sel = Selector::parse("span").unwrap();
+                let spans: Vec<_> = div.select(&span_sel).collect();
+
+                if let Some(last_span) = spans.last() {
+                    let text = last_span.text().collect::<String>();
+                    return text.trim().split(' ').next().and_then(|s| s.parse().ok());
+                }
+            }
+        }
+        None
+    }
+
+    /// Returns the reading time in minutes from the article detail page.
+    pub fn find_reading_time(content: &str) -> Option<i32> {
+        let document = Html::parse_document(content);
+        let div_sel = Selector::parse("div.text-sm.text-muted").unwrap();
+        let div = document.select(&div_sel).next()?;
+        let span_sel = Selector::parse("span").unwrap();
+        let spans: Vec<_> = div.select(&span_sel).collect();
+
+        if let Some(last_span) = spans.last() {
+            let text = last_span.text().collect::<String>();
+            return text.trim().split(' ').next().and_then(|s| s.parse().ok());
+        }
+        None
     }
 
     /// Returns the client id values from all client delete forms in the page.
