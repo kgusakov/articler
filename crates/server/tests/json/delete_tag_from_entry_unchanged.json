@@ -4,7 +4,7 @@
     "given_url": "https://b.com/g2",
     "hashed_given_url": "ghash2",
     "title": "title2",
-    "content": "content2",
+    "content": "<span>content2</span>",
     "is_archived": 1,
     "archived_at": "2023-12-05T14:40:00Z",
     "is_starred": 0,

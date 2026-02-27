@@ -20,6 +20,7 @@ use serde_json::{Value, json};
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use server::app::{AppState, app, init_handlebars};
 use sqlx::SqlitePool;
+use types::Id;
 use url::Url;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
@@ -393,7 +394,7 @@ async fn post_entries_json_data(f: &str, #[ignore] pool: SqlitePool) {
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
 async fn post_entries_with_scraping_needed(pool: SqlitePool) {
-    let app = init_app(pool).await;
+    let app = init_app(pool.clone()).await;
 
     let mock_server = MockServer::start().await;
     let base_server_uri = mock_server.uri();
@@ -457,11 +458,22 @@ async fn post_entries_with_scraping_needed(pool: SqlitePool) {
         actual: result,
         expected: expected
     );
+
+    let id: Id = result.get("id").unwrap().as_i64().unwrap();
+    assert_eq!(
+        entries::find_by_id(&pool, 1, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .0
+            .content_text,
+        "Test Content\n        "
+    );
 }
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
 async fn post_entries_with_scraping_real_article(pool: SqlitePool) {
-    let app = init_app(pool).await;
+    let app = init_app(pool.clone()).await;
 
     let mock_server = MockServer::start().await;
     let base_server_uri = mock_server.uri();
@@ -502,6 +514,16 @@ async fn post_entries_with_scraping_real_article(pool: SqlitePool) {
 
     insta::assert_snapshot!(result.get("title").unwrap());
     insta::assert_snapshot!(result.get("content").unwrap());
+
+    let id: Id = result.get("id").unwrap().as_i64().unwrap();
+    insta::assert_snapshot!(
+        entries::find_by_id(&pool, 1, id)
+            .await
+            .unwrap()
+            .unwrap()
+            .0
+            .content_text
+    );
 
     assert_eq!(url, result.get("url").unwrap().as_str().unwrap());
     assert_eq!(

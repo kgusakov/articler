@@ -244,11 +244,11 @@ where
     let id: i64 = sqlx::query_scalar(
         r"
         INSERT INTO entries (
-            user_id, url, hashed_url, given_url, hashed_given_url, title, content, is_archived, archived_at,
+            user_id, url, hashed_url, given_url, hashed_given_url, title, content, content_text, is_archived, archived_at,
             is_starred, starred_at, created_at, updated_at, mimetype,
             language, reading_time, domain_name, preview_picture,
             origin_url, published_at, published_by, is_public, uid
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
         ",
     )
@@ -259,6 +259,7 @@ where
     .bind(entry.hashed_given_url)
     .bind(entry.title)
     .bind(entry.content)
+    .bind(entry.content_text)
     .bind(entry.is_archived)
     .bind(entry.archived_at)
     .bind(entry.is_starred)
@@ -477,6 +478,7 @@ pub struct EntryRow {
     pub hashed_given_url: Option<String>,
     pub title: String,
     pub content: String,
+    pub content_text: String,
     pub is_archived: bool,
     pub archived_at: Option<Timestamp>,
     pub is_starred: bool,
@@ -506,6 +508,7 @@ impl<'r> sqlx::FromRow<'r, SqliteRow> for EntryRow {
             hashed_given_url: row.try_get("hashed_given_url")?,
             title: row.try_get("title")?,
             content: row.try_get("content")?,
+            content_text: row.try_get("content_text")?,
             is_archived: row.try_get("is_archived")?,
             archived_at: row.try_get("archived_at")?,
             is_starred: row.try_get("is_starred")?,
@@ -535,6 +538,7 @@ pub struct CreateEntry {
     pub hashed_given_url: String,
     pub title: String,
     pub content: String,
+    pub content_text: String,
     pub is_archived: bool,
     pub archived_at: Option<Timestamp>,
     pub is_starred: bool,
@@ -788,7 +792,8 @@ mod tests {
                 given_url: Some("https://a.com/g1".to_owned()),
                 hashed_given_url: Some("ghash1".to_owned()),
                 title: "title1".to_owned(),
-                content: "content1".to_owned(),
+                content: "<span>content1</span>".to_owned(),
+                content_text: "content1".to_owned(),
                 is_archived: false,
                 archived_at: None,
                 is_starred: false,
@@ -881,6 +886,7 @@ mod tests {
                 hashed_given_url: Some("ghash1".to_owned()),
                 title: "new title".to_owned(),
                 content: "new content".to_owned(),
+                content_text: "content1".to_owned(),
                 is_archived: true,
                 archived_at: Some(1_702_000_000),
                 is_starred: true,
@@ -933,7 +939,8 @@ mod tests {
                 given_url: Some("https://a.com/g1".to_owned()),
                 hashed_given_url: Some("ghash1".to_owned()),
                 title: "only title changed".to_owned(),
-                content: "content1".to_owned(),
+                content: "<span>content1</span>".to_owned(),
+                content_text: "content1".to_owned(),
                 is_archived: false,
                 archived_at: None,
                 is_starred: false,

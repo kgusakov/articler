@@ -4,7 +4,7 @@
     "given_url": "https://a.com/g1",
     "hashed_given_url": "ghash1",
     "title": "title1",
-    "content": "content1",
+    "content": "<span>content1</span>",
     "is_archived": 0,
     "archived_at": null,
     "is_starred": 0,

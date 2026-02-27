@@ -68,6 +68,7 @@ pub(in crate::rest::wallabag) async fn post_entries(
         hashed_given_url: hash_url(&add_entry.url),
         title: document.title,
         content: document.content_html,
+        content_text: document.content_text,
         is_archived: archived,
         archived_at: if archived { Some(now) } else { None },
         is_starred: starred,

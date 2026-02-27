@@ -492,6 +492,7 @@ async fn do_add(
         hashed_given_url: hash_url(&url),
         title: document.title,
         content: document.content_html,
+        content_text: document.content_text,
         is_archived: false,
         archived_at: None,
         is_starred: false,
