@@ -1,7 +1,8 @@
 <main id="article-page" class="lg:min-w-3xl max-w-3xl mx-auto px-4 md:px-8 pt-6 lg:pt-[76px] pb-8 lg:pb-12">
     <!-- Top bar -->
     <div class="flex items-center justify-between mb-8">
-        <a href="javascript:history.back()"
+        <a href="{{#if back_location}}{{back_location}}{{else}}javascript:history.back(){{/if}}"
+            {{#if back_location}}hx-boost="true"{{/if}}
             class="flex items-center gap-2 text-sm text-muted hover:text-primary transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />

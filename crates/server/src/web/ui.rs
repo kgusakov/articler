@@ -60,6 +60,7 @@ async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
         &Page {
             nav_partial: None,
             main_partial: "login".to_owned(),
+            back_location: None,
         },
     ) {
         Ok(rendered) => HttpResponse::Ok()
@@ -84,6 +85,7 @@ async fn clients(session: Session, app: web::Data<AppState>) -> actix_web::Resul
                 page: Page {
                     nav_partial: Some("navigation".to_owned()),
                     main_partial: "clients".to_owned(),
+                    back_location: None,
                 },
             },
         ) {
@@ -109,6 +111,7 @@ async fn article(
     session: Session,
     app: web::Data<AppState>,
     id: web::Path<Id>,
+    req: HttpRequest,
 ) -> actix_web::Result<HttpResponse> {
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
         if let Some((article, _)) = entries::find_by_id(&app.pool, user_id, id.into_inner()).await?
@@ -128,6 +131,7 @@ async fn article(
                 page: Page {
                     nav_partial: Some("navigation".to_owned()),
                     main_partial: "article".to_owned(),
+                    back_location: Some(referer_or_root(&req)),
                 },
             };
 
@@ -255,6 +259,7 @@ async fn main(
         page: Page {
             nav_partial: Some("navigation".to_owned()),
             main_partial: "main".to_owned(),
+            back_location: None,
         },
         articles: articles_metadata,
         counters: ArticleCounters::load(&mut *tx, user_id).await?,
@@ -767,6 +772,7 @@ mod dto {
     pub struct Page {
         pub nav_partial: Option<String>,
         pub main_partial: String,
+        pub back_location: Option<String>,
     }
 
     #[derive(Serialize)]
