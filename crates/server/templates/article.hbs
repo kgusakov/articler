@@ -37,6 +37,12 @@
                 </button>
                 {{/if}}
             </form>
+            <button type="button" class="hover:scale-110 transition-transform" title="Edit title" _="on click toggle .hidden on #title-input-form
+                   toggle .hidden on #title-text
+                   if not #title-input-form.classList.contains('hidden')
+                      then call #title-input.focus()">
+                <img src="/static/images/Edit.svg" alt="Edit" />
+            </button>
             <form method="post" action="/do_delete" hx-post="/do_delete" hx-target="#article-page"
                 hx-swap="morph:outerHTML" hx-vals='{"source": "{{source}}"}' class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
@@ -50,8 +56,17 @@
     </div>
 
     <!-- Article header -->
-    <h1 class="text-3xl lg:text-4xl font-bold leading-tight mb-4">{{title}}</h1>
-    <div class="flex items-center gap-2 text-sm text-muted mb-8 pb-8 border-b border-border">
+    <h1 class="text-3xl lg:text-4xl font-bold leading-tight mb-4">
+        <span id="title-text">{{title}}</span>
+
+        <form id="title-input-form" post="/do_edit" hx-post="/do_edit" class="hidden w-full">
+            <input type="hidden" name="article_id" value="{{id}}" />
+            <input id="title-input" type="text" name="title" value="{{title}}"
+                class="w-full text-3xl lg:text-4xl font-bold border-b-2 border-primary focus:outline-none" _="on keyup[key=='Enter'] call htmx.trigger(#title-input-form, 'submit')
+                   on blur call htmx.trigger(#title-input-form, 'submit')" />
+        </form>
+    </h1>
+    <div class=" flex items-center gap-2 text-sm text-muted mb-8 pb-8 border-b border-border">
         <a href="{{url}}" target="_blank" rel="noopener noreferrer"
             class="hover:text-primary transition-colors underline">{{domain}}</a>
         <span>&middot;</span>
