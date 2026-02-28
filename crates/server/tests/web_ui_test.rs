@@ -1341,12 +1341,172 @@ async fn do_add(pool: SqlitePool) {
 
     assert!(
         titles.contains(&"Was Joe Pass a “Genius” of Jazz Guitar?".to_owned()),
-        "Expected 'Scraped Article Title' in {titles:?}"
+        "Expected 'Was Joe Pass a “Genius” of Jazz Guitar?' in {titles:?}"
     );
 
     assert_eq!(
         helpers::find_reading_time_by_title(content, "Was Joe Pass a “Genius” of Jazz Guitar?"),
         Some(5)
+    );
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_edit_title(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/article/1")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    assert_eq!(
+        helpers::find_article_title(content),
+        Some("title1".to_owned())
+    );
+
+    let req = test::TestRequest::post()
+        .uri("/do_edit_title")
+        .cookie(cookie.clone())
+        .set_form([("article_id", "1"), ("title", "Updated Title")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
+
+    let req = test::TestRequest::get()
+        .uri("/article/1")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    assert_eq!(
+        helpers::find_article_title(content),
+        Some("Updated Title".to_owned())
+    );
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_edit_title_htmx(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    assert_eq!(
+        helpers::find_article_title_by_id(content, "1"),
+        Some("title1".to_owned())
+    );
+
+    let req = test::TestRequest::post()
+        .uri("/do_edit_title")
+        .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
+        .insert_header((header::REFERER, "/"))
+        .set_form([("article_id", "1"), ("title", "HTMX Updated Title")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(resp.headers().get(header::LOCATION).is_none());
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    assert!(content.contains("HTMX Updated Title"));
+
+    let req = test::TestRequest::get()
+        .uri("/")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    assert_eq!(
+        helpers::find_article_title_by_id(content, "1"),
+        Some("HTMX Updated Title".to_owned())
+    );
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn do_edit_title_htmx_from_article_page(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/article/1")
+        .cookie(cookie.clone())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    assert_eq!(
+        helpers::find_article_title(content),
+        Some("title1".to_owned())
+    );
+
+    let req = test::TestRequest::post()
+        .uri("/do_edit_title")
+        .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
+        .insert_header((header::REFERER, "/article/1"))
+        .set_form([
+            ("article_id", "1"),
+            ("title", "Article Page Updated Title"),
+            ("source", "article"),
+        ])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(resp.headers().get(header::LOCATION).is_none());
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    assert_eq!(
+        helpers::find_article_title(content),
+        Some("Article Page Updated Title".to_owned())
+    );
+
+    let req = test::TestRequest::get()
+        .uri("/article/1")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+    assert_eq!(
+        helpers::find_article_title(content),
+        Some("Article Page Updated Title".to_owned())
     );
 }
 
@@ -1716,5 +1876,27 @@ mod helpers {
                     .map(std::borrow::ToOwned::to_owned)
             })
             .collect()
+    }
+
+    pub fn find_article_title_by_id(content: &str, article_id: &str) -> Option<String> {
+        let document = Html::parse_document(content);
+        let article_sel = Selector::parse("article").unwrap();
+
+        for article in document.select(&article_sel) {
+            let input_sel = Selector::parse(r#"input[name="article_id"]"#).unwrap();
+            let id_value = article
+                .select(&input_sel)
+                .next()
+                .and_then(|input| input.value().attr("value"))?;
+
+            if id_value == article_id {
+                let title_sel = Selector::parse("h3").unwrap();
+                return article
+                    .select(&title_sel)
+                    .next()
+                    .map(|el| el.text().collect::<String>());
+            }
+        }
+        None
     }
 }

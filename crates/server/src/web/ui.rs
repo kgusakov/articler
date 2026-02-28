@@ -22,7 +22,8 @@ use crate::{
     web::{
         dto::{Client, LoginForm},
         ui::dto::{
-            HxSource, PartialArticleContext, PartialArticlesContext, PartialCategoriesContext,
+            EditArticleTitleForm, HxSource, PartialArticleContext, PartialArticlesContext,
+            PartialCategoriesContext,
         },
     },
 };
@@ -47,6 +48,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/do_archive", post().to(do_archive))
         .route("/do_favourite", post().to(do_favourite))
         .route("/do_delete", post().to(do_delete))
+        .route("/do_edit_title", post().to(do_edit_title))
         .route("/add", post().to(do_add))
         .route("/partial/categories", get().to(partial_categories))
         .route("/partial/articles/{category}", get().to(partial_articles));
@@ -537,6 +539,36 @@ pub(in crate::web) async fn do_login(
     }
 }
 
+async fn do_edit_title(
+    session: Session,
+    req: HttpRequest,
+    app: web::Data<AppState>,
+    form: web::Form<EditArticleTitleForm>,
+) -> actix_web::Result<impl Responder> {
+    let user_id = check_user_id(&session)?;
+
+    let form = form.into_inner();
+
+    let update = UpdateEntry {
+        title: Some(Some(form.title)),
+        ..Default::default()
+    };
+
+    entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
+
+    if is_htmx_request(&req) {
+        if let Some(HxSource::Article) = form.source {
+            render_article(&app, &app.pool, user_id, form.article_id).await
+        } else {
+            render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
+        }
+    } else {
+        Ok(HttpResponse::SeeOther()
+            .append_header((header::LOCATION, referer_or_root(&req)))
+            .finish())
+    }
+}
+
 fn check_user_id(session: &Session) -> Result<i64, actix_web::Error> {
     session
         .get("user_id")
@@ -872,5 +904,12 @@ mod dto {
     #[serde(rename_all = "lowercase")]
     pub enum HxSource {
         Article,
+    }
+
+    #[derive(Deserialize)]
+    pub struct EditArticleTitleForm {
+        pub article_id: Id,
+        pub title: String,
+        pub source: Option<HxSource>,
     }
 }
