@@ -1,4 +1,4 @@
-<main class="flex-1 flex items-center justify-center px-4 py-12">
+<main class="flex-1 flex lg:items-center items-start justify-center px-4 py-12">
     <div
         class="px-10 pt-10 pb-12 bg-white rounded-xl shadow-[0px_10px_24px_4px_rgba(91,107,134,0.12)] inline-flex flex-col justify-center items-center overflow-hidden">
         <div class="mb-10">
@@ -6,17 +6,18 @@
         </div>
 
         <form action="/do_login" method="post" class="flex flex-col items-center gap-6 self-center" id="main-form">
-            <div class="w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
+            <div
+                class="w-80 sm:w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
                 <img src="/static/images/Profile.svg" alt="Profile" />
                 <input type="text" id="main-login" name="_username" autocomplete="username" required
                     class="flex-1 text-Token-Grey_2 text-base font-normal font-sans leading-6 outline-none bg-transparent"
                     placeholder="Login" />
             </div>
 
-            <div class="w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
+            <div
+                class="w-80 sm:w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
                 <img src="/static/images/Password.svg" alt="Password" />
-                <input type="password" id="main-password" name="_password" autocomplete="current-password"
-                    required
+                <input type="password" id="main-password" name="_password" autocomplete="current-password" required
                     class="flex-1 text-Token-Grey_2 text-base font-normal font-sans leading-6 outline-none bg-transparent"
                     placeholder="Password" />
             </div>
