@@ -1760,7 +1760,7 @@ mod helpers {
     pub fn find_article_title(content: &str) -> Option<String> {
         let document = Html::parse_document(content);
         document
-            .select(&Selector::parse("h1").unwrap())
+            .select(&Selector::parse("#title-text").unwrap())
             .next()
             .map(|el| el.text().collect::<String>())
     }
