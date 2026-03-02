@@ -5,7 +5,7 @@ use std::ops::Deref;
 use thiserror::Error;
 use url::Url;
 
-use crate::{ArticleMimeType, Document, reading_time};
+use crate::{ArticleMimeType, Document, extract_title, helpers::reading_time};
 
 pub struct HtmlExtractor {}
 
@@ -35,7 +35,7 @@ impl HtmlExtractor {
         let mut title = article.title;
 
         if title.is_empty() {
-            extract_title(url).to_owned().clone_into(&mut title);
+            extract_title(url).clone_into(&mut title);
         }
 
         let content_text = article.text_content.deref().to_owned();
@@ -52,25 +52,6 @@ impl HtmlExtractor {
             reading_time,
         })
     }
-}
-
-fn extract_title(url: &Url) -> &str {
-    if let Some(mut segments) = url.path_segments()
-        && let Some(last) = segments.next_back()
-        && !last.is_empty()
-    {
-        return last;
-    }
-
-    if let Some(domain) = url.domain() {
-        return domain;
-    }
-
-    if let Some(host) = url.host_str() {
-        return host;
-    }
-
-    url.as_str()
 }
 
 #[derive(Error, Debug)]

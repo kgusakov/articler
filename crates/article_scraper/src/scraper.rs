@@ -1,6 +1,3 @@
-use dom_smoothie::ReadabilityError;
-use icu_segmenter::WordSegmenter;
-use icu_segmenter::options::WordBreakInvariantOptions;
 use log::error;
 use reqwest::Client;
 use reqwest::Proxy;
@@ -15,8 +12,8 @@ use result::ArticlerResult;
 use crate::ArticleMimeType;
 use crate::Document;
 use crate::html::HtmlExtractor;
+use crate::pdf::PdfExtractor;
 
-const AVERAGE_READING_SPEED: i32 = 230;
 const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
 
 impl Scraper {
@@ -44,25 +41,21 @@ impl Scraper {
         let mime_type = response
             .headers()
             .get(header::CONTENT_TYPE)
-            .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
-            .unwrap_or(ArticleMimeType::Html.to_string());
+            .map_or(ArticleMimeType::Html.to_string(), |v| {
+                String::from_utf8_lossy(v.as_bytes()).to_string()
+            });
 
         let Some(mime_type) = ArticleMimeType::from(&mime_type) else {
             return Err(
-                ScraperError::MimeTypeNotSupported(mime_type.to_owned(), url.clone()).into(),
+                ScraperError::MimeTypeNotSupported(mime_type.clone(), url.clone()).into(),
             );
         };
 
+        // TODO need to rethink this code pattern
         match mime_type {
-            ArticleMimeType::Html => {
-                HtmlExtractor::extract(&url, &String::from_utf8_lossy(&response.bytes().await?))
-            }
+            ArticleMimeType::Html => HtmlExtractor::extract(url, &response.text().await?),
 
-            ArticleMimeType::Pdf => Err(ScraperError::MimeTypeNotSupported(
-                ArticleMimeType::Pdf.to_string(),
-                url.clone(),
-            )
-            .into()),
+            ArticleMimeType::Pdf => Ok(PdfExtractor::extract(url, &response.bytes().await?)),
         }
     }
 
@@ -107,20 +100,8 @@ pub fn extract_title(url: &Url) -> &str {
     url.as_str()
 }
 
-fn count_words(text: &str) -> usize {
-    let segmenter = WordSegmenter::new_auto(WordBreakInvariantOptions::default());
-
-    segmenter
-        .segment_str(text)
-        .iter_with_word_type()
-        .filter(|(_, word_type)| word_type.is_word_like())
-        .count()
-}
-
 #[derive(Error, Debug)]
 enum ScraperError {
-    #[error("Can't receive readable text from url {1}: {0:?}")]
-    ArticleTextParsingError(ReadabilityError, Url),
     #[error("Mime type {1} is not supported {0:?}")]
     MimeTypeNotSupported(String, Url),
 }
@@ -259,19 +240,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_non_html_mime_type() {
+    async fn test_unsupported_mime_type() {
         let mock_server = MockServer::start().await;
 
-        let content = "no valid content";
-
         Mock::given(method("GET"))
-            .and(path("/test-article/new.pdf"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(content, "application/pdf"))
+            .and(path("/test-article/file.zip"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw("data", "application/octet-stream"),
+            )
             .mount(&mock_server)
             .await;
 
         let url =
-            Url::parse(format!("{}/test-article/new.pdf", mock_server.uri()).as_str()).unwrap();
+            Url::parse(format!("{}/test-article/file.zip", mock_server.uri()).as_str()).unwrap();
 
         let scraper = Scraper::new(None).unwrap();
 
@@ -280,21 +261,51 @@ mod tests {
         assert!(document.is_err());
         assert_eq!(
             format!("{}", document.err().unwrap().source),
-            format!(r#"Mime type {url} is not supported "application/pdf""#)
+            format!(r#"Mime type {url} is not supported "application/octet-stream""#)
         );
 
         mock_server.verify().await;
     }
 
     #[tokio::test]
-    async fn test_non_html_mime_type_with_fallback() {
+    async fn test_pdf_extraction() {
         let mock_server = MockServer::start().await;
 
-        let content = "no valid content";
+        let pdf_bytes = include_bytes!("../test_articles/2310.11703v2.pdf");
+
+        Mock::given(method("GET"))
+            .and(path("/papers/2310.11703v2.pdf"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw(pdf_bytes.as_slice(), "application/pdf"),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let url =
+            Url::parse(format!("{}/papers/2310.11703v2.pdf", mock_server.uri()).as_str()).unwrap();
+
+        let scraper = Scraper::new(None).unwrap();
+
+        let document = scraper.extract(&url).await.unwrap();
+
+        insta::assert_snapshot!(document.title, @"A Comprehensive Survey on Vector Database: Storage and Retrieval Technique, Challenge");
+        assert_eq!("", document.content_html);
+        insta::assert_snapshot!(document.content_text);
+        assert_eq!(Some("application/pdf".to_owned()), document.mime_type);
+        insta::assert_snapshot!(document.reading_time, @"6");
+
+        mock_server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn test_pdf_fallback_on_invalid_data() {
+        let mock_server = MockServer::start().await;
 
         Mock::given(method("GET"))
             .and(path("/test-article/new.pdf"))
-            .respond_with(ResponseTemplate::new(200).set_body_raw(content, "application/pdf"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_raw("not a valid pdf", "application/pdf"),
+            )
             .mount(&mock_server)
             .await;
 
@@ -305,7 +316,8 @@ mod tests {
 
         let document = scraper.extract_or_fallback(&url).await;
 
-        assert_eq!("new.pdf", document.title);
+        assert_eq!("new", document.title);
+        assert_eq!(Some("application/pdf".to_owned()), document.mime_type);
         assert_eq!("", document.content_html);
         mock_server.verify().await;
     }
@@ -326,35 +338,5 @@ mod tests {
             "127.0.0.1",
             extract_title(&Url::parse("http://127.0.0.1").unwrap())
         );
-    }
-
-    #[test]
-    fn test_count_words_english() {
-        let text = "Hello world. This is a test sentence.";
-        assert_eq!(7, super::count_words(text));
-    }
-
-    #[test]
-    fn test_count_words_german() {
-        let text = "Das ist ein Testartikel. Er enthält mehrere Sätze.";
-        assert_eq!(8, super::count_words(text));
-    }
-
-    #[test]
-    fn test_count_words_russian() {
-        let text = "Это тестовая статья. Она содержит несколько предложений.";
-        assert_eq!(7, super::count_words(text));
-    }
-
-    #[test]
-    fn test_count_words_chinese() {
-        let text = "这是一篇测试文章。它包含多个句子。";
-        assert_eq!(7, super::count_words(text));
-    }
-
-    #[test]
-    fn test_count_words_korean() {
-        let text = "이것은 테스트 기사입니다. 여러 문장이 포함되어 있습니다.";
-        assert_eq!(7, super::count_words(text));
     }
 }
