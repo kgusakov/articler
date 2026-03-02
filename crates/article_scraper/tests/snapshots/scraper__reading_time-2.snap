@@ -1,5 +1,5 @@
 ---
-source: crates/article_scraper/src/scraper.rs
+source: crates/article_scraper/tests/scraper.rs
 expression: document.content_html
 ---
 <div id="readability-page-1" class="page"><div>
