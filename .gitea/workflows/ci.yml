@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ "*" ]
 
+env:
+  TAILWIND_REBUILD: 1
+  TAILWIND_BIN: tailwindcss
+
 jobs:
   check:
     name: Check
@@ -19,4 +23,4 @@ jobs:
       - name: Run cargo udeps
         run: cargo +nightly udeps --all-targets
       - name: Run cargo test
-        run: TAILWIND_REBUILD=1 TAILWIND_BIN="tailwindcss" RUST_LOG=actix_web=debug,sqlx=debug CI=true cargo test
+        run: cargo test
