@@ -1,8 +1,4 @@
-use chrono::DateTime;
-use chrono::Utc;
-use dateparser::parse;
 use dom_smoothie::ReadabilityError;
-use dom_smoothie::{Article, CandidateSelectMode, Config, Readability};
 use icu_segmenter::WordSegmenter;
 use icu_segmenter::options::WordBreakInvariantOptions;
 use log::error;
@@ -10,13 +6,15 @@ use reqwest::Client;
 use reqwest::Proxy;
 use reqwest::header;
 use reqwest::header::USER_AGENT;
-use std::ops::Deref;
 use std::time::Duration;
 use thiserror::Error;
-use types::ReadingTime;
 use url::Url;
 
 use result::ArticlerResult;
+
+use crate::ArticleMimeType;
+use crate::Document;
+use crate::html::HtmlExtractor;
 
 const AVERAGE_READING_SPEED: i32 = 230;
 const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
@@ -46,61 +44,26 @@ impl Scraper {
         let mime_type = response
             .headers()
             .get(header::CONTENT_TYPE)
-            .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string());
+            .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
+            .unwrap_or(ArticleMimeType::Html.to_string());
 
-        if let Some(m) = &mime_type
-            && !m.contains("text/html")
-        {
-            return Err(ScraperError::MimeTypeNotSupported(m.to_owned(), url.clone()).into());
+        let Some(mime_type) = ArticleMimeType::from(&mime_type) else {
+            return Err(
+                ScraperError::MimeTypeNotSupported(mime_type.to_owned(), url.clone()).into(),
+            );
+        };
+
+        match mime_type {
+            ArticleMimeType::Html => {
+                HtmlExtractor::extract(&url, &String::from_utf8_lossy(&response.bytes().await?))
+            }
+
+            ArticleMimeType::Pdf => Err(ScraperError::MimeTypeNotSupported(
+                ArticleMimeType::Pdf.to_string(),
+                url.clone(),
+            )
+            .into()),
         }
-
-        let buf = response.bytes().await?;
-
-        // Double article html allocation here. At the moment looks like no ways to remove it
-        let article = self.extract_from_data(url, &String::from_utf8_lossy(&buf))?;
-
-        let image_url = match article.image {
-            Some(u) => Url::parse(&u).ok(),
-            _ => None,
-        };
-
-        let published_at = match article.published_time {
-            Some(t) => parse(&t).ok(),
-            None => None,
-        };
-
-        let mut title = article.title;
-
-        if title.is_empty() {
-            extract_title(url).to_owned().clone_into(&mut title);
-        }
-
-        let content_text = article.text_content.deref().to_owned();
-        let reading_time = i32::try_from(count_words(&content_text))? / AVERAGE_READING_SPEED;
-
-        Ok(Document {
-            title,
-            content_html: article.content.deref().to_owned(),
-            content_text,
-            image_url,
-            mime_type,
-            language: article.lang,
-            published_at,
-            reading_time,
-        })
-    }
-
-    pub fn extract_from_data(&self, url: &Url, data: &str) -> ArticlerResult<Article> {
-        let cfg = Config {
-            candidate_select_mode: CandidateSelectMode::DomSmoothie,
-            ..Default::default()
-        };
-
-        let mut readability = Readability::new(data, Some(url.as_str()), Some(cfg))?;
-
-        Ok(readability
-            .parse()
-            .map_err(|e| ScraperError::ArticleTextParsingError(e, url.clone()))?)
     }
 
     pub async fn extract_or_fallback(&self, url: &Url) -> Document {
@@ -164,18 +127,6 @@ enum ScraperError {
 
 pub struct Scraper {
     client: Client,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Document {
-    pub title: String,
-    pub content_html: String,
-    pub content_text: String,
-    pub image_url: Option<Url>,
-    pub mime_type: Option<String>,
-    pub language: Option<String>,
-    pub published_at: Option<DateTime<Utc>>,
-    pub reading_time: ReadingTime,
 }
 
 #[cfg(test)]
