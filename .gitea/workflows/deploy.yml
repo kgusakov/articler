@@ -22,7 +22,7 @@ jobs:
           abuild-keygen -n -a
           cp /root/.abuild/*.rsa.pub /etc/apk/keys/
           abuild -F checksum
-          abuild -r -F
+          abuild -F
       - uses: actions/upload-artifact@v3
         with:
           name: articler
