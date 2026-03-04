@@ -5,7 +5,7 @@ use wiremock::{
     matchers::{method, path},
 };
 
-use article_scraper::{Document, Scraper};
+use article_scraper::{Document, Scraper, error::Error};
 
 #[tokio::test]
 async fn test_success() {
@@ -143,10 +143,14 @@ async fn test_unsupported_mime_type() {
 
     let document = scraper.extract(&url).await;
 
-    assert!(document.is_err());
+    let err = document.unwrap_err();
+    assert!(matches!(
+        &err,
+        Error::MimeTypeNotSupported { mime_type, .. } if mime_type == "application/octet-stream"
+    ));
     assert_eq!(
-        format!("{}", document.err().unwrap().source),
-        format!(r#"Mime type {url} is not supported "application/octet-stream""#)
+        err.to_string(),
+        "Mime type is not supported: application/octet-stream"
     );
 
     mock_server.verify().await;

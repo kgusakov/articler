@@ -1,9 +1,13 @@
 use mupdf::{MetadataName, TextPageOptions};
-use result::ArticlerResult;
+use snafu::ResultExt;
 use std::path::Path;
 use url::Url;
 
-use crate::{ArticleMimeType, Document, helpers::reading_time};
+use crate::{
+    ArticleMimeType, Document,
+    error::{PdfContentParsingSnafu, PdfTitleFromMetadataSnafu, Result},
+    helpers::reading_time,
+};
 
 pub struct PdfExtractor {}
 
@@ -133,8 +137,10 @@ fn get_pdf_title(url: &Url, doc: &mupdf::Document) -> Option<String> {
     filename.and_then(|f| f.to_str().map(ToOwned::to_owned))
 }
 
-fn extract_title_from_metadata(doc: &mupdf::Document) -> ArticlerResult<Option<String>> {
-    let title = doc.metadata(MetadataName::Title)?;
+fn extract_title_from_metadata(doc: &mupdf::Document) -> Result<Option<String>> {
+    let title = doc
+        .metadata(MetadataName::Title)
+        .context(PdfTitleFromMetadataSnafu)?;
 
     if title.trim().is_empty() {
         Ok(None)
@@ -143,10 +149,12 @@ fn extract_title_from_metadata(doc: &mupdf::Document) -> ArticlerResult<Option<S
     }
 }
 
-fn extract_title_from_content(doc: &mupdf::Document) -> ArticlerResult<Option<String>> {
-    let first_page = doc.load_page(0)?;
+fn extract_title_from_content(doc: &mupdf::Document) -> Result<Option<String>> {
+    let first_page = doc.load_page(0).context(PdfContentParsingSnafu)?;
 
-    let text_page = first_page.to_text_page(TextPageOptions::empty())?;
+    let text_page = first_page
+        .to_text_page(TextPageOptions::empty())
+        .context(PdfContentParsingSnafu)?;
 
     let mut blocks: Vec<(String, f32)> = Vec::new();
     let mut max_font_size: f32 = 0.0;
@@ -249,8 +257,8 @@ fn looks_like_valid_title(text: &str) -> bool {
     true
 }
 
-fn extract_raw_text(doc: &mupdf::Document) -> ArticlerResult<Option<String>> {
-    let pages = doc.pages()?;
+fn extract_raw_text(doc: &mupdf::Document) -> Result<Option<String>> {
+    let pages = doc.pages().context(PdfContentParsingSnafu)?;
 
     let mut text = String::new();
 

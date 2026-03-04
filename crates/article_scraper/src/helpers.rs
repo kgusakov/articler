@@ -1,11 +1,15 @@
+use crate::error::{self, Result};
 use icu_segmenter::{WordSegmenter, options::WordBreakInvariantOptions};
-use result::ArticlerResult;
+use snafu::ResultExt;
 use types::ReadingTime;
 
 const AVERAGE_READING_SPEED: i32 = 230;
 
-pub fn reading_time(text: &str) -> ArticlerResult<ReadingTime> {
-    Ok(i32::try_from(count_words(text))? / AVERAGE_READING_SPEED)
+pub fn reading_time(text: &str) -> Result<ReadingTime> {
+    Ok(
+        i32::try_from(count_words(text)).context(error::WordCountOverflowSnafu)?
+            / AVERAGE_READING_SPEED,
+    )
 }
 
 fn count_words(text: &str) -> usize {

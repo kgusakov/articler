@@ -12,6 +12,7 @@ types.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 log.workspace = true
+snafu.workspace = true
 dom_smoothie = "0.15.0"
 dateparser = "0.2.1"
 reqwest = { version = "0.13.1", features = ["socks"] }

@@ -1,3 +1,4 @@
+pub mod error;
 mod helpers;
 mod html;
 mod pdf;

@@ -3,40 +3,44 @@ use reqwest::Client;
 use reqwest::Proxy;
 use reqwest::header;
 use reqwest::header::USER_AGENT;
+use snafu::ResultExt;
 use std::time::Duration;
-use thiserror::Error;
 use url::Url;
-
-use result::ArticlerResult;
 
 use crate::ArticleMimeType;
 use crate::Document;
+use crate::error::HttpClientInitSnafu;
+use crate::error::HttpRequestSnafu;
+use crate::error::HttpResponseParsingSnafu;
+use crate::error::MimeTypeNotSupportedSnafu;
+use crate::error::Result;
 use crate::html::HtmlExtractor;
 use crate::pdf::PdfExtractor;
 
 const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36";
 
 impl Scraper {
-    pub fn new(proxy_scheme: Option<&str>) -> ArticlerResult<Self> {
+    pub fn new(proxy_scheme: Option<&str>) -> Result<Self> {
         let mut builder = Client::builder();
 
         if let Some(p) = proxy_scheme {
-            builder = builder.proxy(Proxy::all(p)?);
+            builder = builder.proxy(Proxy::all(p).context(HttpClientInitSnafu)?);
         }
 
         Ok(Self {
-            client: builder.build()?,
+            client: builder.build().context(HttpClientInitSnafu)?,
         })
     }
 
-    pub async fn extract(&self, url: &Url) -> ArticlerResult<Document> {
+    pub async fn extract(&self, url: &Url) -> Result<Document> {
         let response = self
             .client
             .get(url.as_str())
             .header(USER_AGENT, USER_AGENT_VALUE)
             .timeout(Duration::from_secs(30))
             .send()
-            .await?;
+            .await
+            .context(HttpRequestSnafu)?;
 
         let mime_type = response
             .headers()
@@ -46,14 +50,20 @@ impl Scraper {
             });
 
         let Some(mime_type) = ArticleMimeType::from(&mime_type) else {
-            return Err(ScraperError::MimeTypeNotSupported(mime_type.clone(), url.clone()).into());
+            return MimeTypeNotSupportedSnafu { mime_type }.fail();
         };
 
         // TODO need to rethink this code pattern
         match mime_type {
-            ArticleMimeType::Html => HtmlExtractor::extract(url, &response.text().await?),
+            ArticleMimeType::Html => HtmlExtractor::extract(
+                url,
+                &response.text().await.context(HttpResponseParsingSnafu)?,
+            ),
 
-            ArticleMimeType::Pdf => Ok(PdfExtractor::extract(url, &response.bytes().await?)),
+            ArticleMimeType::Pdf => Ok(PdfExtractor::extract(
+                url,
+                &response.bytes().await.context(HttpResponseParsingSnafu)?,
+            )),
         }
     }
 
@@ -96,12 +106,6 @@ pub fn extract_title(url: &Url) -> &str {
     }
 
     url.as_str()
-}
-
-#[derive(Error, Debug)]
-enum ScraperError {
-    #[error("Mime type {1} is not supported {0:?}")]
-    MimeTypeNotSupported(String, Url),
 }
 
 pub struct Scraper {

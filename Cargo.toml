@@ -30,6 +30,7 @@ serde_with = "3.16.1"
 log = "0.4.29"
 rand = "0.10.0"
 insta = "1.46.3"
+snafu = "0.9.0"
 
 result = { path = "crates/result" }
 helpers = { path = "crates/helpers" }
