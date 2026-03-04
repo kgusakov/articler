@@ -9,8 +9,9 @@ use slug::slugify;
 use url::Url;
 
 use crate::{
+    UserInfo,
     models::{Entry, Tag},
-    rest::{UserInfo, wallabag::Id},
+    wallabag::Id,
 };
 use db::repository::{entries, tags};
 use dto::{
@@ -21,11 +22,11 @@ use helpers::{generate_uid, hash_url};
 use result::ArticlerError;
 
 // TODO current implementation needed only for mobile app healthchecks. Needed full implementation
-pub(in crate::rest::wallabag) async fn exists() -> actix_web::Result<Json<Exists>> {
+pub(crate) async fn exists() -> actix_web::Result<Json<Exists>> {
     Ok(Json(Exists { exists: false }))
 }
 
-pub(in crate::rest::wallabag) async fn post_entries(
+pub(crate) async fn post_entries(
     data: web::Data<AppState>,
     request: Either<web::Json<AddEntry>, web::Form<AddEntry>>,
     user_info: UserInfo,
@@ -124,7 +125,7 @@ pub(in crate::rest::wallabag) async fn post_entries(
     }))
 }
 
-pub(in crate::rest::wallabag) async fn entries(
+pub(crate) async fn entries(
     data: web::Data<AppState>,
     request: Query<EntriesRequest>,
     user_info: UserInfo,
@@ -190,7 +191,7 @@ pub(in crate::rest::wallabag) async fn entries(
     }))
 }
 
-pub(in crate::rest::wallabag) async fn get_tags_by_entry(
+pub(crate) async fn get_tags_by_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
     user_info: UserInfo,
@@ -216,7 +217,7 @@ pub(in crate::rest::wallabag) async fn get_tags_by_entry(
     result
 }
 
-pub(in crate::rest::wallabag) async fn delete_tag_from_entry(
+pub(crate) async fn delete_tag_from_entry(
     data: web::Data<AppState>,
     ids: web::Path<(Id, Id)>,
     user_info: UserInfo,
@@ -235,7 +236,6 @@ pub(in crate::rest::wallabag) async fn delete_tag_from_entry(
 
             Ok(Json(Entry::try_from((entry_row, tags))?))
         } else {
-            // Due to transactions - entry couldn't be deleted here
             Err(ErrorInternalServerError("Unknown error"))
         }
     } else {
@@ -247,7 +247,7 @@ pub(in crate::rest::wallabag) async fn delete_tag_from_entry(
     result
 }
 
-pub(in crate::rest::wallabag) async fn delete_entry(
+pub(crate) async fn delete_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
     request: Query<DeleteEntryRequest>,
@@ -295,7 +295,7 @@ pub(in crate::rest::wallabag) async fn delete_entry(
 }
 
 // TODO implement Either based version for Json input data also
-pub(in crate::rest::wallabag) async fn post_entry_tags(
+pub(crate) async fn post_entry_tags(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
     request: web::Form<EntryTags>,
@@ -341,7 +341,7 @@ pub(in crate::rest::wallabag) async fn post_entry_tags(
     result
 }
 
-pub(in crate::rest::wallabag) async fn patch_entry(
+pub(crate) async fn patch_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<i64>,
     request: Either<web::Json<UpdateEntry>, web::Form<UpdateEntry>>,

@@ -3819,13 +3819,10 @@ dependencies = [
 name = "server"
 version = "0.1.0"
 dependencies = [
- "actix-cors",
  "actix-http",
  "actix-service",
  "actix-session",
- "actix-utils",
  "actix-web",
- "actix-web-httpauth",
  "actix-web-static-files",
  "app_state",
  "article_scraper",
@@ -3845,14 +3842,12 @@ dependencies = [
  "serde",
  "serde-json-assert",
  "serde_json",
- "serde_with",
- "slug",
  "sqlx",
  "static-files 0.3.1",
- "thiserror 2.0.17",
  "tokio",
  "types",
  "url",
+ "wallabag_api",
  "wiremock",
 ]
 
@@ -4762,6 +4757,31 @@ checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
 dependencies = [
  "same-file",
  "winapi-util",
+]
+
+[[package]]
+name = "wallabag_api"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-http",
+ "actix-utils",
+ "actix-web",
+ "actix-web-httpauth",
+ "app_state",
+ "article_scraper",
+ "chrono",
+ "db",
+ "helpers",
+ "result",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "slug",
+ "sqlx",
+ "thiserror 2.0.17",
+ "types",
+ "url",
 ]
 
 [[package]]

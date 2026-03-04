@@ -108,7 +108,35 @@ Database layer with repository modules for data access:
   - No traits - just pure async functions
 - Re-exports `ArticlerError` and `ArticlerResult` from `result` crate for convenience
 
-#### Crate: `server` (`crates/server/`, formerly `api`)
+#### Crate: `types` (`crates/types/`)
+Shared type aliases used across crates (zero dependencies):
+- `Id = i64`: Type alias for entity IDs
+- `ReadingTime = i32`: Type alias for reading time estimates
+
+#### Crate: `token_storage` (`crates/token_storage/`)
+Hybrid OAuth token storage (in-memory + database-backed):
+- `TokenStorage`: Thread-safe token manager with `Mutex`
+- `Claim`: Token payload with `user_id` and `client_id`
+- `NewToken`: Generated token response (access_token, expires_in, refresh_token)
+- Access tokens: in-memory with 1-hour expiration
+- Refresh tokens: database-backed with 30-day expiration, persistent across server restarts
+- Automatic garbage collection of expired tokens
+
+#### Crate: `article_scraper` (`crates/article_scraper/`)
+Web content extraction from HTML and PDF documents:
+- `Scraper`: HTTP client with optional proxy support (`ALL_PROXY`)
+- `Document`: Extracted article data (title, content_html, content_text, image_url, mime_type, language, published_at, reading_time)
+- `extract()`: Fetches and parses a URL into a `Document`
+- `extract_or_fallback()`: Gracefully handles errors with minimal fallback data
+- Sub-modules: `html` (HtmlExtractor via `dom_smoothie`), `pdf` (PdfExtractor via `mupdf`), `helpers`
+
+#### Crate: `app_state` (`crates/app_state/`)
+Shared application state container for Actix-web:
+- `AppState`: Holds database pool, token storage, scraper, and Handlebars instance
+- `AppState::new(pool, scraper, handlebars)`: Factory constructor
+- Re-exports `Claim`, `NewToken`, `TokenStorage` from `token_storage` crate
+
+#### Crate: `server` (`crates/server/`)
 HTTP/API layer with the main binary and web interface:
 
 1. **Binary** (`src/main.rs`):
@@ -140,39 +168,27 @@ HTTP/API layer with the main binary and web interface:
 5. **Authentication** (`src/auth.rs`):
    - `find_user()`: User authentication with password verification
 
-6. **Application State** (`src/app.rs`):
-   - `AppState`: Holds database pool, token storage, scraper, and Handlebars instance
+6. **Application Setup** (`src/app.rs`):
    - `app()`: Creates Actix-web application with routes and static file serving
    - `http_server()`: Initializes HTTP server with cookie key for sessions
-   - `app_state_init()`: Factory function for `AppState`
    - `init_handlebars()`: Registers Handlebars templates and partials
 
-7. **Token Storage** (`src/token_storage.rs`):
-   - Hybrid OAuth token storage (in-memory + database-backed)
-   - Access tokens: in-memory with 1-hour expiration
-   - Refresh tokens: database-backed with 30-day expiration, persistent across server restarts
-   - Automatic cleanup of expired tokens
-
-8. **Scraper** (`src/scraper.rs`):
-   - Web scraping functionality for article content
-   - Uses `dom_smoothie` and `reqwest`
-
-9. **Templating** (`templates/`):
+7. **Templating** (`templates/`):
     - Handlebars templates for the web UI, compiled into binary via `include_str!`
     - `index.hbs`: Main layout template with partial inclusion
     - `login.hbs`: Login form partial
     - `main.hbs`: Article listing partial
     - `navigation.hbs`: Navigation bar partial with counters
 
-10. **Static Assets** (`static/`):
+8. **Static Assets** (`static/`):
     - SVG icons for the web UI (All, Archived, Delete, FavoriteOff, FavoriteOn, Logo, MarkRead, MarkUnRead, Profile, Search, Settings, Tagged)
     - Embedded into binary at build time via `actix-web-static-files` and `build.rs`
     - Served at `/static/` path
 
-11. **Build Script** (`build.rs`):
+9. **Build Script** (`build.rs`):
     - Uses `static-files` crate to generate embedded static resources from `./static` directory
 
-12. **Tests** (`tests/`):
+10. **Tests** (`tests/`):
     - Integration tests with fixtures and expected JSON responses
     - Uses `sqlx::test` macro with migrations from workspace root
 
@@ -198,7 +214,7 @@ The API layer converts between:
 - **Module-based functions**: Database access through standalone async functions instead of traits
 - **Direct pool passing**: Functions accept `&SqlitePool` or `impl Executor<'_, Database = Db>`
 - **Type conversions**: Clean separation between database types and API types using `From`/`TryFrom`
-- **Shared state**: `AppState` holds shared resources (pool, token storage, scraper, handlebars)
+- **Shared state**: `AppState` (in `app_state` crate) holds shared resources (pool, token storage, scraper, handlebars)
 - **Embedded assets**: Static files and templates compiled into the binary for single-binary deployment
 - **Session-based auth**: Web UI uses cookie sessions via `actix-session`; REST API uses OAuth tokens
 

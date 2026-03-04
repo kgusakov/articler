@@ -17,14 +17,13 @@ use sqlx::{Acquire, SqlitePool};
 use types::Id;
 use url::Url;
 
-use crate::{
-    auth::find_user,
-    web::{
-        dto::{Client, LoginForm},
-        ui::dto::{
-            EditArticleTitleForm, HxSource, PartialArticleContext, PartialArticlesContext,
-            PartialCategoriesContext,
-        },
+use wallabag_api::auth::find_user;
+
+use crate::web::{
+    dto::{Client, LoginForm},
+    ui::dto::{
+        EditArticleTitleForm, HxSource, PartialArticleContext, PartialArticlesContext,
+        PartialCategoriesContext,
     },
 };
 

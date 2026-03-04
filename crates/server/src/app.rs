@@ -30,8 +30,8 @@ pub fn app(
     App::new()
         .app_data(app_data)
         .wrap(Logger::default())
-        .configure(crate::rest::oauth::routes)
-        .configure(crate::rest::wallabag::routes)
+        .configure(wallabag_api::oauth::routes)
+        .configure(wallabag_api::wallabag::routes)
         .service(ResourceFiles::new("/static", generated))
         .configure(|cfg| crate::web::routes(cfg, cookie_key))
 }

@@ -1,8 +1,8 @@
 mod entries;
 mod tags;
 
-use crate::rest::UserInfo;
-use crate::rest::wallabag::entries::exists;
+use crate::UserInfo;
+use crate::wallabag::entries::exists;
 use actix_cors::Cors;
 use actix_utils::future::{Ready, ready};
 use actix_web::FromRequest;

@@ -8,7 +8,7 @@ use actix_web::{
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use app_state::AppState;
 
-use crate::{auth::find_user, rest::UserInfo};
+use crate::{UserInfo, auth::find_user};
 use db::repository::clients;
 use dto::{GetToken, OauthError, Token};
 
@@ -160,7 +160,7 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
     }))
 }
 
-pub(in crate::rest) async fn auth_extractor(
+pub(crate) async fn auth_extractor(
     req: ServiceRequest,
     credentials: Option<BearerAuth>,
 ) -> Result<ServiceRequest, (Error, ServiceRequest)> {

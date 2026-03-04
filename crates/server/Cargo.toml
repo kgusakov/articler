@@ -17,28 +17,23 @@ app_state.workspace = true
 helpers.workspace = true
 article_scraper.workspace = true
 types.workspace = true
+wallabag_api.workspace = true
 sqlx.workspace = true
 actix-web.workspace = true
-actix-web-httpauth = "0.8.2"
 actix-session = { version = "0.11.0", features = ["cookie-session"] }
 actix-http = "3.11.2"
 actix-service = "2.0.3"
-actix-utils = "3.0.1"
 serde.workspace = true
 serde_json.workspace = true
-serde_with.workspace = true
 chrono.workspace = true
 tokio.workspace = true
 log.workspace = true
-thiserror.workspace = true
 url.workspace = true
 rand.workspace = true
-slug = "0.1.6"
 env_logger = "0.11.8"
 actix-web-static-files = { version = "4.1", features = ["static-files-03"] }
 static-files = "0.3.1"
 handlebars = { version = "6.4.0", features = ["dir_source"]}
-actix-cors = "0.7.1"
 
 [build-dependencies]
 static-files = "0.3.1"

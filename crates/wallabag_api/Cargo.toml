@@ -1,0 +1,28 @@
+[package]
+name = "wallabag_api"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+result.workspace = true
+db.workspace = true
+app_state.workspace = true
+helpers.workspace = true
+article_scraper.workspace = true
+types.workspace = true
+sqlx.workspace = true
+actix-web.workspace = true
+actix-web-httpauth = "0.8.2"
+actix-http = "3.11.2"
+actix-utils = "3.0.1"
+actix-cors = "0.7.1"
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+url.workspace = true
+slug = "0.1.6"

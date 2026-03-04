@@ -6,12 +6,13 @@ use app_state::AppState;
 
 use crate::{
     models::Tag,
-    rest::{UserInfo, wallabag::Id},
+    UserInfo,
+    wallabag::Id,
 };
 use db::repository::tags;
 use dto::{TagLabel, TagsLabel};
 
-pub(in crate::rest::wallabag) async fn get_tags(
+pub(crate) async fn get_tags(
     data: web::Data<AppState>,
     user_info: UserInfo,
 ) -> actix_web::Result<Json<Vec<Tag>>> {
@@ -24,7 +25,7 @@ pub(in crate::rest::wallabag) async fn get_tags(
     Ok(Json(result))
 }
 
-pub(in crate::rest::wallabag) async fn delete_tags_by_label(
+pub(crate) async fn delete_tags_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagsLabel>,
     user_info: UserInfo,
@@ -38,7 +39,7 @@ pub(in crate::rest::wallabag) async fn delete_tags_by_label(
     Ok(Json(result))
 }
 
-pub(in crate::rest::wallabag) async fn delete_tag_by_id(
+pub(crate) async fn delete_tag_by_id(
     data: web::Data<AppState>,
     tag_id: web::Path<Id>,
     user_info: UserInfo,
@@ -54,7 +55,7 @@ pub(in crate::rest::wallabag) async fn delete_tag_by_id(
     }
 }
 
-pub(in crate::rest::wallabag) async fn delete_tag_by_label(
+pub(crate) async fn delete_tag_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagLabel>,
     user_info: UserInfo,
