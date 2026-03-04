@@ -6,8 +6,9 @@ use actix_web::{
     web::{self, Json, ServiceConfig, post},
 };
 use actix_web_httpauth::extractors::bearer::BearerAuth;
+use app_state::AppState;
 
-use crate::{app::AppState, auth::find_user, rest::UserInfo};
+use crate::{auth::find_user, rest::UserInfo};
 use db::repository::clients;
 use dto::{GetToken, OauthError, Token};
 

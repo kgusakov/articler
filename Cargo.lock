@@ -382,6 +382,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
+name = "app_state"
+version = "0.1.0"
+dependencies = [
+ "article_scraper",
+ "chrono",
+ "db",
+ "handlebars",
+ "rand 0.10.0",
+ "result",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
 name = "argon2"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3815,6 +3829,7 @@ dependencies = [
  "actix-web",
  "actix-web-httpauth",
  "actix-web-static-files",
+ "app_state",
  "article_scraper",
  "chrono",
  "db",

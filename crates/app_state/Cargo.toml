@@ -1,0 +1,17 @@
+[package]
+name = "app_state"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+result.workspace = true
+db.workspace = true
+article_scraper.workspace = true
+sqlx.workspace = true
+handlebars = { version = "6.4.0", features = ["dir_source"] }
+tokio.workspace = true
+chrono.workspace = true
+rand.workspace = true

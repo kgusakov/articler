@@ -228,7 +228,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_new_token(pool: SqlitePool) {
         let storage = TokenStorage::new();
@@ -255,7 +255,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_validate_success(pool: SqlitePool) {
         let storage = TokenStorage::new();
@@ -283,7 +283,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_validate_refresh_token_as_access_token(pool: SqlitePool) {
         let storage = TokenStorage::new();
@@ -299,7 +299,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_refresh_success(pool: SqlitePool) {
         let storage = TokenStorage::new();
@@ -346,7 +346,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_refresh_invalid_token(pool: SqlitePool) {
         let storage = TokenStorage::new();
@@ -361,7 +361,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_refresh_access_token_as_refresh_token(pool: SqlitePool) {
         let storage = TokenStorage::new();
@@ -377,7 +377,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_multiple_refresh_cycles(pool: SqlitePool) {
         let storage = TokenStorage::new();
@@ -431,7 +431,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_concurrent_tokens_different_users(pool: SqlitePool) {
         let storage = TokenStorage::new();
@@ -470,7 +470,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_access_token_expiration_on_validate(pool: SqlitePool) {
         let current_time = Arc::new(AtomicI64::new(1000i64));
@@ -503,7 +503,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     // TODO reimplement test to test db-based expiration behaviour
     #[ignore = "Refresh tokens are now stored in database which uses real timestamps, so mocked time doesn't work"]
@@ -545,7 +545,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_access_token_not_expired_before_expiration_time(pool: SqlitePool) {
         let current_time = Arc::new(AtomicI64::new(1000i64));
@@ -568,7 +568,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_refresh_token_still_valid_after_reboot(pool: SqlitePool) {
         let storage = TokenStorage::new();
@@ -589,7 +589,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_gc_removes_expired_tokens(pool: SqlitePool) {
         let current_time = Arc::new(AtomicI64::new(1000i64));
@@ -615,7 +615,7 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
-        fixtures("../tests/fixtures/users.sql")
+        fixtures("../../../crates/server/tests/fixtures/users.sql")
     )]
     async fn test_gc_preserves_valid_tokens(pool: SqlitePool) {
         let current_time = Arc::new(AtomicI64::new(1000i64));

@@ -10,6 +10,7 @@ use actix_web::{
     web::{self},
 };
 
+use app_state::AppState;
 use article_scraper::Scraper;
 use chrono::{DateTime, Utc};
 use db::repository::entries;
@@ -18,7 +19,7 @@ use rstest::rstest;
 use rstest_reuse::apply;
 use serde_json::{Value, json};
 use serde_json_assert::{assert_json_eq, assert_json_include};
-use server::app::{AppState, app, init_handlebars};
+use server::app::{app, init_handlebars};
 use sqlx::SqlitePool;
 use types::Id;
 use url::Url;

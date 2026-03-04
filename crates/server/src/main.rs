@@ -2,9 +2,10 @@ use std::env;
 use std::str::FromStr;
 
 use actix_web::cookie::Key;
+use app_state::AppState;
 use article_scraper::Scraper;
 use result::ArticlerResult;
-use server::app::{AppState, http_server, init_handlebars};
+use server::app::{http_server, init_handlebars};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 
 #[actix_web::main]

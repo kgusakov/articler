@@ -6,11 +6,9 @@ use actix_web::{
     mime,
     web::{self, ServiceConfig, get, post},
 };
+use app_state::AppState;
 
-use crate::{
-    app::AppState,
-    web::{dto::Client, fake_ui::dto::Clients, ui::do_login},
-};
+use crate::web::{dto::Client, fake_ui::dto::Clients, ui::do_login};
 use db::repository::clients::{self};
 
 // The whole file is just a fake pages to support the way of authorization, which Android app and browser extensions are using

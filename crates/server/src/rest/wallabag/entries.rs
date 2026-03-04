@@ -3,12 +3,12 @@ use actix_web::{
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     web::{self, Json, Query},
 };
+use app_state::AppState;
 use chrono::Utc;
 use slug::slugify;
 use url::Url;
 
 use crate::{
-    app::AppState,
     models::{Entry, Tag},
     rest::{UserInfo, wallabag::Id},
 };

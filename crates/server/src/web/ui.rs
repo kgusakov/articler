@@ -6,6 +6,7 @@ use actix_web::{
     mime,
     web::{self, Redirect, ServiceConfig, get, post},
 };
+use app_state::AppState;
 use chrono::Utc;
 use db::repository::{
     Db, clients,
@@ -17,7 +18,6 @@ use types::Id;
 use url::Url;
 
 use crate::{
-    app::AppState,
     auth::find_user,
     web::{
         dto::{Client, LoginForm},

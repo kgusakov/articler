@@ -2,9 +2,9 @@ use actix_web::{
     error::ErrorNotFound,
     web::{self, Json},
 };
+use app_state::AppState;
 
 use crate::{
-    app::AppState,
     models::Tag,
     rest::{UserInfo, wallabag::Id},
 };
