@@ -1,5 +1,5 @@
 [package]
-name = "app_state"
+name = "token_storage"
 version.workspace = true
 edition.workspace = true
 
@@ -9,7 +9,7 @@ workspace = true
 [dependencies]
 result.workspace = true
 db.workspace = true
-article_scraper.workspace = true
-token_storage.workspace = true
 sqlx.workspace = true
-handlebars = { version = "6.4.0", features = ["dir_source"] }
+tokio.workspace = true
+chrono.workspace = true
+rand.workspace = true

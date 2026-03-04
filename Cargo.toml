@@ -9,6 +9,7 @@ members = [
     "crates/article_scraper",
     "crates/types",
     "crates/app_state",
+    "crates/token_storage",
 ]
 
 [workspace.package]
@@ -37,6 +38,7 @@ cli = { path = "crates/cli" }
 article_scraper = { path = "crates/article_scraper" }
 types = { path = "crates/types" }
 app_state = { path = "crates/app_state" }
+token_storage = { path = "crates/token_storage" }
 
 [profile.release]
 strip = true

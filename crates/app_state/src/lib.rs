@@ -1,5 +1,3 @@
-mod token_storage;
-
 pub use token_storage::{Claim, NewToken, TokenStorage};
 
 use article_scraper::Scraper;
