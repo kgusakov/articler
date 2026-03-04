@@ -1,6 +1,5 @@
+use crate::error::Result;
 use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
-
-use result::ArticlerResult;
 
 use super::{CLIENTS_TABLE, Db, Timestamp};
 use types::Id;
@@ -12,7 +11,7 @@ pub async fn create<'c, C>(
     client_id: &str,
     client_secret: &str,
     created_at: Timestamp,
-) -> ArticlerResult<ClientRow>
+) -> Result<ClientRow>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -28,7 +27,7 @@ where
             .await?)
 }
 
-pub async fn delete_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> ArticlerResult<bool>
+pub async fn delete_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> Result<bool>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -50,7 +49,7 @@ pub async fn find_by_user_id_client_id_and_secret<'c, C>(
     user_id: Id,
     client_id: &str,
     client_secret: &str,
-) -> ArticlerResult<Option<ClientRow>>
+) -> Result<Option<ClientRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -72,7 +71,7 @@ pub async fn find_by_client_id_and_secret<'c, C>(
     conn: C,
     client_id: &str,
     client_secret: &str,
-) -> ArticlerResult<Option<ClientRow>>
+) -> Result<Option<ClientRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -93,7 +92,7 @@ pub async fn find_by_client_name_and_user_id<'c, C>(
     conn: C,
     user_id: Id,
     client_name: &str,
-) -> ArticlerResult<Option<ClientRow>>
+) -> Result<Option<ClientRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -110,7 +109,7 @@ where
     Ok(result)
 }
 
-pub async fn find_by_user_id<'c, C>(conn: C, user_id: Id) -> ArticlerResult<Vec<ClientRow>>
+pub async fn find_by_user_id<'c, C>(conn: C, user_id: Id) -> Result<Vec<ClientRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {

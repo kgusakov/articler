@@ -1110,6 +1110,7 @@ dependencies = [
  "indexmap 2.13.0",
  "result",
  "serde",
+ "snafu",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",

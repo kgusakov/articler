@@ -1,6 +1,6 @@
-use result::ArticlerResult;
 use sqlx::{prelude::*, sqlite::SqliteRow};
 
+use crate::error::Result;
 use crate::repository::{Db, TOKENS_TABLE, Timestamp};
 use types::Id;
 
@@ -11,7 +11,7 @@ pub async fn create<'c, C>(
     client_id: Id,
     created_at: Timestamp,
     expires_in: i64,
-) -> ArticlerResult<TokenRow>
+) -> Result<TokenRow>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -29,7 +29,7 @@ where
     .await?)
 }
 
-pub async fn delete<'c, C>(conn: C, token: &str) -> ArticlerResult<Option<TokenRow>>
+pub async fn delete<'c, C>(conn: C, token: &str) -> Result<Option<TokenRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -43,7 +43,7 @@ where
     .await?)
 }
 
-pub async fn delete_expired<'c, C>(conn: C) -> ArticlerResult<()>
+pub async fn delete_expired<'c, C>(conn: C) -> Result<()>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -58,7 +58,7 @@ where
     Ok(())
 }
 
-pub async fn find<'c, C>(conn: C, token: &str) -> ArticlerResult<Option<TokenRow>>
+pub async fn find<'c, C>(conn: C, token: &str) -> Result<Option<TokenRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {

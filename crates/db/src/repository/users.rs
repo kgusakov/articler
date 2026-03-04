@@ -1,8 +1,7 @@
 use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
-use result::ArticlerResult;
-
 use super::{Db, Timestamp, USERS_TABLE};
+use crate::error::Result;
 use types::Id;
 
 pub async fn create_user<'c, C>(
@@ -13,7 +12,7 @@ pub async fn create_user<'c, C>(
     email: &str,
     created_at: Timestamp,
     updated_at: Timestamp,
-) -> ArticlerResult<UserRow>
+) -> Result<UserRow>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -34,7 +33,7 @@ pub async fn find_by_username_and_password<'c, C>(
     conn: C,
     username: &str,
     password_hash: &str,
-) -> ArticlerResult<Option<UserRow>>
+) -> Result<Option<UserRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -52,7 +51,7 @@ where
     Ok(result)
 }
 
-pub async fn find_by_username<'c, C>(conn: C, username: &str) -> ArticlerResult<Option<UserRow>>
+pub async fn find_by_username<'c, C>(conn: C, username: &str) -> Result<Option<UserRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {

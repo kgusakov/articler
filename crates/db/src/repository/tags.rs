@@ -1,10 +1,7 @@
 use sqlx::{FromRow, QueryBuilder, Row, sqlite::SqliteRow};
 
-use result::ArticlerResult;
-
-use super::{
-    Db, DbErrorType, ENTRIES_TABLE, ENTRIES_TAG_TABLE, SQLITE_LIMIT_VARIABLE_NUMBER, TAGS_TABLE,
-};
+use super::{Db, ENTRIES_TABLE, ENTRIES_TAG_TABLE, SQLITE_LIMIT_VARIABLE_NUMBER, TAGS_TABLE};
+use crate::error::{Result, TooManySqliteHostParametersSnafu};
 use types::Id;
 
 /* Return Vec of tags, which was linked to entry_id. Vec consists of ALL tags, even tags, which was already linked before and included in tags argument. */
@@ -12,7 +9,7 @@ pub async fn create_and_link<'c, C>(
     conn: C,
     entry_id: Id,
     tags: &[CreateTag],
-) -> ArticlerResult<Vec<TagRow>>
+) -> Result<Vec<TagRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -21,12 +18,14 @@ where
     }
 
     if tags.len() > SQLITE_LIMIT_VARIABLE_NUMBER / 2 {
-        return Err(DbErrorType::RepositoryError(format!(
-            "Too many tags: {} exceeds limit of {}",
-            tags.len(),
-            SQLITE_LIMIT_VARIABLE_NUMBER / 2
-        ))
-        .into());
+        return TooManySqliteHostParametersSnafu {
+            msg: format!(
+                "Too many tags: {} exceeds limit of {}",
+                tags.len(),
+                SQLITE_LIMIT_VARIABLE_NUMBER / 2
+            ),
+        }
+        .fail();
     }
 
     let mut tx = conn.begin().await?;
@@ -76,7 +75,7 @@ pub async fn update_tags_by_entry_id<'c, C>(
     user_id: Id,
     entry_id: Id,
     tags: &[CreateTag],
-) -> ArticlerResult<Vec<TagRow>>
+) -> Result<Vec<TagRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -112,11 +111,7 @@ where
     Ok(result_tags)
 }
 
-pub async fn find_by_entry_id<'c, C>(
-    conn: C,
-    user_id: Id,
-    entry_id: Id,
-) -> ArticlerResult<Vec<TagRow>>
+pub async fn find_by_entry_id<'c, C>(conn: C, user_id: Id, entry_id: Id) -> Result<Vec<TagRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -134,7 +129,7 @@ where
     .await?)
 }
 
-pub async fn get_all<'c, C>(conn: C, user_id: Id) -> ArticlerResult<Vec<TagRow>>
+pub async fn get_all<'c, C>(conn: C, user_id: Id) -> Result<Vec<TagRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -147,11 +142,7 @@ where
     )
 }
 
-pub async fn delete_by_label<'c, C>(
-    conn: C,
-    user_id: Id,
-    label: &str,
-) -> ArticlerResult<Option<TagRow>>
+pub async fn delete_by_label<'c, C>(conn: C, user_id: Id, label: &str) -> Result<Option<TagRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -169,7 +160,7 @@ pub async fn delete_all_by_label<'c, C>(
     conn: C,
     user_id: Id,
     labels: &[String],
-) -> ArticlerResult<Vec<TagRow>>
+) -> Result<Vec<TagRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -192,7 +183,7 @@ where
         .await?)
 }
 
-pub async fn delete_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> ArticlerResult<Option<TagRow>>
+pub async fn delete_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> Result<Option<TagRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {

@@ -14,6 +14,7 @@ chrono.workspace = true
 types.workspace = true
 thiserror.workspace = true
 url.workspace = true
+snafu.workspace = true
 indexmap = "2.12.1"
 
 [dev-dependencies]

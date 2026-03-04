@@ -7,9 +7,8 @@ use sqlx::{
     sqlite::SqliteRow,
 };
 
-use result::ArticlerResult;
-
-use super::{Db, DbErrorType, ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE, Timestamp};
+use super::{Db, ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE, Timestamp};
+use crate::error::{NotSupportedYetSnafu, Result};
 use types::{Id, ReadingTime};
 
 pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
@@ -17,7 +16,7 @@ pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
 pub async fn find_all<'c, C>(
     conn: C,
     params: &FindParams,
-) -> ArticlerResult<Vec<(EntryRow, Vec<crate::repository::tags::TagRow>)>>
+) -> Result<Vec<(EntryRow, Vec<crate::repository::tags::TagRow>)>>
 where
     C: Acquire<'c, Database = Db>,
 {
@@ -84,24 +83,26 @@ where
 
     // TODO implement detail filtering
     if params.detail == Some(Detail::Metadata) {
-        return Err(DbErrorType::RepositoryError(
-            "Detail metadata mode is not supported yet".into(),
-        )
-        .into());
+        return NotSupportedYetSnafu {
+            msg: "Detail metadata mode is not supported yet",
+        }
+        .fail();
     }
 
     // TODO implement domain_name filtering
     if params.domain_name.is_some() {
-        return Err(
-            DbErrorType::RepositoryError("Domain filtering is not supported yet".into()).into(),
-        );
+        return NotSupportedYetSnafu {
+            msg: "Domain filtering is not supported yet",
+        }
+        .fail();
     }
 
     // TODO implement tags filtering
     if params.tags.is_some() {
-        return Err(
-            DbErrorType::RepositoryError("Tags filtering is not supported yet".into()).into(),
-        );
+        return NotSupportedYetSnafu {
+            msg: "Tags filtering is not supported yet",
+        }
+        .fail();
     }
 
     let raw_rows = q_builder.build().fetch_all(&mut *conn).await?;
@@ -133,7 +134,7 @@ where
     Ok(entrs_with_relations)
 }
 
-pub async fn exists_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> ArticlerResult<bool>
+pub async fn exists_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> Result<bool>
 where
     C: Acquire<'c, Database = Db>,
 {
@@ -150,12 +151,7 @@ where
     Ok(result == 1)
 }
 
-pub async fn delete_tag_by_tag_id<'c, C>(
-    conn: C,
-    user_id: Id,
-    id: Id,
-    tag_id: Id,
-) -> ArticlerResult<bool>
+pub async fn delete_tag_by_tag_id<'c, C>(conn: C, user_id: Id, id: Id, tag_id: Id) -> Result<bool>
 where
     C: Acquire<'c, Database = Db>,
 {
@@ -173,7 +169,7 @@ where
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn count<'c, C>(conn: C, params: &FindParams) -> ArticlerResult<i64>
+pub async fn count<'c, C>(conn: C, params: &FindParams) -> Result<i64>
 where
     C: Acquire<'c, Database = Db>,
 {
@@ -208,24 +204,26 @@ where
 
     // TODO implement detail filtering
     if params.detail == Some(Detail::Metadata) {
-        return Err(DbErrorType::RepositoryError(
-            "Detail metadata mode is not supported yet".into(),
-        )
-        .into());
+        return NotSupportedYetSnafu {
+            msg: "Detail metadata mode is not supported yet",
+        }
+        .fail();
     }
 
     // TODO implement domain_name filtering
     if params.domain_name.is_some() {
-        return Err(
-            DbErrorType::RepositoryError("Domain filtering is not supported yet".into()).into(),
-        );
+        return NotSupportedYetSnafu {
+            msg: "Domain filtering is not supported yet",
+        }
+        .fail();
     }
 
     // TODO implement tags filtering
     if params.tags.is_some() {
-        return Err(
-            DbErrorType::RepositoryError("Tags filtering is not supported yet".into()).into(),
-        );
+        return NotSupportedYetSnafu {
+            msg: "Tags filtering is not supported yet",
+        }
+        .fail();
     }
 
     Ok(q_builder.build().fetch_one(&mut *conn).await?.get(0))
@@ -235,7 +233,7 @@ pub async fn create<'c, C>(
     conn: C,
     entry: CreateEntry,
     tags: &[crate::repository::tags::CreateTag],
-) -> ArticlerResult<(EntryRow, Vec<crate::repository::tags::TagRow>)>
+) -> Result<(EntryRow, Vec<crate::repository::tags::TagRow>)>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
@@ -304,7 +302,7 @@ where
     Ok((entry, tags))
 }
 
-pub async fn find_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> ArticlerResult<Option<FullEntry>>
+pub async fn find_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> Result<Option<FullEntry>>
 where
     C: Acquire<'c, Database = Db>,
 {
@@ -340,12 +338,7 @@ where
     Ok(Some((entry, tags)))
 }
 
-pub async fn update_by_id<'c, C>(
-    conn: C,
-    user_id: Id,
-    id: Id,
-    update: UpdateEntry,
-) -> ArticlerResult<bool>
+pub async fn update_by_id<'c, C>(conn: C, user_id: Id, id: Id, update: UpdateEntry) -> Result<bool>
 where
     C: Acquire<'c, Database = Db>,
 {
@@ -439,7 +432,7 @@ where
     Ok(result.rows_affected() > 0)
 }
 
-pub async fn delete_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> ArticlerResult<bool>
+pub async fn delete_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> Result<bool>
 where
     C: Acquire<'c, Database = Db>,
 {
