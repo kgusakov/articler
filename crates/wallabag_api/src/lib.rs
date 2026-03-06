@@ -1,6 +1,7 @@
 use types::Id;
 
 pub mod auth;
+pub mod error;
 pub mod models;
 pub mod oauth;
 pub mod wallabag;

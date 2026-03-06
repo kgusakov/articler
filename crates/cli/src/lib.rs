@@ -1,9 +1,9 @@
-use db::ArticlerResult;
 use db::repository::clients;
 use db::repository::clients::ClientRow;
 use db::repository::users;
 use email_address::EmailAddress;
 use helpers::{generate_client_id, generate_client_secret, hash_password};
+use result::ArticlerResult;
 use sqlx::Pool;
 use sqlx::Sqlite;
 use thiserror::Error;

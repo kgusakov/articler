@@ -1,0 +1,57 @@
+use actix_web::ResponseError;
+use snafu::{Location, Snafu};
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
+pub enum Error {
+    Sqlx {
+        #[snafu(source)]
+        error: sqlx::error::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    Db {
+        #[snafu(source)]
+        error: db::error::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    TokenStorage {
+        #[snafu(source)]
+        error: token_storage::error::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    NotImpemented {
+        msg: String,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    NotFound {
+        msg: String,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(display("Unexpected state: {msg}"))]
+    UnexpectedState {
+        msg: String,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    UrlFormat {
+        #[snafu(source)]
+        error: url::ParseError,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(display("Can't convert timestamp '{timestamp}' to DateTime"))]
+    TimestampToDateTime {
+        timestamp: i64,
+        #[snafu(implicit)]
+        location: Location,
+    },
+}
+
+impl ResponseError for Error {}

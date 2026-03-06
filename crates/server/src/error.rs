@@ -1,3 +1,4 @@
+use actix_web::ResponseError;
 use snafu::{Location, Snafu};
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -5,23 +6,18 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub(crate)))]
 pub enum Error {
-    #[snafu(transparent)]
     Sqlx {
         #[snafu(source)]
-        error: sqlx::Error,
+        error: sqlx::error::Error,
         #[snafu(implicit)]
         location: Location,
     },
-    #[snafu(display("{msg}"))]
-    NotSupportedYet {
-        msg: String,
-        #[snafu(implicit)]
-        location: Location,
-    },
-    #[snafu(display("{msg}"))]
-    TooManySqliteHostParameters {
-        msg: String,
+    Db {
+        #[snafu(source)]
+        error: db::error::Error,
         #[snafu(implicit)]
         location: Location,
     },
 }
+
+impl ResponseError for Error {}

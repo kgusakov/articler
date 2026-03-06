@@ -6,15 +6,8 @@ use snafu::{Location, Snafu};
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Snafu)]
-#[snafu(visibility(pub))]
+#[snafu(visibility(pub(crate)))]
 pub enum Error {
-    #[snafu(display("IO error occuried in scraper"))]
-    ScrapperIo {
-        #[snafu(source)]
-        error: std::io::Error,
-        #[snafu(implicit)]
-        location: Location,
-    },
     #[snafu(display("Text wordcount is bigger than {}", i32::MAX))]
     WordCountOverflow {
         #[snafu(source)]
@@ -77,29 +70,4 @@ pub enum Error {
         #[snafu(implicit)]
         location: Location,
     },
-}
-
-#[cfg(test)]
-mod tests {
-    use snafu::ResultExt;
-
-    use crate::error::ScrapperIoSnafu;
-
-    fn lib_fun() -> std::io::Result<i32> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Deadlock,
-            "deadlock occuried",
-        ))
-    }
-
-    fn scraper_fun() -> super::Result<String> {
-        lib_fun().context(ScrapperIoSnafu)?;
-
-        Ok("yes".to_owned())
-    }
-
-    #[test]
-    fn test() {
-        scraper_fun().unwrap();
-    }
 }

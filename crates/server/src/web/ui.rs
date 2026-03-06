@@ -13,17 +13,21 @@ use db::repository::{
     entries::{self, FindParams, SortOrder, UpdateEntry},
 };
 use helpers::{generate_client_id, generate_client_secret, hash_url};
+use snafu::ResultExt;
 use sqlx::{Acquire, SqlitePool};
 use types::Id;
 use url::Url;
 
 use wallabag_api::auth::find_user;
 
-use crate::web::{
-    dto::{Client, LoginForm},
-    ui::dto::{
-        EditArticleTitleForm, HxSource, PartialArticleContext, PartialArticlesContext,
-        PartialCategoriesContext,
+use crate::{
+    error::DbSnafu,
+    web::{
+        dto::{Client, LoginForm},
+        ui::dto::{
+            EditArticleTitleForm, HxSource, PartialArticleContext, PartialArticlesContext,
+            PartialCategoriesContext,
+        },
     },
 };
 
@@ -72,7 +76,8 @@ async fn login(_session: Session, app: web::Data<AppState>) -> impl Responder {
 async fn clients(session: Session, app: web::Data<AppState>) -> actix_web::Result<HttpResponse> {
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
         let clients = clients::find_by_user_id(&app.pool, user_id)
-            .await?
+            .await
+            .context(DbSnafu)?
             .into_iter()
             .map(Client::from)
             .collect();
@@ -113,7 +118,9 @@ async fn article(
     req: HttpRequest,
 ) -> actix_web::Result<HttpResponse> {
     if let Some(user_id) = session.get("user_id").map_err(ErrorInternalServerError)? {
-        if let Some((article, _)) = entries::find_by_id(&app.pool, user_id, id.into_inner()).await?
+        if let Some((article, _)) = entries::find_by_id(&app.pool, user_id, id.into_inner())
+            .await
+            .context(DbSnafu)?
         {
             let article_page = ArticleContext {
                 article: PartialArticleContext {
@@ -249,7 +256,8 @@ async fn main(
 
     // TODO must load only metadata
     let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut *tx, &entries_filter)
-        .await?
+        .await
+        .context(DbSnafu)?
         .into_iter()
         .map(|e| e.0.into())
         .collect();
@@ -288,7 +296,8 @@ async fn partial_articles(
 
     // TODO must load only metadata
     let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut *tx, &params)
-        .await?
+        .await
+        .context(DbSnafu)?
         .into_iter()
         .map(|e| e.0.into())
         .collect();
@@ -355,7 +364,9 @@ async fn do_archive(
         ..Default::default()
     };
 
-    entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
+    entries::update_by_id(&app.pool, user_id, form.article_id, update)
+        .await
+        .context(DbSnafu)?;
 
     if is_htmx_request(&req) {
         if let Some(HxSource::Article) = form.source {
@@ -390,7 +401,9 @@ async fn do_favourite(
         ..Default::default()
     };
 
-    entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
+    entries::update_by_id(&app.pool, user_id, form.article_id, update)
+        .await
+        .context(DbSnafu)?;
 
     if is_htmx_request(&req) {
         if let Some(HxSource::Article) = form.source {
@@ -415,7 +428,9 @@ async fn do_delete(
 
     let form = form.into_inner();
 
-    entries::delete_by_id(&app.pool, user_id, form.article_id).await?;
+    entries::delete_by_id(&app.pool, user_id, form.article_id)
+        .await
+        .context(DbSnafu)?;
 
     if is_htmx_request(&req) {
         if let Some(HxSource::Article) = form.source {
@@ -444,7 +459,9 @@ async fn do_client_delete(
 
     let form = form.into_inner();
 
-    clients::delete_by_id(&app.pool, user_id, form.id).await?;
+    clients::delete_by_id(&app.pool, user_id, form.id)
+        .await
+        .context(DbSnafu)?;
 
     Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
@@ -466,7 +483,8 @@ async fn do_create_client(
         &generate_client_secret(),
         now,
     )
-    .await?;
+    .await
+    .context(DbSnafu)?;
 
     Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
@@ -517,7 +535,9 @@ async fn do_add(
         uid: None,
     };
 
-    entries::create(&app.pool, create_entry, &[]).await?;
+    entries::create(&app.pool, create_entry, &[])
+        .await
+        .context(DbSnafu)?;
 
     Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
@@ -558,7 +578,9 @@ async fn do_edit_title(
         ..Default::default()
     };
 
-    entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
+    entries::update_by_id(&app.pool, user_id, form.article_id, update)
+        .await
+        .context(DbSnafu)?;
 
     if is_htmx_request(&req) {
         if let Some(HxSource::Article) = form.source {
@@ -661,7 +683,10 @@ async fn render_article(
     user_id: Id,
     article_id: Id,
 ) -> actix_web::Result<HttpResponse> {
-    if let Some((article, _)) = entries::find_by_id(pool, user_id, article_id).await? {
+    if let Some((article, _)) = entries::find_by_id(pool, user_id, article_id)
+        .await
+        .context(DbSnafu)?
+    {
         let article_contenxt = PartialArticleContext {
             id: article.id,
             title: article.title,
@@ -690,13 +715,11 @@ async fn render_article(
 mod dto {
     use actix_http::header;
     use actix_web::HttpRequest;
-    use db::{
-        ArticlerResult,
-        repository::{
-            Db,
-            entries::{self, EntryRow, FindParams},
-        },
+    use db::repository::{
+        Db,
+        entries::{self, EntryRow, FindParams},
     };
+    use result::ArticlerResult;
     use serde::{Deserialize, Serialize};
     use types::{Id, ReadingTime};
     use url::Url;

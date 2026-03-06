@@ -7,8 +7,13 @@ use actix_web::{
 };
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use app_state::AppState;
+use snafu::ResultExt;
 
-use crate::{UserInfo, auth::find_user};
+use crate::{
+    UserInfo,
+    auth::find_user,
+    error::{DbSnafu, TokenStorageSnafu},
+};
 use db::repository::clients;
 use dto::{GetToken, OauthError, Token};
 
@@ -40,7 +45,10 @@ async fn post_token(
     }
 }
 
-async fn refresh_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<Token>, Error> {
+async fn refresh_token(
+    data: web::Data<AppState>,
+    request: GetToken,
+) -> actix_web::Result<Json<Token>> {
     let Some(client_id) = request.client_id else {
         return Err(ErrorBadRequest(oauth_error(
             "invalid_client",
@@ -56,7 +64,8 @@ async fn refresh_token(data: web::Data<AppState>, request: GetToken) -> Result<J
     };
 
     if clients::find_by_client_id_and_secret(&data.pool, &client_id, &client_secret)
-        .await?
+        .await
+        .context(DbSnafu)?
         .is_none()
     {
         return Err(ErrorBadRequest(oauth_error(
@@ -75,7 +84,8 @@ async fn refresh_token(data: web::Data<AppState>, request: GetToken) -> Result<J
     let Some(new_token) = data
         .token_storage
         .refresh(&data.pool, &refresh_token)
-        .await?
+        .await
+        .context(TokenStorageSnafu)?
     else {
         return Err(ErrorBadRequest(oauth_error(
             "invalid_grant",
@@ -92,7 +102,7 @@ async fn refresh_token(data: web::Data<AppState>, request: GetToken) -> Result<J
     }))
 }
 
-async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<Token>, Error> {
+async fn new_token(data: web::Data<AppState>, request: GetToken) -> actix_web::Result<Json<Token>> {
     let Some(username) = request.username else {
         return Err(ErrorBadRequest(oauth_error(
             "invalid_request",
@@ -136,7 +146,8 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
         &client_id,
         &client_secret,
     )
-    .await?
+    .await
+    .context(DbSnafu)?
     else {
         return Err(ErrorBadRequest(oauth_error(
             "invalid_client",
@@ -149,7 +160,8 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
     let new_token = data
         .token_storage
         .new_token(&data.pool, user_row.id, client_row.id)
-        .await?;
+        .await
+        .context(TokenStorageSnafu)?;
 
     Ok(Json(Token {
         access_token: new_token.access_token,

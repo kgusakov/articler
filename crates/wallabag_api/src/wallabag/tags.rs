@@ -1,12 +1,11 @@
-use actix_web::{
-    error::ErrorNotFound,
-    web::{self, Json},
-};
+use actix_web::web::{self, Json};
 use app_state::AppState;
+use snafu::ResultExt;
 
 use crate::{
-    models::Tag,
     UserInfo,
+    error::{DbSnafu, NotFoundSnafu, Result},
+    models::Tag,
     wallabag::Id,
 };
 use db::repository::tags;
@@ -15,9 +14,10 @@ use dto::{TagLabel, TagsLabel};
 pub(crate) async fn get_tags(
     data: web::Data<AppState>,
     user_info: UserInfo,
-) -> actix_web::Result<Json<Vec<Tag>>> {
+) -> Result<Json<Vec<Tag>>> {
     let result = tags::get_all(&data.pool, user_info.user_id)
-        .await?
+        .await
+        .context(DbSnafu)?
         .into_iter()
         .map(std::convert::Into::into)
         .collect();
@@ -29,9 +29,10 @@ pub(crate) async fn delete_tags_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagsLabel>,
     user_info: UserInfo,
-) -> actix_web::Result<Json<Vec<Tag>>> {
+) -> Result<Json<Vec<Tag>>> {
     let result = tags::delete_all_by_label(&data.pool, user_info.user_id, &label.labels)
-        .await?
+        .await
+        .context(DbSnafu)?
         .into_iter()
         .map(std::convert::Into::into)
         .collect();
@@ -43,15 +44,19 @@ pub(crate) async fn delete_tag_by_id(
     data: web::Data<AppState>,
     tag_id: web::Path<Id>,
     user_info: UserInfo,
-) -> actix_web::Result<Json<Tag>> {
+) -> Result<Json<Tag>> {
     let result = tags::delete_by_id(&data.pool, user_info.user_id, tag_id.into_inner())
-        .await?
+        .await
+        .context(DbSnafu)?
         .map(std::convert::Into::into);
 
     if let Some(delete_tag) = result {
         Ok(Json(delete_tag))
     } else {
-        Err(ErrorNotFound("Tag not found"))
+        NotFoundSnafu {
+            msg: "Tag not found",
+        }
+        .fail()
     }
 }
 
@@ -59,15 +64,19 @@ pub(crate) async fn delete_tag_by_label(
     data: web::Data<AppState>,
     label: web::Query<TagLabel>,
     user_info: UserInfo,
-) -> actix_web::Result<Json<Tag>> {
+) -> Result<Json<Tag>> {
     let result = tags::delete_by_label(&data.pool, user_info.user_id, &label.label)
-        .await?
+        .await
+        .context(DbSnafu)?
         .map(std::convert::Into::into);
 
     if let Some(delete_tag) = result {
         Ok(Json(delete_tag))
     } else {
-        Err(ErrorNotFound("Tag not found"))
+        NotFoundSnafu {
+            msg: "Tag not found",
+        }
+        .fail()
     }
 }
 

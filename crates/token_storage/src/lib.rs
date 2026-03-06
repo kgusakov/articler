@@ -1,12 +1,15 @@
+pub mod error;
+
 use std::collections::HashMap;
 
 use chrono::Utc;
 use db::repository::{Db, tokens};
 use rand::{distr::Alphanumeric, prelude::*};
 
-use result::ArticlerResult;
 use sqlx::Connection;
 use tokio::sync::Mutex;
+
+use crate::error::Result;
 
 type Id = i64;
 
@@ -70,12 +73,7 @@ impl TokenStorage {
         }
     }
 
-    pub async fn new_token<'c, C>(
-        &self,
-        conn: C,
-        user_id: Id,
-        client_id: Id,
-    ) -> ArticlerResult<NewToken>
+    pub async fn new_token<'c, C>(&self, conn: C, user_id: Id, client_id: Id) -> Result<NewToken>
     where
         C: sqlx::Acquire<'c, Database = Db>,
     {
@@ -110,7 +108,7 @@ impl TokenStorage {
         })
     }
 
-    pub async fn validate(&self, access_token: &str) -> ArticlerResult<Option<Claim>> {
+    pub async fn validate(&self, access_token: &str) -> Result<Option<Claim>> {
         // It's ok to unwrap - poison hould be propagated
         let mut inner = self.inner.lock().await;
         // TODO gc on every validate is a bad pattern
@@ -131,11 +129,7 @@ impl TokenStorage {
         }
     }
 
-    pub async fn refresh<'c, C>(
-        &self,
-        conn: C,
-        refresh_token: &str,
-    ) -> ArticlerResult<Option<NewToken>>
+    pub async fn refresh<'c, C>(&self, conn: C, refresh_token: &str) -> Result<Option<NewToken>>
     where
         C: sqlx::Acquire<'c, Database = Db>,
     {

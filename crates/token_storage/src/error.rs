@@ -6,21 +6,16 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[snafu(visibility(pub(crate)))]
 pub enum Error {
     #[snafu(transparent)]
+    Db {
+        #[snafu(source)]
+        error: db::error::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
     Sqlx {
         #[snafu(source)]
-        error: sqlx::Error,
-        #[snafu(implicit)]
-        location: Location,
-    },
-    #[snafu(display("{msg}"))]
-    NotSupportedYet {
-        msg: String,
-        #[snafu(implicit)]
-        location: Location,
-    },
-    #[snafu(display("{msg}"))]
-    TooManySqliteHostParameters {
-        msg: String,
+        error: sqlx::error::Error,
         #[snafu(implicit)]
         location: Location,
     },

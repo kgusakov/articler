@@ -1,3 +1,7 @@
+use crate::error::{
+    DbSnafu, NotFoundSnafu, NotImpementedSnafu, Result, SqlxSnafu, UnexpectedStateSnafu,
+    UrlFormatSnafu,
+};
 use actix_web::{
     Either,
     error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
@@ -6,6 +10,7 @@ use actix_web::{
 use app_state::AppState;
 use chrono::Utc;
 use slug::slugify;
+use snafu::ResultExt;
 use url::Url;
 
 use crate::{
@@ -22,7 +27,7 @@ use helpers::{generate_uid, hash_url};
 use result::ArticlerError;
 
 // TODO current implementation needed only for mobile app healthchecks. Needed full implementation
-pub(crate) async fn exists() -> actix_web::Result<Json<Exists>> {
+pub(crate) async fn exists() -> Result<Json<Exists>> {
     Ok(Json(Exists { exists: false }))
 }
 
@@ -30,7 +35,7 @@ pub(crate) async fn post_entries(
     data: web::Data<AppState>,
     request: Either<web::Json<AddEntry>, web::Form<AddEntry>>,
     user_info: UserInfo,
-) -> actix_web::Result<Json<AddEntryResponse>> {
+) -> Result<Json<AddEntryResponse>> {
     // TODO
     // Check if url already exist:
     //    - if exist update the current entry
@@ -41,9 +46,10 @@ pub(crate) async fn post_entries(
 
     if let (Some(_), Some(_)) = (add_entry.title, add_entry.content) {
         // TODO add support of receiving title and html to skip data crawling outside step
-        return Err(ErrorBadRequest(
-            "Title and content fields is not supported yet",
-        ));
+        return NotImpementedSnafu {
+            msg: "Title and content fields is not supported yet",
+        }
+        .fail();
     }
 
     let document = data.scraper.extract_or_fallback(&add_entry.url).await;
@@ -106,13 +112,15 @@ pub(crate) async fn post_entries(
         // TODO if it is not new entry - we will force empty tags. It should be fixed when this method will support not only entry creations
         .unwrap_or(vec![]);
 
-    let (entry_row, tag_rows) = entries::create(&data.pool, create_entry, &create_tags).await?;
+    let (entry_row, tag_rows) = entries::create(&data.pool, create_entry, &create_tags)
+        .await
+        .context(DbSnafu)?;
 
     let tags = tag_rows.into_iter().map(Tag::from).collect();
 
     // TODO replace by real url
     #[expect(clippy::redundant_closure)]
-    let self_url = Url::parse("https://example.com").map_err(|e| Into::<ArticlerError>::into(e))?;
+    let self_url = Url::parse("https://example.com").context(UrlFormatSnafu)?;
 
     Ok(web::Json(AddEntryResponse {
         entry: Entry::try_from((entry_row, tags))?,
@@ -129,7 +137,7 @@ pub(crate) async fn entries(
     data: web::Data<AppState>,
     request: Query<EntriesRequest>,
     user_info: UserInfo,
-) -> actix_web::Result<Json<Entries>> {
+) -> Result<Json<Entries>> {
     let request = request.into_inner();
 
     let params = entries::FindParams {
@@ -147,14 +155,16 @@ pub(crate) async fn entries(
         domain_name: request.domain_name,
     };
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
 
-    let count_without_paging = entries::count(&mut *tx, &params).await?;
+    let count_without_paging = entries::count(&mut *tx, &params).await.context(DbSnafu)?;
 
     // TODO implement all needed request filters and etc
-    let entries = entries::find_all(&mut *tx, &params).await?;
+    let entries = entries::find_all(&mut *tx, &params)
+        .await
+        .context(DbSnafu)?;
 
-    tx.commit().await.map_err(ErrorInternalServerError)?;
+    tx.commit().await.context(SqlxSnafu)?;
 
     // TODO fix clippy
     #[expect(clippy::cast_precision_loss)]
@@ -162,7 +172,10 @@ pub(crate) async fn entries(
     let pages = (count_without_paging as f64 / request.per_page as f64).ceil() as i64;
 
     if request.page > pages {
-        return Err(ErrorNotFound("Page not found"));
+        return NotFoundSnafu {
+            msg: "Page not found",
+        }
+        .fail();
     }
 
     let mut ents = vec![];
@@ -174,7 +187,7 @@ pub(crate) async fn entries(
 
     // TODO implement actual urls generating
     #[expect(clippy::redundant_closure)]
-    let url = Url::parse("http://example.com").map_err(|e| Into::<ArticlerError>::into(e))?;
+    let url = Url::parse("http://example.com").context(UrlFormatSnafu)?;
 
     Ok(web::Json(Entries {
         page: request.page,
@@ -195,24 +208,31 @@ pub(crate) async fn get_tags_by_entry(
     data: web::Data<AppState>,
     entry_id: web::Path<Id>,
     user_info: UserInfo,
-) -> actix_web::Result<Json<Vec<Tag>>> {
+) -> Result<Json<Vec<Tag>>> {
     let entry_id = entry_id.into_inner();
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
 
-    let result = if entries::exists_by_id(&mut *tx, user_info.user_id, entry_id).await? {
+    let result = if entries::exists_by_id(&mut *tx, user_info.user_id, entry_id)
+        .await
+        .context(DbSnafu)?
+    {
         let result = tags::find_by_entry_id(&mut *tx, user_info.user_id, entry_id)
-            .await?
+            .await
+            .context(DbSnafu)?
             .into_iter()
             .map(std::convert::Into::into)
             .collect();
 
         Ok(Json(result))
     } else {
-        Err(ErrorNotFound("Entry not found"))
+        NotFoundSnafu {
+            msg: "Entry not found",
+        }
+        .fail()
     };
 
-    tx.commit().await.map_err(ErrorInternalServerError)?;
+    tx.commit().await.context(SqlxSnafu)?;
 
     result
 }
@@ -221,28 +241,41 @@ pub(crate) async fn delete_tag_from_entry(
     data: web::Data<AppState>,
     ids: web::Path<(Id, Id)>,
     user_info: UserInfo,
-) -> actix_web::Result<Json<Entry>> {
+) -> Result<Json<Entry>> {
     let (entry_id, tag_id) = ids.into_inner();
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
 
-    let result = if entries::exists_by_id(&mut *tx, user_info.user_id, entry_id).await? {
-        entries::delete_tag_by_tag_id(&mut *tx, user_info.user_id, entry_id, tag_id).await?;
+    let result = if entries::exists_by_id(&mut *tx, user_info.user_id, entry_id)
+        .await
+        .context(DbSnafu)?
+    {
+        entries::delete_tag_by_tag_id(&mut *tx, user_info.user_id, entry_id, tag_id)
+            .await
+            .context(DbSnafu)?;
 
         if let Some((entry_row, tag_rows)) =
-            entries::find_by_id(&mut *tx, user_info.user_id, entry_id).await?
+            entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
+                .await
+                .context(DbSnafu)?
         {
             let tags = tag_rows.into_iter().map(std::convert::Into::into).collect();
 
             Ok(Json(Entry::try_from((entry_row, tags))?))
         } else {
-            Err(ErrorInternalServerError("Unknown error"))
+            UnexpectedStateSnafu {
+                msg: "Can't find entry by id",
+            }
+            .fail()
         }
     } else {
-        Err(ErrorNotFound("Entry not found"))
+        NotFoundSnafu {
+            msg: "Entry not found",
+        }
+        .fail()
     };
 
-    tx.commit().await.map_err(ErrorInternalServerError)?;
+    tx.commit().await.context(SqlxSnafu)?;
 
     result
 }
@@ -252,32 +285,48 @@ pub(crate) async fn delete_entry(
     entry_id: web::Path<i64>,
     request: Query<DeleteEntryRequest>,
     user_info: UserInfo,
-) -> actix_web::Result<Json<DeleteEntryResponse>> {
+) -> Result<Json<DeleteEntryResponse>> {
     let request = request.into_inner();
     let entry_id = entry_id.into_inner();
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
 
     let result = match request.expect {
         Expect::Id => {
-            let deleted = entries::delete_by_id(&mut *tx, user_info.user_id, entry_id).await?;
+            let deleted = entries::delete_by_id(&mut *tx, user_info.user_id, entry_id)
+                .await
+                .context(DbSnafu)?;
 
             if !deleted {
-                return Err(ErrorNotFound("Entry not found"));
+                return NotFoundSnafu {
+                    msg: "Entry not found",
+                }
+                .fail();
             }
 
             Ok(Json(DeleteEntryResponse::Id { id: entry_id }))
         }
         Expect::Full => {
-            let full_entry = entries::find_by_id(&mut *tx, user_info.user_id, entry_id).await?;
+            let full_entry = entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
+                .await
+                .context(DbSnafu)?;
 
-            let (entry_row, tag_rows) =
-                full_entry.ok_or_else(|| ErrorNotFound("Entry not found"))?;
+            let (entry_row, tag_rows) = full_entry.ok_or_else(|| {
+                NotFoundSnafu {
+                    msg: "Entry not found",
+                }
+                .build()
+            })?;
 
-            let deleted = entries::delete_by_id(&mut *tx, user_info.user_id, entry_id).await?;
+            let deleted = entries::delete_by_id(&mut *tx, user_info.user_id, entry_id)
+                .await
+                .context(DbSnafu)?;
 
             if !deleted {
-                return Err(ErrorNotFound("Entry not found"));
+                return NotFoundSnafu {
+                    msg: "Entry not found",
+                }
+                .fail();
             }
 
             let tags: Vec<Tag> = tag_rows.into_iter().map(std::convert::Into::into).collect();
@@ -289,7 +338,7 @@ pub(crate) async fn delete_entry(
         }
     };
 
-    tx.commit().await.map_err(ErrorInternalServerError)?;
+    tx.commit().await.context(SqlxSnafu);
 
     result
 }
@@ -300,43 +349,53 @@ pub(crate) async fn post_entry_tags(
     entry_id: web::Path<Id>,
     request: web::Form<EntryTags>,
     user_info: UserInfo,
-) -> actix_web::Result<Json<Entry>> {
+) -> Result<Json<Entry>> {
     let entry_id = entry_id.into_inner();
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
 
     // TODO dirty design - looks like we need entry repository method for it
-    let result: actix_web::Result<Json<Entry>> =
-        if entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
-            .await?
-            .is_some()
-        {
-            let full_tags: Vec<tags::CreateTag> = request
-                .into_inner()
-                .labels
-                .into_iter()
-                .map(|l| tags::CreateTag {
-                    user_id: user_info.user_id,
-                    slug: slugify(&l),
-                    label: l,
-                })
-                .collect();
+    let result: Result<Json<Entry>> = if entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
+        .await
+        .context(DbSnafu)?
+        .is_some()
+    {
+        let full_tags: Vec<tags::CreateTag> = request
+            .into_inner()
+            .labels
+            .into_iter()
+            .map(|l| tags::CreateTag {
+                user_id: user_info.user_id,
+                slug: slugify(&l),
+                label: l,
+            })
+            .collect();
 
-            tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags)
-                .await?;
+        tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags)
+            .await
+            .context(DbSnafu)?;
 
-            let (entry_row, tag_rows) = entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
-                .await?
-                .ok_or(ErrorNotFound("Entry not found"))?;
+        let (entry_row, tag_rows) = entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
+            .await
+            .context(DbSnafu)?
+            .ok_or(
+                NotFoundSnafu {
+                    msg: "Entry not found",
+                }
+                .build(),
+            )?;
 
-            let entry_tags = tag_rows.into_iter().map(Tag::from).collect();
+        let entry_tags = tag_rows.into_iter().map(Tag::from).collect();
 
-            Ok(Json(Entry::try_from((entry_row, entry_tags))?))
-        } else {
-            Err(ErrorNotFound("Entry not found"))
-        };
+        Ok(Json(Entry::try_from((entry_row, entry_tags))?))
+    } else {
+        NotFoundSnafu {
+            msg: "Entry not found",
+        }
+        .fail()
+    };
 
-    tx.commit().await.map_err(ErrorInternalServerError)?;
+    tx.commit().await.context(SqlxSnafu)?;
 
     result
 }
@@ -346,7 +405,7 @@ pub(crate) async fn patch_entry(
     entry_id: web::Path<i64>,
     request: Either<web::Json<UpdateEntry>, web::Form<UpdateEntry>>,
     user_info: UserInfo,
-) -> actix_web::Result<Json<Entry>> {
+) -> Result<Json<Entry>> {
     let request = request.into_inner();
     let entry_id = entry_id.into_inner();
 
@@ -384,13 +443,19 @@ pub(crate) async fn patch_entry(
         },
     };
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
 
-    let updated = entries::update_by_id(&mut *tx, user_info.user_id, entry_id, repo_update).await?;
+    let updated = entries::update_by_id(&mut *tx, user_info.user_id, entry_id, repo_update)
+        .await
+        .context(DbSnafu)?;
 
     if !updated {
-        tx.rollback().await.map_err(ErrorInternalServerError)?;
-        return Err(ErrorNotFound("Entry not found"));
+        tx.rollback().await.context(SqlxSnafu)?;
+
+        return NotFoundSnafu {
+            msg: "Entry not found",
+        }
+        .fail();
     }
 
     if let Some(tags_labels) = request.tags {
@@ -403,18 +468,26 @@ pub(crate) async fn patch_entry(
             })
             .collect();
 
-        tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags).await?;
+        tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags)
+            .await
+            .context(DbSnafu)?;
     }
 
     let (entry_row, tag_rows) = entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
-        .await?
-        .ok_or_else(|| ErrorNotFound("Entry not found"))?;
+        .await
+        .context(DbSnafu)?
+        .ok_or_else(|| {
+            NotFoundSnafu {
+                msg: "Entry not found",
+            }
+            .build()
+        })?;
 
     let entry_tags = tag_rows.into_iter().map(std::convert::Into::into).collect();
 
     let entry = Entry::try_from((entry_row, entry_tags))?;
 
-    tx.commit().await.map_err(ErrorInternalServerError)?;
+    tx.commit().await.context(SqlxSnafu)?;
 
     Ok(Json(entry))
 }
@@ -424,12 +497,13 @@ mod dto {
     use serde::{Deserialize, Serialize};
     use serde_with::{BoolFromInt, StringWithSeparator};
     use serde_with::{formats::CommaSeparator, serde_as};
-    use thiserror::Error;
+    use snafu::ResultExt;
     use url::Url;
 
+    use crate::error::UrlFormatSnafu;
+    use crate::error::{Result, TimestampToDateTimeSnafu};
     use crate::models::{Entry, Tag};
     use db::repository::{entries, tags};
-    use result::{ArticlerError, ArticlerResult};
 
     #[derive(Default, Deserialize, Debug, PartialEq, Clone, Copy)]
     pub enum Expect {
@@ -489,31 +563,26 @@ mod dto {
         pub _links: Links,
     }
 
-    fn try_parse_url(s: Option<String>) -> ArticlerResult<Option<Url>> {
-        Ok(s.map(|u| Url::parse(&u)).transpose()?)
+    fn try_parse_url(s: Option<String>) -> Result<Option<Url>> {
+        Ok(s.map(|u| Url::parse(&u))
+            .transpose()
+            .context(UrlFormatSnafu)?)
     }
 
-    // TODO ugly place for errors - api module is overwhelmed with logic already
-    #[derive(Error, Debug)]
-    enum HandlerError {
-        #[error("Date from seconds convert error")]
-        DateFromError,
-    }
-
-    fn try_parse_timestamp_opt(s: Option<i64>) -> ArticlerResult<Option<DateTime<Utc>>> {
+    fn try_parse_timestamp_opt(s: Option<i64>) -> Result<Option<DateTime<Utc>>> {
         match s {
             Some(t) => match DateTime::from_timestamp_secs(t) {
                 Some(r) => Ok(Some(r)),
-                None => Err(HandlerError::DateFromError.into()),
+                None => TimestampToDateTimeSnafu { timestamp: t }.fail(),
             },
             None => Ok(None),
         }
     }
 
-    fn try_parse_timestamp(s: i64) -> ArticlerResult<DateTime<Utc>> {
+    fn try_parse_timestamp(s: i64) -> Result<DateTime<Utc>> {
         match DateTime::from_timestamp_secs(s) {
             Some(r) => Ok(r),
-            None => Err(HandlerError::DateFromError.into()),
+            None => TimestampToDateTimeSnafu { timestamp: s }.fail(),
         }
     }
 
@@ -528,12 +597,14 @@ mod dto {
     }
 
     impl TryFrom<(entries::EntryRow, Vec<Tag>)> for Entry {
-        type Error = ArticlerError;
+        type Error = crate::error::Error;
 
-        fn try_from((e, tags): (entries::EntryRow, Vec<Tag>)) -> Result<Self, Self::Error> {
+        fn try_from(
+            (e, tags): (entries::EntryRow, Vec<Tag>),
+        ) -> std::result::Result<Self, Self::Error> {
             Ok(Entry {
                 id: e.id,
-                url: Url::parse(&e.url)?,
+                url: Url::parse(&e.url).context(UrlFormatSnafu)?,
                 hashed_url: e.hashed_url,
                 given_url: try_parse_url(e.given_url)?,
                 hashed_given_url: e.hashed_given_url,

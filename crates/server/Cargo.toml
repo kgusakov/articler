@@ -20,6 +20,7 @@ types.workspace = true
 wallabag_api.workspace = true
 sqlx.workspace = true
 actix-web.workspace = true
+snafu.workspace = true
 actix-session = { version = "0.11.0", features = ["cookie-session"] }
 actix-http = "3.11.2"
 actix-service = "2.0.3"

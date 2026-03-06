@@ -3844,6 +3844,7 @@ dependencies = [
  "serde",
  "serde-json-assert",
  "serde_json",
+ "snafu",
  "sqlx",
  "static-files 0.3.1",
  "tokio",
@@ -4461,6 +4462,7 @@ dependencies = [
  "db",
  "rand 0.10.0",
  "result",
+ "snafu",
  "sqlx",
  "tokio",
 ]
@@ -4801,8 +4803,10 @@ dependencies = [
  "serde_json",
  "serde_with",
  "slug",
+ "snafu",
  "sqlx",
  "thiserror 2.0.17",
+ "token_storage",
  "types",
  "url",
 ]
