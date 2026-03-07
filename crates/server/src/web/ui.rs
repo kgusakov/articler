@@ -13,13 +13,12 @@ use db::repository::{
     entries::{self, FindParams, SortOrder, UpdateEntry},
 };
 use helpers::{generate_client_id, generate_client_secret, hash_url};
-use snafu::ResultExt;
 use sqlx::{Acquire, SqlitePool};
 use types::Id;
 use url::Url;
 
 use crate::{
-    error::{DbSnafu, ForbiddenSnafu, NotFoundSnafu, Result, SqlxSnafu},
+    error::{ForbiddenSnafu, NotFoundSnafu, Result},
     web::{
         dto::{Client, LoginForm},
         ui::dto::{
@@ -73,8 +72,7 @@ async fn login(_session: Session, app: web::Data<AppState>) -> Result<HttpRespon
 async fn clients(session: Session, app: web::Data<AppState>) -> Result<HttpResponse> {
     if let Some(user_id) = session.get("user_id")? {
         let clients = clients::find_by_user_id(&app.pool, user_id)
-            .await
-            .context(DbSnafu)?
+            .await?
             .into_iter()
             .map(Client::from)
             .collect();
@@ -114,9 +112,7 @@ async fn article(
     req: HttpRequest,
 ) -> Result<HttpResponse> {
     if let Some(user_id) = session.get("user_id")? {
-        if let Some((article, _)) = entries::find_by_id(&app.pool, user_id, id.into_inner())
-            .await
-            .context(DbSnafu)?
+        if let Some((article, _)) = entries::find_by_id(&app.pool, user_id, id.into_inner()).await?
         {
             let article_page = ArticleContext {
                 article: PartialArticleContext {
@@ -248,12 +244,11 @@ async fn main(
     entries_filter: FindParams,
     active_category: Category,
 ) -> Result<HttpResponse> {
-    let mut tx = app.pool.begin().await.context(SqlxSnafu)?;
+    let mut tx = app.pool.begin().await?;
 
     // TODO must load only metadata
     let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut *tx, &entries_filter)
-        .await
-        .context(DbSnafu)?
+        .await?
         .into_iter()
         .map(|e| e.0.into())
         .collect();
@@ -269,7 +264,7 @@ async fn main(
         active_category,
     };
 
-    tx.commit().await.context(SqlxSnafu)?;
+    tx.commit().await?;
 
     let rendered = app.handlebars.render("index", &context)?;
 
@@ -283,15 +278,14 @@ async fn partial_articles(
     app: web::Data<AppState>,
     category: web::Path<Category>,
 ) -> Result<HttpResponse> {
-    let mut tx = app.pool.begin().await.context(SqlxSnafu)?;
+    let mut tx = app.pool.begin().await?;
 
     let user_id = check_user_id(&session)?;
     let params = find_params_for_category(user_id, &category);
 
     // TODO must load only metadata
     let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut *tx, &params)
-        .await
-        .context(DbSnafu)?
+        .await?
         .into_iter()
         .map(|e| e.0.into())
         .collect();
@@ -302,7 +296,7 @@ async fn partial_articles(
         active_category: category.into_inner(),
     };
 
-    tx.commit().await.context(SqlxSnafu)?;
+    tx.commit().await?;
 
     let rendered = app.handlebars.render("articles_and_categories", &context)?;
 
@@ -354,9 +348,7 @@ async fn do_archive(
         ..Default::default()
     };
 
-    entries::update_by_id(&app.pool, user_id, form.article_id, update)
-        .await
-        .context(DbSnafu)?;
+    entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
 
     if is_htmx_request(&req) {
         if let Some(HxSource::Article) = form.source {
@@ -391,9 +383,7 @@ async fn do_favourite(
         ..Default::default()
     };
 
-    entries::update_by_id(&app.pool, user_id, form.article_id, update)
-        .await
-        .context(DbSnafu)?;
+    entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
 
     if is_htmx_request(&req) {
         if let Some(HxSource::Article) = form.source {
@@ -418,9 +408,7 @@ async fn do_delete(
 
     let form = form.into_inner();
 
-    entries::delete_by_id(&app.pool, user_id, form.article_id)
-        .await
-        .context(DbSnafu)?;
+    entries::delete_by_id(&app.pool, user_id, form.article_id).await?;
 
     if is_htmx_request(&req) {
         if let Some(HxSource::Article) = form.source {
@@ -449,9 +437,7 @@ async fn do_client_delete(
 
     let form = form.into_inner();
 
-    clients::delete_by_id(&app.pool, user_id, form.id)
-        .await
-        .context(DbSnafu)?;
+    clients::delete_by_id(&app.pool, user_id, form.id).await?;
 
     Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
@@ -473,8 +459,7 @@ async fn do_create_client(
         &generate_client_secret(),
         now,
     )
-    .await
-    .context(DbSnafu)?;
+    .await?;
 
     Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
@@ -521,9 +506,7 @@ async fn do_add(
         uid: None,
     };
 
-    entries::create(&app.pool, create_entry, &[])
-        .await
-        .context(DbSnafu)?;
+    entries::create(&app.pool, create_entry, &[]).await?;
 
     Ok(Redirect::to(referer_or_root(&req)).see_other())
 }
@@ -562,9 +545,7 @@ async fn do_edit_title(
         ..Default::default()
     };
 
-    entries::update_by_id(&app.pool, user_id, form.article_id, update)
-        .await
-        .context(DbSnafu)?;
+    entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
 
     if is_htmx_request(&req) {
         if let Some(HxSource::Article) = form.source {
@@ -633,14 +614,13 @@ async fn render_article_cards<'c, C>(
 where
     C: Acquire<'c, Database = Db>,
 {
-    let mut conn = conn.acquire().await.context(SqlxSnafu)?;
+    let mut conn = conn.acquire().await?;
 
     let params = find_params_for_category(user_id, category);
 
     // TODO must load only metadata
     let articles: Vec<ArticleMetadata> = entries::find_all(&mut *conn, &params)
-        .await
-        .context(DbSnafu)?
+        .await?
         .into_iter()
         .map(|e| e.0.into())
         .collect();
@@ -661,10 +641,7 @@ async fn render_article(
     user_id: Id,
     article_id: Id,
 ) -> Result<HttpResponse> {
-    if let Some((article, _)) = entries::find_by_id(pool, user_id, article_id)
-        .await
-        .context(DbSnafu)?
-    {
+    if let Some((article, _)) = entries::find_by_id(pool, user_id, article_id).await? {
         let article_contenxt = PartialArticleContext {
             id: article.id,
             title: article.title,
@@ -698,11 +675,10 @@ mod dto {
         entries::{self, EntryRow, FindParams},
     };
     use serde::{Deserialize, Serialize};
-    use snafu::ResultExt;
     use types::{Id, ReadingTime};
     use url::Url;
 
-    use crate::error::{DbSnafu, Result, SqlxSnafu};
+    use crate::error::Result;
     use crate::web::dto::Client;
 
     #[derive(Deserialize)]
@@ -851,7 +827,7 @@ mod dto {
         where
             C: sqlx::Acquire<'c, Database = Db>,
         {
-            let mut tx = conn.acquire().await.context(SqlxSnafu)?;
+            let mut tx = conn.acquire().await?;
 
             Ok(Self {
                 unread_counter: entries::count(
@@ -862,8 +838,7 @@ mod dto {
                         ..Default::default()
                     },
                 )
-                .await
-                .context(DbSnafu)?,
+                .await?,
                 all_counter: entries::count(
                     &mut *tx,
                     &FindParams {
@@ -871,8 +846,7 @@ mod dto {
                         ..Default::default()
                     },
                 )
-                .await
-                .context(DbSnafu)?,
+                .await?,
                 starred_counter: entries::count(
                     &mut *tx,
                     &FindParams {
@@ -881,8 +855,7 @@ mod dto {
                         ..Default::default()
                     },
                 )
-                .await
-                .context(DbSnafu)?,
+                .await?,
                 archived_counter: entries::count(
                     &mut *tx,
                     &FindParams {
@@ -891,8 +864,7 @@ mod dto {
                         ..Default::default()
                     },
                 )
-                .await
-                .context(DbSnafu)?,
+                .await?,
             })
         }
     }

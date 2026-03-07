@@ -1,10 +1,9 @@
 use actix_web::web::{self, Json};
 use app_state::AppState;
-use snafu::ResultExt;
 
 use crate::{
     UserInfo,
-    error::{DbSnafu, NotFoundSnafu, Result},
+    error::{NotFoundSnafu, Result},
     models::Tag,
     wallabag::Id,
 };
@@ -16,8 +15,7 @@ pub(crate) async fn get_tags(
     user_info: UserInfo,
 ) -> Result<Json<Vec<Tag>>> {
     let result = tags::get_all(&data.pool, user_info.user_id)
-        .await
-        .context(DbSnafu)?
+        .await?
         .into_iter()
         .map(std::convert::Into::into)
         .collect();
@@ -31,8 +29,7 @@ pub(crate) async fn delete_tags_by_label(
     user_info: UserInfo,
 ) -> Result<Json<Vec<Tag>>> {
     let result = tags::delete_all_by_label(&data.pool, user_info.user_id, &label.labels)
-        .await
-        .context(DbSnafu)?
+        .await?
         .into_iter()
         .map(std::convert::Into::into)
         .collect();
@@ -46,8 +43,7 @@ pub(crate) async fn delete_tag_by_id(
     user_info: UserInfo,
 ) -> Result<Json<Tag>> {
     let result = tags::delete_by_id(&data.pool, user_info.user_id, tag_id.into_inner())
-        .await
-        .context(DbSnafu)?
+        .await?
         .map(std::convert::Into::into);
 
     if let Some(delete_tag) = result {
@@ -66,8 +62,7 @@ pub(crate) async fn delete_tag_by_label(
     user_info: UserInfo,
 ) -> Result<Json<Tag>> {
     let result = tags::delete_by_label(&data.pool, user_info.user_id, &label.label)
-        .await
-        .context(DbSnafu)?
+        .await?
         .map(std::convert::Into::into);
 
     if let Some(delete_tag) = result {

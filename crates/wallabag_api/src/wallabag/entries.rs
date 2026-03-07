@@ -1,6 +1,5 @@
 use crate::error::{
-    DbSnafu, NotFoundSnafu, NotImpementedSnafu, Result, SqlxSnafu, UnexpectedStateSnafu,
-    UrlFormatSnafu,
+    NotFoundSnafu, NotImpementedSnafu, Result, UnexpectedStateSnafu, UrlFormatSnafu,
 };
 use actix_web::{
     Either,
@@ -110,9 +109,7 @@ pub(crate) async fn post_entries(
         // TODO if it is not new entry - we will force empty tags. It should be fixed when this method will support not only entry creations
         .unwrap_or(vec![]);
 
-    let (entry_row, tag_rows) = entries::create(&data.pool, create_entry, &create_tags)
-        .await
-        .context(DbSnafu)?;
+    let (entry_row, tag_rows) = entries::create(&data.pool, create_entry, &create_tags).await?;
 
     let tags = tag_rows.into_iter().map(Tag::from).collect();
 
@@ -152,16 +149,14 @@ pub(crate) async fn entries(
         domain_name: request.domain_name,
     };
 
-    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
+    let mut tx = data.pool.begin().await?;
 
-    let count_without_paging = entries::count(&mut *tx, &params).await.context(DbSnafu)?;
+    let count_without_paging = entries::count(&mut *tx, &params).await?;
 
     // TODO implement all needed request filters and etc
-    let entries = entries::find_all(&mut *tx, &params)
-        .await
-        .context(DbSnafu)?;
+    let entries = entries::find_all(&mut *tx, &params).await?;
 
-    tx.commit().await.context(SqlxSnafu)?;
+    tx.commit().await?;
 
     // TODO fix clippy
     #[expect(clippy::cast_precision_loss)]
@@ -207,15 +202,11 @@ pub(crate) async fn get_tags_by_entry(
 ) -> Result<Json<Vec<Tag>>> {
     let entry_id = entry_id.into_inner();
 
-    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
+    let mut tx = data.pool.begin().await?;
 
-    let result = if entries::exists_by_id(&mut *tx, user_info.user_id, entry_id)
-        .await
-        .context(DbSnafu)?
-    {
+    let result = if entries::exists_by_id(&mut *tx, user_info.user_id, entry_id).await? {
         let result = tags::find_by_entry_id(&mut *tx, user_info.user_id, entry_id)
-            .await
-            .context(DbSnafu)?
+            .await?
             .into_iter()
             .map(std::convert::Into::into)
             .collect();
@@ -228,7 +219,7 @@ pub(crate) async fn get_tags_by_entry(
         .fail()
     };
 
-    tx.commit().await.context(SqlxSnafu)?;
+    tx.commit().await?;
 
     result
 }
@@ -240,20 +231,13 @@ pub(crate) async fn delete_tag_from_entry(
 ) -> Result<Json<Entry>> {
     let (entry_id, tag_id) = ids.into_inner();
 
-    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
+    let mut tx = data.pool.begin().await?;
 
-    let result = if entries::exists_by_id(&mut *tx, user_info.user_id, entry_id)
-        .await
-        .context(DbSnafu)?
-    {
-        entries::delete_tag_by_tag_id(&mut *tx, user_info.user_id, entry_id, tag_id)
-            .await
-            .context(DbSnafu)?;
+    let result = if entries::exists_by_id(&mut *tx, user_info.user_id, entry_id).await? {
+        entries::delete_tag_by_tag_id(&mut *tx, user_info.user_id, entry_id, tag_id).await?;
 
         if let Some((entry_row, tag_rows)) =
-            entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
-                .await
-                .context(DbSnafu)?
+            entries::find_by_id(&mut *tx, user_info.user_id, entry_id).await?
         {
             let tags = tag_rows.into_iter().map(std::convert::Into::into).collect();
 
@@ -271,7 +255,7 @@ pub(crate) async fn delete_tag_from_entry(
         .fail()
     };
 
-    tx.commit().await.context(SqlxSnafu)?;
+    tx.commit().await?;
 
     result
 }
@@ -285,13 +269,11 @@ pub(crate) async fn delete_entry(
     let request = request.into_inner();
     let entry_id = entry_id.into_inner();
 
-    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
+    let mut tx = data.pool.begin().await?;
 
     let result = match request.expect {
         Expect::Id => {
-            let deleted = entries::delete_by_id(&mut *tx, user_info.user_id, entry_id)
-                .await
-                .context(DbSnafu)?;
+            let deleted = entries::delete_by_id(&mut *tx, user_info.user_id, entry_id).await?;
 
             if !deleted {
                 return NotFoundSnafu {
@@ -303,9 +285,7 @@ pub(crate) async fn delete_entry(
             Ok(Json(DeleteEntryResponse::Id { id: entry_id }))
         }
         Expect::Full => {
-            let full_entry = entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
-                .await
-                .context(DbSnafu)?;
+            let full_entry = entries::find_by_id(&mut *tx, user_info.user_id, entry_id).await?;
 
             let (entry_row, tag_rows) = full_entry.ok_or_else(|| {
                 NotFoundSnafu {
@@ -314,9 +294,7 @@ pub(crate) async fn delete_entry(
                 .build()
             })?;
 
-            let deleted = entries::delete_by_id(&mut *tx, user_info.user_id, entry_id)
-                .await
-                .context(DbSnafu)?;
+            let deleted = entries::delete_by_id(&mut *tx, user_info.user_id, entry_id).await?;
 
             if !deleted {
                 return NotFoundSnafu {
@@ -334,7 +312,7 @@ pub(crate) async fn delete_entry(
         }
     };
 
-    tx.commit().await.context(SqlxSnafu)?;
+    tx.commit().await?;
 
     result
 }
@@ -348,12 +326,11 @@ pub(crate) async fn post_entry_tags(
 ) -> Result<Json<Entry>> {
     let entry_id = entry_id.into_inner();
 
-    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
+    let mut tx = data.pool.begin().await?;
 
     // TODO dirty design - looks like we need entry repository method for it
     let result: Result<Json<Entry>> = if entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
-        .await
-        .context(DbSnafu)?
+        .await?
         .is_some()
     {
         let full_tags: Vec<tags::CreateTag> = request
@@ -367,13 +344,10 @@ pub(crate) async fn post_entry_tags(
             })
             .collect();
 
-        tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags)
-            .await
-            .context(DbSnafu)?;
+        tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags).await?;
 
         let (entry_row, tag_rows) = entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
-            .await
-            .context(DbSnafu)?
+            .await?
             .ok_or(
                 NotFoundSnafu {
                     msg: "Entry not found",
@@ -391,7 +365,7 @@ pub(crate) async fn post_entry_tags(
         .fail()
     };
 
-    tx.commit().await.context(SqlxSnafu)?;
+    tx.commit().await?;
 
     result
 }
@@ -439,14 +413,12 @@ pub(crate) async fn patch_entry(
         },
     };
 
-    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
+    let mut tx = data.pool.begin().await?;
 
-    let updated = entries::update_by_id(&mut *tx, user_info.user_id, entry_id, repo_update)
-        .await
-        .context(DbSnafu)?;
+    let updated = entries::update_by_id(&mut *tx, user_info.user_id, entry_id, repo_update).await?;
 
     if !updated {
-        tx.rollback().await.context(SqlxSnafu)?;
+        tx.rollback().await?;
 
         return NotFoundSnafu {
             msg: "Entry not found",
@@ -464,14 +436,11 @@ pub(crate) async fn patch_entry(
             })
             .collect();
 
-        tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags)
-            .await
-            .context(DbSnafu)?;
+        tags::update_tags_by_entry_id(&mut *tx, user_info.user_id, entry_id, &full_tags).await?;
     }
 
     let (entry_row, tag_rows) = entries::find_by_id(&mut *tx, user_info.user_id, entry_id)
-        .await
-        .context(DbSnafu)?
+        .await?
         .ok_or_else(|| {
             NotFoundSnafu {
                 msg: "Entry not found",
@@ -483,7 +452,7 @@ pub(crate) async fn patch_entry(
 
     let entry = Entry::try_from((entry_row, entry_tags))?;
 
-    tx.commit().await.context(SqlxSnafu)?;
+    tx.commit().await?;
 
     Ok(Json(entry))
 }

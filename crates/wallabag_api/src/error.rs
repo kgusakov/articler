@@ -7,12 +7,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub(crate)))]
 pub enum Error {
+    #[snafu(transparent)]
     Sqlx {
         #[snafu(source)]
         error: sqlx::error::Error,
         #[snafu(implicit)]
         location: Location,
     },
+    #[snafu(transparent)]
     Db {
         #[snafu(source)]
         error: db::error::Error,
@@ -78,7 +80,7 @@ impl ResponseError for Error {
                 desription: _,
                 status_code,
                 location: _,
-            } => status_code.clone(),
+            } => *status_code,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

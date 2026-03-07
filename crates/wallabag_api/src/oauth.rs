@@ -12,7 +12,7 @@ use snafu::ResultExt;
 
 use crate::{
     UserInfo,
-    error::{DbSnafu, OauthSnafu, Result, SqlxSnafu, TokenStorageSnafu},
+    error::{OauthSnafu, Result, TokenStorageSnafu},
 };
 use db::repository::clients;
 use dto::{GetToken, Token};
@@ -67,8 +67,7 @@ async fn refresh_token(data: web::Data<AppState>, request: GetToken) -> Result<J
     };
 
     if clients::find_by_client_id_and_secret(&data.pool, &client_id, &client_secret)
-        .await
-        .context(DbSnafu)?
+        .await?
         .is_none()
     {
         return OauthSnafu {
@@ -148,7 +147,7 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
         .fail();
     };
 
-    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
+    let mut tx = data.pool.begin().await?;
 
     let Some(user_row) = find_user(&mut *tx, &username, &password).await? else {
         return OauthSnafu {
@@ -165,8 +164,7 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
         &client_id,
         &client_secret,
     )
-    .await
-    .context(DbSnafu)?
+    .await?
     else {
         return OauthSnafu {
             error: "invalid_client",
@@ -176,7 +174,7 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
         .fail();
     };
 
-    tx.commit().await.context(SqlxSnafu)?;
+    tx.commit().await?;
 
     let new_token = data
         .token_storage
