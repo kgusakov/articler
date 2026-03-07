@@ -19,6 +19,50 @@ pub enum Error {
         #[snafu(implicit)]
         location: Location,
     },
+    #[snafu(transparent)]
+    SessionGet {
+        #[snafu(source)]
+        error: actix_session::SessionGetError,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
+    SessionInsert {
+        #[snafu(source)]
+        error: actix_session::SessionInsertError,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    Forbidden {
+        #[snafu(implicit)]
+        location: Location,
+    },
+    NotFound {
+        msg: String,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
+    Render {
+        #[snafu(source)]
+        error: handlebars::RenderError,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
+    UrlParse {
+        #[snafu(source)]
+        error: url::ParseError,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
+    Auth {
+        #[snafu(source)]
+        error: auth::error::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
 }
 
 impl ResponseError for Error {

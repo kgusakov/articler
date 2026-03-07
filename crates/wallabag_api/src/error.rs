@@ -53,12 +53,32 @@ pub enum Error {
         #[snafu(implicit)]
         location: Location,
     },
+    Oauth {
+        error: String,
+        desription: String,
+        status_code: StatusCode,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
+    Auth {
+        #[snafu(source)]
+        error: auth::error::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
 }
 
 impl ResponseError for Error {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::NotFound { .. } => StatusCode::NOT_FOUND,
+            Self::Oauth {
+                error: _,
+                desription: _,
+                status_code,
+                location: _,
+            } => status_code.clone(),
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

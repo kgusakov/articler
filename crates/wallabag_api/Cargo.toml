@@ -12,6 +12,7 @@ db.workspace = true
 app_state.workspace = true
 helpers.workspace = true
 article_scraper.workspace = true
+auth.workspace = true
 types.workspace = true
 sqlx.workspace = true
 snafu.workspace = true

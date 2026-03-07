@@ -1,12 +1,15 @@
+pub mod error;
+
 use db::repository::{self, Db};
 use helpers::verify_password;
-use result::ArticlerResult;
+
+use crate::error::Result;
 
 pub async fn find_user<'c, C>(
     conn: C,
     username: &str,
     password: &str,
-) -> ArticlerResult<Option<repository::users::UserRow>>
+) -> Result<Option<repository::users::UserRow>>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {

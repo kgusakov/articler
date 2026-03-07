@@ -1,0 +1,14 @@
+[package]
+name = "auth"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+db.workspace = true
+helpers.workspace = true
+snafu.workspace = true
+sqlx.workspace = true
+argon2.workspace = true

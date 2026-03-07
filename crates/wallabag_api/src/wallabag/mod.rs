@@ -2,6 +2,7 @@ mod entries;
 mod tags;
 
 use crate::UserInfo;
+use crate::error::Result;
 use crate::wallabag::entries::exists;
 use actix_cors::Cors;
 use actix_utils::future::{Ready, ready};
@@ -86,14 +87,14 @@ pub fn routes(cfg: &mut ServiceConfig) {
     );
 }
 
-async fn version() -> actix_web::Result<Json<String>> {
+async fn version() -> Result<Json<String>> {
     Ok(Json(VERSION.to_owned()))
 }
 
 impl FromRequest for UserInfo {
     type Error = Error;
 
-    type Future = Ready<Result<Self, Self::Error>>;
+    type Future = Ready<actix_web::Result<Self, Self::Error>>;
 
     fn from_request(
         req: &actix_web::HttpRequest,

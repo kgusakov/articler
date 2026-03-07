@@ -18,6 +18,7 @@ helpers.workspace = true
 article_scraper.workspace = true
 types.workspace = true
 wallabag_api.workspace = true
+auth.workspace = true
 sqlx.workspace = true
 actix-web.workspace = true
 snafu.workspace = true

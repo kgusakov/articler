@@ -1,21 +1,21 @@
 use actix_cors::Cors;
+use actix_http::StatusCode;
 use actix_web::{
-    Either, Error, HttpMessage,
+    Either, HttpMessage,
     dev::ServiceRequest,
-    error::{self, ErrorBadRequest, ErrorInternalServerError},
     web::{self, Json, ServiceConfig, post},
 };
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use app_state::AppState;
+use auth::find_user;
 use snafu::ResultExt;
 
 use crate::{
     UserInfo,
-    auth::find_user,
-    error::{DbSnafu, TokenStorageSnafu},
+    error::{DbSnafu, OauthSnafu, Result, SqlxSnafu, TokenStorageSnafu},
 };
 use db::repository::clients;
-use dto::{GetToken, OauthError, Token};
+use dto::{GetToken, Token};
 
 static BEARER: &str = "bearer";
 
@@ -33,34 +33,37 @@ pub fn routes(cfg: &mut ServiceConfig) {
 async fn post_token(
     data: web::Data<AppState>,
     request: Either<web::Form<GetToken>, web::Json<GetToken>>,
-) -> actix_web::Result<Json<Token>> {
+) -> Result<Json<Token>> {
     let request = request.into_inner();
     match &request.grant_type {
         Some(gt) if gt == "password" => new_token(data, request).await,
         Some(gt) if gt == "refresh_token" => refresh_token(data, request).await,
-        _ => Err(ErrorBadRequest(oauth_error(
-            "invalid_request",
-            "Invalid grant_type parameter or parameter missing",
-        ))),
+        _ => OauthSnafu {
+            error: "invalid_request",
+            desription: "Invalid grant_type parameter or parameter missing",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail(),
     }
 }
 
-async fn refresh_token(
-    data: web::Data<AppState>,
-    request: GetToken,
-) -> actix_web::Result<Json<Token>> {
+async fn refresh_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<Token>> {
     let Some(client_id) = request.client_id else {
-        return Err(ErrorBadRequest(oauth_error(
-            "invalid_client",
-            "Client id was not found in the headers or body",
-        )));
+        return OauthSnafu {
+            error: "invalid_client",
+            desription: "Client id was not found in the headers or body",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail();
     };
 
     let Some(client_secret) = request.client_secret else {
-        return Err(ErrorBadRequest(oauth_error(
-            "invalid_client",
-            "The client credentials are invalid",
-        )));
+        return OauthSnafu {
+            error: "invalid_client",
+            desription: "The client credentials are invalid",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail();
     };
 
     if clients::find_by_client_id_and_secret(&data.pool, &client_id, &client_secret)
@@ -68,17 +71,21 @@ async fn refresh_token(
         .context(DbSnafu)?
         .is_none()
     {
-        return Err(ErrorBadRequest(oauth_error(
-            "invalid_client",
-            "The client credentials are invalid",
-        )));
+        return OauthSnafu {
+            error: "invalid_client",
+            desription: "The client credentials are invalid",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail();
     }
 
     let Some(refresh_token) = request.refresh_token else {
-        return Err(ErrorBadRequest(oauth_error(
-            "invalid_request",
-            "No \"refresh_token\" parameter found",
-        )));
+        return OauthSnafu {
+            error: "invalid_request",
+            desription: "No \"refresh_token\" parameter found",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail();
     };
 
     let Some(new_token) = data
@@ -87,10 +94,12 @@ async fn refresh_token(
         .await
         .context(TokenStorageSnafu)?
     else {
-        return Err(ErrorBadRequest(oauth_error(
-            "invalid_grant",
-            "Invalid refresh token",
-        )));
+        return OauthSnafu {
+            error: "invalid_grant",
+            desription: "Invalid refresh token",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail();
     };
 
     Ok(Json(Token {
@@ -102,42 +111,52 @@ async fn refresh_token(
     }))
 }
 
-async fn new_token(data: web::Data<AppState>, request: GetToken) -> actix_web::Result<Json<Token>> {
+async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<Token>> {
     let Some(username) = request.username else {
-        return Err(ErrorBadRequest(oauth_error(
-            "invalid_request",
-            "Missing parameters. \"username\" and \"password\" required",
-        )));
+        return OauthSnafu {
+            error: "invalid_request",
+            desription: "Missing parameters. \"username\" and \"password\" required",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail();
     };
 
     let Some(password) = request.password else {
-        return Err(ErrorBadRequest(oauth_error(
-            "invalid_request",
-            "Missing parameters. \"username\" and \"password\" required",
-        )));
+        return OauthSnafu {
+            error: "invalid_request",
+            desription: "Missing parameters. \"username\" and \"password\" required",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail();
     };
 
     let Some(client_id) = request.client_id else {
-        return Err(ErrorBadRequest(oauth_error(
-            "invalid_client",
-            "Client id was not found in the headers or body",
-        )));
+        return OauthSnafu {
+            error: "invalid_client",
+            desription: "Client id was not found in the headers or body",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail();
     };
 
     let Some(client_secret) = request.client_secret else {
-        return Err(ErrorBadRequest(oauth_error(
-            "invalid_client",
-            "The client credentials are invalid",
-        )));
+        return OauthSnafu {
+            error: "invalid_client",
+            desription: "The client credentials are invalid",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail();
     };
 
-    let mut tx = data.pool.begin().await.map_err(ErrorInternalServerError)?;
+    let mut tx = data.pool.begin().await.context(SqlxSnafu)?;
 
     let Some(user_row) = find_user(&mut *tx, &username, &password).await? else {
-        return Err(ErrorBadRequest(oauth_error(
-            "invalid_grant",
-            "Invalid username and password combination",
-        )));
+        return OauthSnafu {
+            error: "invalid_grant",
+            desription: "Invalid username and password combination",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail();
     };
 
     let Some(client_row) = clients::find_by_user_id_client_id_and_secret(
@@ -149,13 +168,15 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> actix_web::R
     .await
     .context(DbSnafu)?
     else {
-        return Err(ErrorBadRequest(oauth_error(
-            "invalid_client",
-            "The client credentials are invalid",
-        )));
+        return OauthSnafu {
+            error: "invalid_client",
+            desription: "The client credentials are invalid",
+            status_code: StatusCode::BAD_REQUEST,
+        }
+        .fail();
     };
 
-    tx.commit().await.map_err(ErrorInternalServerError)?;
+    tx.commit().await.context(SqlxSnafu)?;
 
     let new_token = data
         .token_storage
@@ -175,22 +196,30 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> actix_web::R
 pub(crate) async fn auth_extractor(
     req: ServiceRequest,
     credentials: Option<BearerAuth>,
-) -> Result<ServiceRequest, (Error, ServiceRequest)> {
+) -> std::result::Result<ServiceRequest, (actix_web::Error, ServiceRequest)> {
     let Some(credentials) = credentials else {
         return Err((
-            error::ErrorUnauthorized(oauth_error(
-                "access_denied",
-                "OAuth2 authentication required",
-            )),
+            OauthSnafu {
+                error: "access_denied",
+                desription: "OAuth2 authentication required",
+                status_code: StatusCode::UNAUTHORIZED,
+            }
+            .build()
+            .into(),
             req,
         ));
     };
+
     let token_storage = &req
         .app_data::<web::Data<AppState>>()
         .expect("App data for the request is not configured properly")
         .token_storage;
 
-    match token_storage.validate(credentials.token()).await {
+    match token_storage
+        .validate(credentials.token())
+        .await
+        .context(TokenStorageSnafu)
+    {
         Ok(Some(claim)) => {
             req.extensions_mut().insert(UserInfo {
                 user_id: claim.user_id,
@@ -200,20 +229,16 @@ pub(crate) async fn auth_extractor(
             Ok(req)
         }
         Ok(None) => Err((
-            error::ErrorUnauthorized(oauth_error(
-                "invalid_grant",
-                "The access token provided is invalid.",
-            )),
+            OauthSnafu {
+                error: "invalid_grant",
+                desription: "The access token provided is invalid",
+                status_code: StatusCode::UNAUTHORIZED,
+            }
+            .build()
+            .into(),
             req,
         )),
-        Err(e) => Err((ErrorInternalServerError(e), req)),
-    }
-}
-
-fn oauth_error(error: &str, description: &str) -> OauthError {
-    OauthError {
-        error: error.to_owned(),
-        error_description: description.to_owned(),
+        Err(err) => Err((err.into(), req)),
     }
 }
 
@@ -237,18 +262,5 @@ mod dto {
         pub expires_in: i64,
         pub token_type: String,
         pub scope: Option<String>,
-    }
-
-    #[derive(Debug, Serialize)]
-    pub struct OauthError {
-        pub error: String,
-        pub error_description: String,
-    }
-
-    impl std::fmt::Display for OauthError {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let json = serde_json::to_string(self).map_err(|_| std::fmt::Error)?;
-            write!(f, "{json}")
-        }
     }
 }
