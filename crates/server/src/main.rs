@@ -4,12 +4,13 @@ use std::str::FromStr;
 use actix_web::cookie::Key;
 use app_state::AppState;
 use article_scraper::Scraper;
-use result::ArticlerResult;
 use server::app::{http_server, init_handlebars};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 
+use server::error::Result;
+
 #[actix_web::main]
-async fn main() -> ArticlerResult<()> {
+async fn main() -> Result<()> {
     env_logger::init();
 
     let db_path = env::var("DATABASE_URL").expect("Environment variable DATABASE_URL is not set");

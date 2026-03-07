@@ -7,7 +7,6 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-result.workspace = true
 db.workspace = true
 article_scraper.workspace = true
 token_storage.workspace = true

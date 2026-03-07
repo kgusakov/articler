@@ -7,7 +7,6 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-result.workspace = true
 db.workspace = true
 app_state.workspace = true
 helpers.workspace = true

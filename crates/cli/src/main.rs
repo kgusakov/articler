@@ -5,6 +5,8 @@ use cli::{create_client, create_user};
 use sqlx::sqlite::SqlitePoolOptions;
 use tokio::runtime::Runtime;
 
+use cli::error::Result;
+
 #[derive(Parser)]
 #[command(about = "Command-line interface for articler", long_about = None)]
 #[command(version)]
@@ -28,7 +30,7 @@ enum Commands {
 }
 
 // TODO improve error messages: just human readable message
-fn main() -> result::ArticlerResult<()> {
+fn main() -> Result<()> {
     let rt = Runtime::new()?;
     let db_path = env::var("DATABASE_URL").expect("Environment variable DATABASE_URL is not set");
     let pool = rt.block_on(async { SqlitePoolOptions::new().connect(&db_path).await })?;

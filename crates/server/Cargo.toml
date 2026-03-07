@@ -11,7 +11,6 @@ name = "articler"
 path = "src/main.rs"
 
 [dependencies]
-result.workspace = true
 db.workspace = true
 app_state.workspace = true
 helpers.workspace = true

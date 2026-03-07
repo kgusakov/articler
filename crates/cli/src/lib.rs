@@ -1,22 +1,14 @@
+pub mod error;
+
 use db::repository::clients;
 use db::repository::clients::ClientRow;
 use db::repository::users;
 use email_address::EmailAddress;
 use helpers::{generate_client_id, generate_client_secret, hash_password};
-use result::ArticlerResult;
 use sqlx::Pool;
 use sqlx::Sqlite;
-use thiserror::Error;
 
-#[derive(Error, Debug)]
-pub enum CliErrors {
-    #[error("This username is already busy")]
-    UsernameBusy,
-    #[error("Email address is invalid")]
-    EmailInvalid,
-    #[error("User with this username was not found")]
-    UserNotFound,
-}
+use crate::error::{EmailInvalidSnafu, Result, UserNotFoundSnafu, UsernameBusySnafu};
 
 pub async fn create_user(
     pool: &Pool<Sqlite>,
@@ -24,15 +16,15 @@ pub async fn create_user(
     password: &str,
     name: &str,
     email: &str,
-) -> ArticlerResult<()> {
+) -> Result<()> {
     let mut tx = pool.begin().await?;
 
     if !EmailAddress::is_valid(email) {
-        return Err(CliErrors::EmailInvalid.into());
+        return EmailInvalidSnafu.fail();
     }
 
     if users::find_by_username(&mut *tx, username).await?.is_some() {
-        return Err(CliErrors::UsernameBusy.into());
+        return UsernameBusySnafu.fail();
     }
 
     let now = chrono::Utc::now().timestamp();
@@ -56,7 +48,7 @@ pub async fn create_client(
     pool: &Pool<Sqlite>,
     username: &str,
     client_name: &str,
-) -> ArticlerResult<ClientRow> {
+) -> Result<ClientRow> {
     let mut tx = pool.begin().await?;
 
     if let Some(user) = users::find_by_username(&mut *tx, username).await? {
@@ -75,6 +67,6 @@ pub async fn create_client(
 
         Ok(client)
     } else {
-        Err(CliErrors::UserNotFound.into())
+        UserNotFoundSnafu.fail()
     }
 }

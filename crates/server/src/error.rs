@@ -22,6 +22,13 @@ pub enum Error {
         location: Location,
     },
     #[snafu(transparent)]
+    Io {
+        #[snafu(source)]
+        error: std::io::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
     SessionGet {
         #[snafu(source)]
         error: actix_session::SessionGetError,

@@ -388,7 +388,6 @@ dependencies = [
  "article_scraper",
  "db",
  "handlebars",
- "result",
  "sqlx",
  "token_storage",
 ]
@@ -417,7 +416,6 @@ dependencies = [
  "log",
  "mupdf",
  "reqwest",
- "result",
  "snafu",
  "thiserror 2.0.17",
  "tokio",
@@ -455,7 +453,6 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 name = "auth"
 version = "0.1.0"
 dependencies = [
- "argon2",
  "db",
  "helpers",
  "snafu",
@@ -766,9 +763,9 @@ dependencies = [
  "db",
  "email_address",
  "helpers",
- "result",
  "serde",
  "serde_json",
+ "snafu",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",
@@ -1119,7 +1116,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "indexmap 2.13.0",
- "result",
  "serde",
  "snafu",
  "sqlx",
@@ -1921,6 +1917,7 @@ dependencies = [
  "argon2",
  "rand 0.10.0",
  "sha1",
+ "snafu",
  "url",
 ]
 
@@ -3406,13 +3403,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "result"
-version = "0.1.0"
-dependencies = [
- "actix-web",
-]
-
-[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3849,7 +3839,6 @@ dependencies = [
  "log",
  "rand 0.10.0",
  "regex",
- "result",
  "rstest",
  "rstest_reuse",
  "scraper",
@@ -4473,7 +4462,6 @@ dependencies = [
  "chrono",
  "db",
  "rand 0.10.0",
- "result",
  "snafu",
  "sqlx",
  "tokio",
@@ -4811,7 +4799,6 @@ dependencies = [
  "chrono",
  "db",
  "helpers",
- "result",
  "serde",
  "serde_json",
  "serde_with",

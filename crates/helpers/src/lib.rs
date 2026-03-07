@@ -1,3 +1,5 @@
+pub mod error;
+
 use std::sync::LazyLock;
 
 use argon2::{
@@ -9,13 +11,15 @@ use rand::distr::Alphanumeric;
 use sha1::{Digest, Sha1};
 use url::Url;
 
+use crate::error::Result;
+
 static PASSWORD_HASHER: LazyLock<Argon2> = LazyLock::new(Argon2::default);
 
 pub fn hash_url(url: &Url) -> String {
     format!("{:x}", Sha1::digest(url.as_str()))
 }
 
-pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
+pub fn hash_password(password: &str) -> Result<String> {
     let salt = SaltString::generate(OsRng);
     let hash: PasswordHashString = PASSWORD_HASHER
         .hash_password(password.as_bytes(), &salt)?
@@ -24,7 +28,7 @@ pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Er
     Ok(hash.to_string())
 }
 
-pub fn verify_password(password: &str, hash: &str) -> Result<bool, argon2::password_hash::Error> {
+pub fn verify_password(password: &str, hash: &str) -> Result<bool> {
     Ok(PASSWORD_HASHER
         .verify_password(password.as_bytes(), &PasswordHash::new(hash)?)
         .is_ok())

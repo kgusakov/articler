@@ -7,7 +7,6 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-result.workspace = true
 db.workspace = true
 sqlx.workspace = true
 tokio.workspace = true

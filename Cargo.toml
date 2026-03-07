@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/result",
     "crates/helpers",
     "crates/db",
     "crates/server",
@@ -34,7 +33,6 @@ insta = "1.46.3"
 snafu = "0.9.0"
 argon2 = { version = "0.5.3", features = ["std"] }
 
-result = { path = "crates/result" }
 helpers = { path = "crates/helpers" }
 db = { path = "crates/db" }
 server = { path = "crates/server" }

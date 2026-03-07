@@ -7,7 +7,6 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-result.workspace = true
 types.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
