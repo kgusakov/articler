@@ -1271,7 +1271,7 @@ async fn auth_wrong_bearer(pool: SqlitePool) {
     let expected: Value = serde_json::from_str(
         r#"{
             "error": "invalid_grant",
-            "error_description": "The access token provided is invalid."
+            "error_description": "The access token provided is invalid"
             }"#,
     )
     .unwrap();

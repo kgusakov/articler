@@ -40,7 +40,7 @@ async fn post_token(
         Some(gt) if gt == "refresh_token" => refresh_token(data, request).await,
         _ => OauthSnafu {
             error: "invalid_request",
-            desription: "Invalid grant_type parameter or parameter missing",
+            description: "Invalid grant_type parameter or parameter missing",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail(),
@@ -51,7 +51,7 @@ async fn refresh_token(data: web::Data<AppState>, request: GetToken) -> Result<J
     let Some(client_id) = request.client_id else {
         return OauthSnafu {
             error: "invalid_client",
-            desription: "Client id was not found in the headers or body",
+            description: "Client id was not found in the headers or body",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail();
@@ -60,7 +60,7 @@ async fn refresh_token(data: web::Data<AppState>, request: GetToken) -> Result<J
     let Some(client_secret) = request.client_secret else {
         return OauthSnafu {
             error: "invalid_client",
-            desription: "The client credentials are invalid",
+            description: "The client credentials are invalid",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail();
@@ -72,7 +72,7 @@ async fn refresh_token(data: web::Data<AppState>, request: GetToken) -> Result<J
     {
         return OauthSnafu {
             error: "invalid_client",
-            desription: "The client credentials are invalid",
+            description: "The client credentials are invalid",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail();
@@ -81,7 +81,7 @@ async fn refresh_token(data: web::Data<AppState>, request: GetToken) -> Result<J
     let Some(refresh_token) = request.refresh_token else {
         return OauthSnafu {
             error: "invalid_request",
-            desription: "No \"refresh_token\" parameter found",
+            description: "No \"refresh_token\" parameter found",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail();
@@ -95,7 +95,7 @@ async fn refresh_token(data: web::Data<AppState>, request: GetToken) -> Result<J
     else {
         return OauthSnafu {
             error: "invalid_grant",
-            desription: "Invalid refresh token",
+            description: "Invalid refresh token",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail();
@@ -114,7 +114,7 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
     let Some(username) = request.username else {
         return OauthSnafu {
             error: "invalid_request",
-            desription: "Missing parameters. \"username\" and \"password\" required",
+            description: "Missing parameters. \"username\" and \"password\" required",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail();
@@ -123,7 +123,7 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
     let Some(password) = request.password else {
         return OauthSnafu {
             error: "invalid_request",
-            desription: "Missing parameters. \"username\" and \"password\" required",
+            description: "Missing parameters. \"username\" and \"password\" required",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail();
@@ -132,7 +132,7 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
     let Some(client_id) = request.client_id else {
         return OauthSnafu {
             error: "invalid_client",
-            desription: "Client id was not found in the headers or body",
+            description: "Client id was not found in the headers or body",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail();
@@ -141,7 +141,7 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
     let Some(client_secret) = request.client_secret else {
         return OauthSnafu {
             error: "invalid_client",
-            desription: "The client credentials are invalid",
+            description: "The client credentials are invalid",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail();
@@ -152,7 +152,7 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
     let Some(user_row) = find_user(&mut *tx, &username, &password).await? else {
         return OauthSnafu {
             error: "invalid_grant",
-            desription: "Invalid username and password combination",
+            description: "Invalid username and password combination",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail();
@@ -168,7 +168,7 @@ async fn new_token(data: web::Data<AppState>, request: GetToken) -> Result<Json<
     else {
         return OauthSnafu {
             error: "invalid_client",
-            desription: "The client credentials are invalid",
+            description: "The client credentials are invalid",
             status_code: StatusCode::BAD_REQUEST,
         }
         .fail();
@@ -199,7 +199,7 @@ pub(crate) async fn auth_extractor(
         return Err((
             OauthSnafu {
                 error: "access_denied",
-                desription: "OAuth2 authentication required",
+                description: "OAuth2 authentication required",
                 status_code: StatusCode::UNAUTHORIZED,
             }
             .build()
@@ -229,7 +229,7 @@ pub(crate) async fn auth_extractor(
         Ok(None) => Err((
             OauthSnafu {
                 error: "invalid_grant",
-                desription: "The access token provided is invalid",
+                description: "The access token provided is invalid",
                 status_code: StatusCode::UNAUTHORIZED,
             }
             .build()

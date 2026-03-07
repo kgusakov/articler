@@ -69,6 +69,10 @@ pub enum Error {
 
 impl ResponseError for Error {
     fn status_code(&self) -> StatusCode {
-        StatusCode::INTERNAL_SERVER_ERROR
+        match self {
+            Self::NotFound { .. } => StatusCode::NOT_FOUND,
+            Self::Forbidden { .. } => StatusCode::FORBIDDEN,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
     }
 }
