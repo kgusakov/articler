@@ -41,10 +41,20 @@ pub fn app(
 pub fn init_handlebars() -> Result<Handlebars<'static>, TemplateError> {
     let mut handlebars = Handlebars::new();
     handlebars.register_template_string("index", include_str!("../templates/index.hbs"))?;
+
     handlebars.register_template_string(
         "fake_development",
         include_str!("../templates/fake_development.hbs"),
     )?;
+    handlebars.register_template_string(
+        "fake_client_create_result",
+        include_str!("../templates/fake_client_create_result.hbs"),
+    )?;
+    handlebars.register_template_string(
+        "fake_client_create",
+        include_str!("../templates/fake_client_create.hbs"),
+    )?;
+
     handlebars.register_partial("login", include_str!("../templates/login.hbs"))?;
     handlebars.register_partial("navigation", include_str!("../templates/navigation.hbs"))?;
     handlebars.register_partial("main", include_str!("../templates/main.hbs"))?;

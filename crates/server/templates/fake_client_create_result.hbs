@@ -1,0 +1,40 @@
+<html>
+
+<body>
+    <div class="row">
+        <p>Here are your client parameters.</p>
+
+        <table class="striped">
+            <tbody>
+                <tr>
+                    <td>Client name</td>
+                    <td><strong><code>{{ client_name }} </code></strong></td>
+                </tr>
+                <tr>
+                    <td>Client ID</td>
+                    <td>
+                        <strong><code>{{ client_id }}</code></strong>
+                        <button class="btn"
+                            data-clipboard-text="12_4l8sj4k7cm80os00occwkcc8sgo8wc0s00sk8so40gggs80kss">Copy</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Client secret</td>
+                    <td>
+                        <strong><code>{{ client_secret }}</code></strong>
+                        <button class="btn" data-clipboard-text="{{ client_secret }}">Copy</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <br>
+
+        <a href="/developer" class="waves-effect waves-light grey btn">Back</a>
+        <a href="/developer/howto/first-app" class="btn waves-effect waves-light">Read the howto "Create my first
+            application"</a>
+    </div>
+
+</body>
+
+</html>
