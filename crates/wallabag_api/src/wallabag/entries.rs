@@ -4,7 +4,6 @@ use crate::error::{
 };
 use actix_web::{
     Either,
-    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     web::{self, Json, Query},
 };
 use app_state::AppState;
@@ -24,7 +23,6 @@ use dto::{
     EntriesRequest, EntryTags, Exists, Expect, Link, Links, UpdateEntry,
 };
 use helpers::{generate_uid, hash_url};
-use result::ArticlerError;
 
 // TODO current implementation needed only for mobile app healthchecks. Needed full implementation
 pub(crate) async fn exists() -> Result<Json<Exists>> {
@@ -119,7 +117,6 @@ pub(crate) async fn post_entries(
     let tags = tag_rows.into_iter().map(Tag::from).collect();
 
     // TODO replace by real url
-    #[expect(clippy::redundant_closure)]
     let self_url = Url::parse("https://example.com").context(UrlFormatSnafu)?;
 
     Ok(web::Json(AddEntryResponse {
@@ -186,7 +183,6 @@ pub(crate) async fn entries(
     }
 
     // TODO implement actual urls generating
-    #[expect(clippy::redundant_closure)]
     let url = Url::parse("http://example.com").context(UrlFormatSnafu)?;
 
     Ok(web::Json(Entries {
@@ -338,7 +334,7 @@ pub(crate) async fn delete_entry(
         }
     };
 
-    tx.commit().await.context(SqlxSnafu);
+    tx.commit().await.context(SqlxSnafu)?;
 
     result
 }
@@ -564,9 +560,9 @@ mod dto {
     }
 
     fn try_parse_url(s: Option<String>) -> Result<Option<Url>> {
-        Ok(s.map(|u| Url::parse(&u))
+        s.map(|u| Url::parse(&u))
             .transpose()
-            .context(UrlFormatSnafu)?)
+            .context(UrlFormatSnafu)
     }
 
     fn try_parse_timestamp_opt(s: Option<i64>) -> Result<Option<DateTime<Utc>>> {

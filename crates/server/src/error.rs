@@ -1,3 +1,4 @@
+use actix_http::StatusCode;
 use actix_web::ResponseError;
 use snafu::{Location, Snafu};
 
@@ -20,4 +21,8 @@ pub enum Error {
     },
 }
 
-impl ResponseError for Error {}
+impl ResponseError for Error {
+    fn status_code(&self) -> StatusCode {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
+}
