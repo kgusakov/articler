@@ -250,6 +250,7 @@ The `/api/entries` endpoint supports filtering by:
 - Entry-tag relationship uses a LEFT JOIN pattern to fetch entries with their associated tags
 - Session cookies are not marked secure by default (TODO for production HTTPS)
 - NEVER remove TODO automatically, ask me about it ALWAYS
+- When using DashMap - get/remove and etc. methods which have "**Locking behaviour:** May deadlock if called when holding any sort of reference into the map." in docks must be called only when no another references to the map exists in current thread
 
 # Individual Preferences
 - @~/.claude/articler.md

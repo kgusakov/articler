@@ -215,7 +215,6 @@ pub(crate) async fn auth_extractor(
 
     match token_storage
         .validate(credentials.token())
-        .await
         .context(TokenStorageSnafu)
     {
         Ok(Some(claim)) => {

@@ -40,28 +40,19 @@ struct InternalToken {
 
 struct TokenStorageInner {
     access_tokens: DashMap<String, InternalToken>,
-}
-
-pub struct TokenStorage {
-    inner: Arc<TokenStorageInner>,
-    now: Arc<dyn Fn() -> i64 + Send + Sync>,
     cancel_token: CancellationToken,
 }
 
-impl Clone for TokenStorage {
-    fn clone(&self) -> Self {
-        Self {
-            inner: Arc::clone(&self.inner),
-            now: Arc::clone(&self.now),
-            cancel_token: self.cancel_token.clone(),
-        }
-    }
-}
-
-impl Drop for TokenStorage {
+impl Drop for TokenStorageInner {
     fn drop(&mut self) {
         self.cancel_token.cancel();
     }
+}
+
+#[derive(Clone)]
+pub struct TokenStorage {
+    inner: Arc<TokenStorageInner>,
+    now: Arc<dyn Fn() -> i64 + Send + Sync>,
 }
 
 impl Default for TokenStorage {
@@ -77,9 +68,9 @@ impl TokenStorage {
         let storage = TokenStorage {
             inner: Arc::new(TokenStorageInner {
                 access_tokens: DashMap::new(),
+                cancel_token: cancel_token.clone(),
             }),
             now: Arc::new(|| Utc::now().timestamp()),
-            cancel_token: cancel_token.clone(),
         };
 
         let task_storage = storage.clone();
@@ -89,7 +80,7 @@ impl TokenStorage {
 
             loop {
                 tokio::select! {
-                    _ = cancel_token.cancelled() => break,
+                    () = cancel_token.cancelled() => break,
                     _ = interval.tick() => {
                         task_storage.gc();
                     }
@@ -105,13 +96,13 @@ impl TokenStorage {
         TokenStorage {
             inner: Arc::new(TokenStorageInner {
                 access_tokens: DashMap::new(),
+                cancel_token: CancellationToken::new(),
             }),
             now: provider,
-            cancel_token: CancellationToken::new(),
         }
     }
 
-    pub async fn run_gc(&self) {
+    pub fn run_gc(&self) {
         self.gc();
     }
 
@@ -149,11 +140,12 @@ impl TokenStorage {
         })
     }
 
-    pub async fn validate(&self, access_token: &str) -> Result<Option<Claim>> {
+    pub fn validate(&self, access_token: &str) -> Result<Option<Claim>> {
         let now = self.now();
 
         if let Some(t) = self.inner.access_tokens.get(access_token) {
             if t.expires_at < now {
+                drop(t); // don't remove - deadlock on the next line will be produced (read DashMap docs)
                 self.inner.access_tokens.remove(access_token);
                 Ok(None)
             } else {
@@ -203,7 +195,7 @@ impl TokenStorage {
                 internal_token.user_id,
                 internal_token.client_id,
                 Utc::now().timestamp(),
-                EXPIRATION_TIME,
+                REFRESH_TOKEN_EXPIRATION_TIME,
             )
             .await?;
 
@@ -289,7 +281,7 @@ mod tests {
 
         let token = storage.new_token(&pool, user_id, client_id).await.unwrap();
 
-        let claim = storage.validate(&token.access_token).await.unwrap();
+        let claim = storage.validate(&token.access_token).unwrap();
 
         assert!(claim.is_some(), "Should find valid access token");
         let claim = claim.unwrap();
@@ -301,7 +293,7 @@ mod tests {
     async fn test_validate_invalid_token() {
         let storage = TokenStorage::new();
 
-        let claim = storage.validate("invalid_token").await.unwrap();
+        let claim = storage.validate("invalid_token").unwrap();
 
         assert!(claim.is_none(), "Should not find invalid token");
     }
@@ -314,7 +306,7 @@ mod tests {
         let storage = TokenStorage::new();
         let token = storage.new_token(&pool, 1, 1).await.unwrap();
 
-        let claim = storage.validate(&token.refresh_token).await.unwrap();
+        let claim = storage.validate(&token.refresh_token).unwrap();
 
         assert!(
             claim.is_none(),
@@ -349,7 +341,7 @@ mod tests {
             "New refresh token should be different"
         );
 
-        let claim = storage.validate(&new_token.access_token).await.unwrap();
+        let claim = storage.validate(&new_token.access_token).unwrap();
         assert!(claim.is_some(), "New access token should be valid");
         assert_eq!(claim.unwrap().user_id, user_id);
 
@@ -421,19 +413,11 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        let claim = storage
-            .validate(&token3.access_token)
-            .await
-            .unwrap()
-            .unwrap();
+        let claim = storage.validate(&token3.access_token).unwrap().unwrap();
         assert_eq!(claim.user_id, user_id);
 
         assert!(
-            storage
-                .validate(&token1.access_token)
-                .await
-                .unwrap()
-                .is_some(),
+            storage.validate(&token1.access_token).unwrap().is_some(),
             "Old access tokens remain valid"
         );
         assert!(
@@ -464,16 +448,8 @@ mod tests {
         let token1 = storage.new_token(&pool, 1, 1).await.unwrap();
         let token2 = storage.new_token(&pool, 2, 4).await.unwrap();
 
-        let claim1 = storage
-            .validate(&token1.access_token)
-            .await
-            .unwrap()
-            .unwrap();
-        let claim2 = storage
-            .validate(&token2.access_token)
-            .await
-            .unwrap()
-            .unwrap();
+        let claim1 = storage.validate(&token1.access_token).unwrap().unwrap();
+        let claim2 = storage.validate(&token2.access_token).unwrap().unwrap();
 
         assert_eq!(claim1.user_id, 1);
         assert_eq!(claim1.client_id, 1);
@@ -482,11 +458,7 @@ mod tests {
 
         storage.refresh(&pool, &token1.refresh_token).await.unwrap();
 
-        let claim2_after = storage
-            .validate(&token2.access_token)
-            .await
-            .unwrap()
-            .unwrap();
+        let claim2_after = storage.validate(&token2.access_token).unwrap().unwrap();
         assert_eq!(
             claim2_after.user_id, 2,
             "Other user's token should still work"
@@ -507,19 +479,19 @@ mod tests {
 
         let token = storage.new_token(&pool, 1, 1).await.unwrap();
 
-        let claim = storage.validate(&token.access_token).await.unwrap();
+        let claim = storage.validate(&token.access_token).unwrap();
         assert!(claim.is_some(), "Token should be valid when just created");
 
         current_time.store(1000 + EXPIRATION_TIME + 1, Relaxed);
 
-        let claim = storage.validate(&token.access_token).await.unwrap();
+        let claim = storage.validate(&token.access_token).unwrap();
         assert!(
             claim.is_none(),
             "Expired access token should return None on validation"
         );
 
         current_time.store(1000, Relaxed);
-        let claim = storage.validate(&token.access_token).await.unwrap();
+        let claim = storage.validate(&token.access_token).unwrap();
         assert!(
             claim.is_none(),
             "Expired token should be removed from storage"
@@ -584,7 +556,7 @@ mod tests {
 
         current_time.store(1000 + EXPIRATION_TIME - 1, Relaxed);
 
-        let claim = storage.validate(&token.access_token).await.unwrap();
+        let claim = storage.validate(&token.access_token).unwrap();
         assert!(
             claim.is_some(),
             "Token should still be valid before expiration time"
@@ -630,13 +602,13 @@ mod tests {
 
         let token2 = storage.new_token(&pool, 2, 4).await.unwrap();
 
-        let claim2 = storage.validate(&token2.access_token).await.unwrap();
+        let claim2 = storage.validate(&token2.access_token).unwrap();
         assert!(claim2.is_some(), "Token2 should be valid");
 
-        storage.run_gc().await;
+        storage.run_gc();
 
         current_time.store(1000, atomic::Ordering::Relaxed);
-        let claim1 = storage.validate(&token1.access_token).await.unwrap();
+        let claim1 = storage.validate(&token1.access_token).unwrap();
         assert!(claim1.is_none(), "Token1 should be removed by GC");
     }
 
@@ -658,14 +630,14 @@ mod tests {
         // Move time forward but not enough to expire tokens
         current_time.store(1000 + EXPIRATION_TIME / 2, Relaxed);
 
-        storage.run_gc().await;
+        storage.run_gc();
 
         // Token1 should still be valid
-        let claim1 = storage.validate(&token1.access_token).await.unwrap();
+        let claim1 = storage.validate(&token1.access_token).unwrap();
         assert!(claim1.is_some(), "Token1 should still be valid");
 
         // Token2 should still be there
-        let claim2 = storage.validate(&token2.access_token).await.unwrap();
+        let claim2 = storage.validate(&token2.access_token).unwrap();
         assert!(
             claim2.is_some(),
             "Token2 should be preserved by GC since it's still valid"
