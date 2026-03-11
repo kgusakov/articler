@@ -10,6 +10,7 @@ workspace = true
 db.workspace = true
 sqlx.workspace = true
 tokio.workspace = true
+tokio-util = { version = "0.7", features = ["rt"] }
 chrono.workspace = true
 rand.workspace = true
 snafu.workspace = true

@@ -1,22 +1,24 @@
 pub mod error;
 
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::Utc;
 use db::repository::{Db, tokens};
 use rand::{distr::Alphanumeric, prelude::*};
+use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 use sqlx::Connection;
-use tokio::sync::Mutex;
 
 use crate::error::Result;
 
 type Id = i64;
 
-const EXPIRATION_TIME: i64 = 60 * 60; // one hour in seconds
-const REFRESH_TOKEN_EXPIRATION_TIME: i64 = 30 * 24 * 60 * 60; // one month in seconds
-
-// TODO fix global mutex and gc on every call (without calls it will produce memory leaks moreover)
+const GC_PERIOD: i64 = 60;
+const EXPIRATION_TIME: i64 = 60 * 60;
+const REFRESH_TOKEN_EXPIRATION_TIME: i64 = 30 * 24 * 60 * 60;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Claim {
@@ -42,8 +44,25 @@ struct TokenStorageInner {
 }
 
 pub struct TokenStorage {
-    inner: Mutex<TokenStorageInner>,
-    now: Box<dyn Fn() -> i64 + Send + Sync>,
+    inner: Arc<Mutex<TokenStorageInner>>,
+    now: Arc<dyn Fn() -> i64 + Send + Sync>,
+    cancel_token: CancellationToken,
+}
+
+impl Clone for TokenStorage {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            now: Arc::clone(&self.now),
+            cancel_token: self.cancel_token.clone(),
+        }
+    }
+}
+
+impl Drop for TokenStorage {
+    fn drop(&mut self) {
+        self.cancel_token.cancel();
+    }
 }
 
 impl Default for TokenStorage {
@@ -55,22 +74,45 @@ impl Default for TokenStorage {
 impl TokenStorage {
     #[must_use]
     pub fn new() -> Self {
-        TokenStorage {
-            inner: Mutex::new(TokenStorageInner {
+        let cancel_token = CancellationToken::new();
+        let storage = TokenStorage {
+            inner: Arc::new(Mutex::new(TokenStorageInner {
                 access_tokens: HashMap::new(),
-            }),
-            now: Box::new(|| Utc::now().timestamp()),
-        }
+            })),
+            now: Arc::new(|| Utc::now().timestamp()),
+            cancel_token: cancel_token.clone(),
+        };
+        tokio::spawn(storage.clone().gc_task(cancel_token));
+        storage
     }
 
     #[cfg(test)]
-    fn new_with_custom_timestamp_provider(provider: Box<dyn Fn() -> i64 + Send + Sync>) -> Self {
+    fn new_with_custom_timestamp_provider(provider: Arc<dyn Fn() -> i64 + Send + Sync>) -> Self {
         TokenStorage {
-            inner: Mutex::new(TokenStorageInner {
+            inner: Arc::new(Mutex::new(TokenStorageInner {
                 access_tokens: HashMap::new(),
-            }),
+            })),
             now: provider,
+            cancel_token: CancellationToken::new(),
         }
+    }
+
+    async fn gc_task(self, cancel_token: CancellationToken) {
+        let mut interval = tokio::time::interval(Duration::from_secs(GC_PERIOD as u64));
+        loop {
+            tokio::select! {
+                _ = cancel_token.cancelled() => break,
+                _ = interval.tick() => {
+                    let mut inner = self.inner.lock().await;
+                    self.gc(&mut inner);
+                }
+            }
+        }
+    }
+
+    pub async fn run_gc(&self) {
+        let mut inner = self.inner.lock().await;
+        self.gc(&mut inner);
     }
 
     pub async fn new_token<'c, C>(&self, conn: C, user_id: Id, client_id: Id) -> Result<NewToken>
@@ -109,17 +151,12 @@ impl TokenStorage {
     }
 
     pub async fn validate(&self, access_token: &str) -> Result<Option<Claim>> {
-        // It's ok to unwrap - poison hould be propagated
         let mut inner = self.inner.lock().await;
-        // TODO gc on every validate is a bad pattern
-        self.gc(&mut inner);
-
         let now = self.now();
 
         if let Some(t) = inner.access_tokens.get(access_token) {
             if t.expires_at < now {
                 inner.access_tokens.remove(access_token);
-
                 Ok(None)
             } else {
                 Ok(Some(t.claim))
@@ -470,7 +507,7 @@ mod tests {
         let current_time = Arc::new(AtomicI64::new(1000i64));
         let time_clone = current_time.clone();
 
-        let storage = TokenStorage::new_with_custom_timestamp_provider(Box::new(move || {
+        let storage = TokenStorage::new_with_custom_timestamp_provider(Arc::new(move || {
             time_clone.load(atomic::Ordering::Relaxed)
         }));
 
@@ -505,7 +542,7 @@ mod tests {
         let current_time = Arc::new(AtomicI64::new(1000i64));
         let time_clone = current_time.clone();
 
-        let storage = TokenStorage::new_with_custom_timestamp_provider(Box::new(move || {
+        let storage = TokenStorage::new_with_custom_timestamp_provider(Arc::new(move || {
             time_clone.load(atomic::Ordering::Relaxed)
         }));
 
@@ -545,7 +582,7 @@ mod tests {
         let current_time = Arc::new(AtomicI64::new(1000i64));
         let time_clone = current_time.clone();
 
-        let storage = TokenStorage::new_with_custom_timestamp_provider(Box::new(move || {
+        let storage = TokenStorage::new_with_custom_timestamp_provider(Arc::new(move || {
             time_clone.load(atomic::Ordering::Relaxed)
         }));
 
@@ -589,7 +626,7 @@ mod tests {
         let current_time = Arc::new(AtomicI64::new(1000i64));
         let time_clone = current_time.clone();
 
-        let storage = TokenStorage::new_with_custom_timestamp_provider(Box::new(move || {
+        let storage = TokenStorage::new_with_custom_timestamp_provider(Arc::new(move || {
             time_clone.load(atomic::Ordering::Relaxed)
         }));
 
@@ -601,6 +638,8 @@ mod tests {
 
         let claim2 = storage.validate(&token2.access_token).await.unwrap();
         assert!(claim2.is_some(), "Token2 should be valid");
+
+        storage.run_gc().await;
 
         current_time.store(1000, atomic::Ordering::Relaxed);
         let claim1 = storage.validate(&token1.access_token).await.unwrap();
@@ -615,7 +654,7 @@ mod tests {
         let current_time = Arc::new(AtomicI64::new(1000i64));
         let time_clone = current_time.clone();
 
-        let storage = TokenStorage::new_with_custom_timestamp_provider(Box::new(move || {
+        let storage = TokenStorage::new_with_custom_timestamp_provider(Arc::new(move || {
             time_clone.load(atomic::Ordering::Relaxed)
         }));
 
@@ -625,7 +664,9 @@ mod tests {
         // Move time forward but not enough to expire tokens
         current_time.store(1000 + EXPIRATION_TIME / 2, Relaxed);
 
-        // Validate token1 (triggers GC)
+        storage.run_gc().await;
+
+        // Token1 should still be valid
         let claim1 = storage.validate(&token1.access_token).await.unwrap();
         assert!(claim1.is_some(), "Token1 should still be valid");
 
