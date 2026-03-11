@@ -14,3 +14,4 @@ tokio-util = { version = "0.7", features = ["rt"] }
 chrono.workspace = true
 rand.workspace = true
 snafu.workspace = true
+dashmap = "6.1.0"

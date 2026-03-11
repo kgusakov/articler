@@ -1,13 +1,12 @@
 pub mod error;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
+use dashmap::DashMap;
 use db::repository::{Db, tokens};
 use rand::{distr::Alphanumeric, prelude::*};
-use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 use sqlx::Connection;
@@ -40,11 +39,11 @@ struct InternalToken {
 }
 
 struct TokenStorageInner {
-    access_tokens: HashMap<String, InternalToken>,
+    access_tokens: DashMap<String, InternalToken>,
 }
 
 pub struct TokenStorage {
-    inner: Arc<Mutex<TokenStorageInner>>,
+    inner: Arc<TokenStorageInner>,
     now: Arc<dyn Fn() -> i64 + Send + Sync>,
     cancel_token: CancellationToken,
 }
@@ -76,56 +75,56 @@ impl TokenStorage {
     pub fn new() -> Self {
         let cancel_token = CancellationToken::new();
         let storage = TokenStorage {
-            inner: Arc::new(Mutex::new(TokenStorageInner {
-                access_tokens: HashMap::new(),
-            })),
+            inner: Arc::new(TokenStorageInner {
+                access_tokens: DashMap::new(),
+            }),
             now: Arc::new(|| Utc::now().timestamp()),
             cancel_token: cancel_token.clone(),
         };
-        tokio::spawn(storage.clone().gc_task(cancel_token));
+
+        let task_storage = storage.clone();
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(GC_PERIOD as u64));
+
+            loop {
+                tokio::select! {
+                    _ = cancel_token.cancelled() => break,
+                    _ = interval.tick() => {
+                        task_storage.gc();
+                    }
+                }
+            }
+        });
+
         storage
     }
 
     #[cfg(test)]
     fn new_with_custom_timestamp_provider(provider: Arc<dyn Fn() -> i64 + Send + Sync>) -> Self {
         TokenStorage {
-            inner: Arc::new(Mutex::new(TokenStorageInner {
-                access_tokens: HashMap::new(),
-            })),
+            inner: Arc::new(TokenStorageInner {
+                access_tokens: DashMap::new(),
+            }),
             now: provider,
             cancel_token: CancellationToken::new(),
         }
     }
 
-    async fn gc_task(self, cancel_token: CancellationToken) {
-        let mut interval = tokio::time::interval(Duration::from_secs(GC_PERIOD as u64));
-        loop {
-            tokio::select! {
-                _ = cancel_token.cancelled() => break,
-                _ = interval.tick() => {
-                    let mut inner = self.inner.lock().await;
-                    self.gc(&mut inner);
-                }
-            }
-        }
-    }
-
     pub async fn run_gc(&self) {
-        let mut inner = self.inner.lock().await;
-        self.gc(&mut inner);
+        self.gc();
     }
 
     pub async fn new_token<'c, C>(&self, conn: C, user_id: Id, client_id: Id) -> Result<NewToken>
     where
         C: sqlx::Acquire<'c, Database = Db>,
     {
-        let mut inner = self.inner.lock().await;
         let access_token = generate_token();
         let refresh_token = generate_token();
 
         let now = self.now();
 
-        inner.access_tokens.insert(
+        self.inner.access_tokens.insert(
             access_token.clone(),
             InternalToken {
                 claim: Claim { user_id, client_id },
@@ -151,12 +150,11 @@ impl TokenStorage {
     }
 
     pub async fn validate(&self, access_token: &str) -> Result<Option<Claim>> {
-        let mut inner = self.inner.lock().await;
         let now = self.now();
 
-        if let Some(t) = inner.access_tokens.get(access_token) {
+        if let Some(t) = self.inner.access_tokens.get(access_token) {
             if t.expires_at < now {
-                inner.access_tokens.remove(access_token);
+                self.inner.access_tokens.remove(access_token);
                 Ok(None)
             } else {
                 Ok(Some(t.claim))
@@ -170,8 +168,6 @@ impl TokenStorage {
     where
         C: sqlx::Acquire<'c, Database = Db>,
     {
-        let mut inner = self.inner.lock().await;
-
         let mut conn = conn.acquire().await?;
 
         let mut tx = conn.begin().await?;
@@ -193,7 +189,7 @@ impl TokenStorage {
 
             tokens::delete(&mut tx, refresh_token).await?;
 
-            inner.access_tokens.insert(
+            self.inner.access_tokens.insert(
                 access_token.clone(),
                 InternalToken {
                     claim,
@@ -229,16 +225,14 @@ impl TokenStorage {
         (self.now)()
     }
 
-    // TODO stupid O(n) algo for every call
-    fn gc(&self, inner: &mut TokenStorageInner) {
+    fn gc(&self) {
         let now = self.now();
 
-        inner.access_tokens.retain(|_, v| v.expires_at > now);
+        self.inner.access_tokens.retain(|_, v| v.expires_at > now);
     }
 }
 
 fn generate_token() -> String {
-    // TODO check that it is secure enough for token
     ThreadRng::default()
         .sample_iter(Alphanumeric)
         .take(64)
