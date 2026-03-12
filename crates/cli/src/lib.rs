@@ -100,7 +100,7 @@ pub async fn reload_articles(pool: &Pool<Sqlite>, username: &str) -> Result<()> 
 
     let mut i = 0;
 
-    for e in entries.iter() {
+    for e in &entries {
         let e = &e.0;
         i += 1;
 
