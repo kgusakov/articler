@@ -25,3 +25,54 @@
     --color-surface: #F1F3F6;
     --font-sans: 'Roboto', ui-sans-serif, system-ui, sans-serif;
 }
+
+@layer components {
+    /* === Buttons === */
+
+    /* Main filled action button (login, form submit) */
+    .btn-primary {
+        @apply px-8 py-2 bg-secondary rounded flex justify-start items-center gap-1 text-white text-base font-medium font-sans leading-5 hover:bg-muted hover:cursor-pointer transition;
+    }
+
+    /* Secondary outlined button (create actions) */
+    .btn-outline {
+        @apply px-6 py-2 border-2 border-primary text-primary rounded hover:bg-primary hover:text-white transition-colors;
+    }
+
+    /* Destructive outlined button (delete actions) */
+    .btn-danger {
+        @apply px-4 py-1 border-2 border-red-600 text-red-600 rounded hover:bg-red-600 hover:text-white transition-colors text-sm;
+    }
+
+    /* Small inline utility button (copy to clipboard) */
+    .btn-copy {
+        @apply px-2 py-1 text-xs border border-border text-secondary rounded hover:bg-surface transition-colors;
+    }
+
+    /* SVG icon-only button (star, archive, delete, edit) */
+    .btn-icon {
+        @apply hover:scale-110 transition-transform;
+    }
+
+    /* === Inputs === */
+
+    /* Standard bordered input (URL bar, search fields) */
+    .input-field {
+        @apply w-full px-4 py-2 text-sm border border-border rounded bg-surface focus:outline-none focus:border-primary;
+    }
+
+    /* Underline-style input base — add border color and sizing at call site */
+    .input-underline {
+        @apply border-b-2 focus:outline-none bg-transparent;
+    }
+
+    /* Transparent text input inside a decorated wrapper */
+    .input-ghost {
+        @apply flex-1 text-base font-normal font-sans leading-6 outline-none bg-transparent;
+    }
+
+    /* Container for icon + input combos (login fields) */
+    .input-wrapper {
+        @apply h-14 rounded-lg outline outline-border -outline-offset-1 flex items-center px-4 gap-2;
+    }
+}

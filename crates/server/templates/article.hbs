@@ -15,11 +15,11 @@
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <input type="hidden" name="starred" value="{{#unless is_starred}}true{{else}}false{{/unless}}" />
                 {{#if is_starred}}
-                <button type="submit" class="hover:scale-110 transition-transform" title="Unstar">
+                <button type="submit" class="btn-icon" title="Unstar">
                     <img src="/static/images/FavoriteOn.svg" alt="Unstar" />
                 </button>
                 {{else}}
-                <button type="submit" class="hover:scale-110 transition-transform" title="Star">
+                <button type="submit" class="btn-icon" title="Star">
                     <img src="/static/images/FavoriteOff.svg" alt="Star" />
                 </button>
                 {{/if}}
@@ -29,16 +29,16 @@
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <input type="hidden" name="archived" value="{{#unless is_archived}}true{{else}}false{{/unless}}" />
                 {{#if is_archived}}
-                <button type="submit" class="hover:scale-110 transition-transform" title="Mark as unread">
+                <button type="submit" class="btn-icon" title="Mark as unread">
                     <img src="/static/images/MarkRead.svg" alt="Mark as unread" />
                 </button>
                 {{else}}
-                <button type="submit" class="hover:scale-110 transition-transform" title="Mark as read">
+                <button type="submit" class="btn-icon" title="Mark as read">
                     <img src="/static/images/MarkUnRead.svg" alt="Mark as read" />
                 </button>
                 {{/if}}
             </form>
-            <button type="button" class="hover:scale-110 transition-transform" title="Edit title" _="on click toggle .hidden on #title-input-form
+            <button type="button" class="btn-icon" title="Edit title" _="on click toggle .hidden on #title-input-form
                    toggle .hidden on #title-text
                    if not #title-input-form.classList.contains('hidden')
                       then call #title-input.focus()">
@@ -49,7 +49,7 @@
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <!-- TODO make this back location dependent -->
                 <input type="hidden" name="back_location" value="/" />
-                <button type=" submit" class="hover:scale-110" title="Delete">
+                <button type=" submit" class="btn-icon" title="Delete">
                     <img src="/static/images/Delete.svg" alt="Delete" />
                 </button>
             </form>
@@ -64,7 +64,7 @@
             hx-swap="morph:innerHtml" hx-vals='{"source": "{{source}}"}' class="hidden w-full">
             <input type="hidden" name="article_id" value="{{id}}" />
             <input id="title-input" type="text" name="title" value="{{title}}"
-                class="w-full text-3xl lg:text-4xl font-bold border-b-2 border-primary focus:outline-none" _="on keyup[key=='Enter'] call htmx.trigger(#title-input-form, 'submit')
+                class="input-underline w-full text-3xl lg:text-4xl font-bold border-primary" _="on keyup[key=='Enter'] call htmx.trigger(#title-input-form, 'submit')
                    on blur call htmx.trigger(#title-input-form, 'submit')" />
         </form>
     </h1>

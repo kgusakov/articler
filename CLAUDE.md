@@ -238,6 +238,8 @@ The `/api/entries` endpoint supports filtering by:
 
 - **No code comments**: Do not write inline code comments (`//` or `/* */`). Code should be self-explanatory through clear variable names, function names, and structure. Only write doc-comments (`///` or `//!`) when necessary for public API documentation.
 
+- **Use component classes for templates**: When designing new pages and templates, always use the component classes from `crates/server/tailwind/input.css` first — `btn-primary`, `btn-outline`, `btn-danger`, `btn-copy`, `btn-icon` for buttons; `input-field`, `input-underline`, `input-ghost`, `input-wrapper` for inputs. If a new pattern is needed, add a new class to `@layer components` in `input.css`. Only in rare cases should custom inline utility classes be written directly on an element.
+
 ## Notes
 
 - The codebase uses Rust edition 2024

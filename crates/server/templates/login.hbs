@@ -7,24 +7,21 @@
           </div>
 
           <form action="/do_login" method="post" class="flex flex-col items-center gap-6 self-center" id="main-form">
-              <div
-                  class="w-80 sm:w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
+              <div class="input-wrapper w-80 sm:w-96">
                   <img src="/static/images/Profile.svg" alt="Profile" />
                   <input type="text" id="main-login" name="_username" autocomplete="username" required
-                      class="flex-1 text-Token-Grey_2 text-base font-normal font-sans leading-6 outline-none bg-transparent"
+                      class="input-ghost text-muted"
                       placeholder="Login" />
               </div>
 
-              <div
-                  class="w-80 sm:w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
+              <div class="input-wrapper w-80 sm:w-96">
                   <img src="/static/images/Password.svg" alt="Password" />
                   <input type="password" id="main-password" name="_password" autocomplete="current-password" required
-                      class="flex-1 text-Token-Grey_2 text-base font-normal font-sans leading-6 outline-none bg-transparent"
+                      class="input-ghost text-muted"
                       placeholder="Password" />
               </div>
 
-              <button type="submit"
-                  class="px-8 py-2 bg-secondary rounded flex justify-start items-center gap-1 text-white text-base font-medium font-sans leading-5 hover:bg-muted hover:cursor-pointer transition">
+              <button type="submit" class="btn-primary">
                   Login
               </button>
           </form>
