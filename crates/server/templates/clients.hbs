@@ -15,6 +15,7 @@
         opacity: 1 !important;
         transform: translateY(0) !important;
     }
+
 </style>
 
 <script>
@@ -68,19 +69,43 @@
                         Copy
                     </button>
                 </div>
-                <form method="post" action="/do_client_delete" class="flex items-center">
-                    <input type="hidden" name="id" value="{{id}}" />
-                    <div class="flex justify-end pt-2">
-                        <button type="submit" class="btn-danger">
-                            Delete
-                        </button>
-                    </div>
-                </form>
+                <div class="flex justify-end pt-2">
+                    <button type="button" class="btn-danger"
+                        _="on click
+                            set #deleteClientName.textContent to '{{client_name}}'
+                            set #deleteClientId.value to '{{id}}'
+                            call #deleteDialog.showModal()">
+                        Delete
+                    </button>
+                </div>
             </div>
         </details>
         {{/each}}
     </div>
 </div>
+
+<!-- Delete Confirmation Dialog -->
+<dialog id="deleteDialog" class="dialog-modal">
+    <form method="post" action="/do_client_delete">
+        <input type="hidden" id="deleteClientId" name="id" />
+        <div class="dialog-body">
+            <h2 class="text-lg font-medium text-primary">Delete Client</h2>
+            <p class="text-sm text-muted">
+                Are you sure you want to delete <strong id="deleteClientName" class="text-primary"></strong>?
+                This action cannot be undone.
+            </p>
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" class="btn-outline"
+                    _="on click call #deleteDialog.close()">
+                    Cancel
+                </button>
+                <button type="submit" class="btn-danger">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </form>
+</dialog>
 
 <!-- Copy Notification -->
 <div id="copyNotification"

@@ -26,7 +26,26 @@
     --font-sans: 'Roboto', ui-sans-serif, system-ui, sans-serif;
 }
 
+@layer base {
+    dialog::backdrop {
+        background: color-mix(in srgb, var(--color-primary) 40%, transparent);
+        backdrop-filter: blur(2px);
+    }
+}
+
 @layer components {
+    /* === Dialog === */
+
+    /* Centered modal dialog with themed border and shadow */
+    .dialog-modal {
+        @apply m-auto w-full max-w-sm rounded-lg border border-border p-0 shadow-xl;
+    }
+
+    /* Inner content wrapper for dialog body */
+    .dialog-body {
+        @apply grid gap-4 p-6;
+    }
+
     /* === Buttons === */
 
     /* Main filled action button (login, form submit) */

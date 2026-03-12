@@ -38,13 +38,12 @@
                 </button>
                 {{/if}}
             </form>
-            <form method="post" action="/do_delete" hx-post="/do_delete" hx-target="#article-cards"
-                hx-swap="morph:innerHTML" id="do_delete_form" class="flex items-center">
-                <input type="hidden" name="article_id" value="{{id}}" />
-                <button class="btn-icon" title="Delete">
-                    <img src="/static/images/Delete.svg" alt="Delete" />
-                </button>
-            </form>
+            <button type="button" class="btn-icon" title="Delete"
+                _="on click
+                    set #articleDeleteId.value to '{{id}}'
+                    call #articleDeleteDialog.showModal()">
+                <img src="/static/images/Delete.svg" alt="Delete" />
+            </button>
         </div>
     </div>
     <a href="/article/{{id}}" class="block">
@@ -58,3 +57,4 @@
     </div>
 </article>
 {{/each}}
+
