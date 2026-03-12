@@ -85,13 +85,8 @@ Migrations are located in the `migrations/` directory and are automatically appl
 
 The application is organized as a Cargo workspace with multiple crates, following a clean, module-based architecture with functional async functions instead of trait-based OOP patterns:
 
-#### Crate: `result` (`crates/result/`)
-Shared error handling types used across all crates:
-- `ArticlerResult<T>`: Application-wide result type alias
-- `ArticlerError`: Custom error type with source tracking and caller location
-- Automatic conversion from any `std::error::Error` type via `From` trait
-- Uses `#[track_caller]` to capture error origin location
-- Implements `ResponseError` for Actix-web integration (due to orphan rule)
+#### Error Handling
+Each crate defines its own `error.rs` module using the `snafu` crate. There is no shared `result` crate — errors are crate-local and composed via `snafu`'s derive macros.
 
 #### Crate: `helpers` (`crates/helpers/`)
 Utility functions shared across the application (password hashing/verification, UID generation, string hashing).
@@ -106,7 +101,6 @@ Database layer with repository modules for data access:
   - `tokens.rs`: Database-backed token storage (create, find, delete, expire)
   - All functions accept `&SqlitePool` or `impl Executor` for database access
   - No traits - just pure async functions
-- Re-exports `ArticlerError` and `ArticlerResult` from `result` crate for convenience
 
 #### Crate: `types` (`crates/types/`)
 Shared type aliases used across crates (zero dependencies):
@@ -115,7 +109,7 @@ Shared type aliases used across crates (zero dependencies):
 
 #### Crate: `token_storage` (`crates/token_storage/`)
 Hybrid OAuth token storage (in-memory + database-backed):
-- `TokenStorage`: Thread-safe token manager with `Mutex`
+- `TokenStorage`: Thread-safe token manager with `DashMap`
 - `Claim`: Token payload with `user_id` and `client_id`
 - `NewToken`: Generated token response (access_token, expires_in, refresh_token)
 - Access tokens: in-memory with 1-hour expiration
@@ -136,6 +130,22 @@ Shared application state container for Actix-web:
 - `AppState::new(pool, scraper, handlebars)`: Factory constructor
 - Re-exports `Claim`, `NewToken`, `TokenStorage` from `token_storage` crate
 
+#### Crate: `auth` (`crates/auth/`)
+User authentication logic extracted from the server crate:
+- `find_user()`: User authentication with password verification
+- Depends on: `db`, `helpers` crates
+
+#### Crate: `wallabag_api` (`crates/wallabag_api/`)
+Wallabag-compatible REST API handlers, extracted from the server crate:
+- `wallabag/mod.rs`: Route configuration and shared types
+- `wallabag/entries.rs`: Entry CRUD handlers and request/response types
+- `wallabag/tags.rs`: Tag management handlers
+- `oauth.rs`: OAuth2 token endpoint and authentication middleware
+- `models.rs`: Domain models for API responses
+  - `Entry`: Main article/entry model with URL, content, metadata
+  - `Tag`: Article categorization
+  - `Annotation` and `Range`: Article annotations (not yet fully implemented)
+
 #### Crate: `server` (`crates/server/`)
 HTTP/API layer with the main binary and web interface:
 
@@ -143,14 +153,7 @@ HTTP/API layer with the main binary and web interface:
    - Application entry point named `articler`
    - Initializes database, runs migrations, starts HTTP server
 
-2. **REST Layer** (`src/rest/`):
-   - `wallabag/`: Wallabag-compatible REST API endpoints
-     - `mod.rs`: Route configuration and shared types
-     - `entries.rs`: Entry CRUD handlers and request/response types
-     - `tags.rs`: Tag management handlers
-   - `oauth.rs`: OAuth2 token endpoint and authentication middleware
-
-3. **Web Layer** (`src/web/`):
+2. **Web Layer** (`src/web/`):
    - `mod.rs`: Web scope configuration with session middleware (`actix-session` cookie-based sessions)
    - `fake_ui.rs`: Minimal HTML pages for Android app OAuth flow
    - `ui.rs`: Full web UI with login, article listing, and archiving
@@ -160,42 +163,33 @@ HTTP/API layer with the main binary and web interface:
      - `/do_archive`: Archive article handler
      - Session-based authentication (stores `user_id` in cookie session)
 
-4. **Models Layer** (`src/models.rs`): Domain models for API responses
-   - `Entry`: Main article/entry model with URL, content, metadata
-   - `Tag`: Article categorization
-   - `Annotation` and `Range`: Article annotations (not yet fully implemented)
-
-5. **Authentication** (`src/auth.rs`):
-   - `find_user()`: User authentication with password verification
-
-6. **Application Setup** (`src/app.rs`):
+3. **Application Setup** (`src/app.rs`):
    - `app()`: Creates Actix-web application with routes and static file serving
    - `http_server()`: Initializes HTTP server with cookie key for sessions
    - `init_handlebars()`: Registers Handlebars templates and partials
 
-7. **Templating** (`templates/`):
+4. **Templating** (`crates/server/templates/`):
     - Handlebars templates for the web UI, compiled into binary via `include_str!`
-    - `index.hbs`: Main layout template with partial inclusion
-    - `login.hbs`: Login form partial
-    - `main.hbs`: Article listing partial
-    - `navigation.hbs`: Navigation bar partial with counters
+    - Page templates: `page.hbs`, `page_article.hbs`, `page_articles.hbs`, `page_clients.hbs`
+    - Partial templates: `login.hbs`, `navigation.hbs`, `article.hbs`, `article_cards.hbs`, `articles_and_categories.hbs`, `base.hbs`, `categories.hbs`, `clients.hbs`
+    - OAuth flow templates: `fake_client_create.hbs`, `fake_client_create_result.hbs`, `fake_development.hbs`
 
-8. **Static Assets** (`static/`):
+5. **Static Assets** (`crates/server/static/`):
     - SVG icons for the web UI (All, Archived, Delete, FavoriteOff, FavoriteOn, Logo, MarkRead, MarkUnRead, Profile, Search, Settings, Tagged)
     - Embedded into binary at build time via `actix-web-static-files` and `build.rs`
     - Served at `/static/` path
 
-9. **Build Script** (`build.rs`):
+6. **Build Script** (`build.rs`):
     - Uses `static-files` crate to generate embedded static resources from `./static` directory
 
-10. **Tests** (`tests/`):
+7. **Tests** (`tests/`):
     - Integration tests with fixtures and expected JSON responses
     - Uses `sqlx::test` macro with migrations from workspace root
 
 #### Crate: `cli` (`crates/cli/`)
 CLI tool for administration:
 - Binary name: `articlerctl`
-- Depends on: `result`, `db`, `helpers` crates
+- Depends on: `db`, `helpers` crates
 - Uses `clap` for command-line argument parsing
 - Commands:
   - `create-user`: Creates a new user with username, password, name, and email
