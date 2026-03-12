@@ -358,6 +358,11 @@ where
         push_bind_or_default(&mut separated, content);
     }
 
+    if let Some(content_text) = update.content_text {
+        separated.push("content_text = ");
+        push_bind_or_default(&mut separated, content_text);
+    }
+
     if let Some(is_archived) = update.is_archived {
         separated.push("is_archived = ");
         push_bind_or_default(&mut separated, is_archived);
@@ -559,6 +564,7 @@ type UpdateField<T> = Option<Option<T>>;
 pub struct UpdateEntry {
     pub title: UpdateField<String>,
     pub content: UpdateField<String>,
+    pub content_text: UpdateField<String>,
     pub is_archived: UpdateField<bool>,
     pub archived_at: UpdateField<Timestamp>,
     pub is_starred: UpdateField<bool>,
@@ -579,6 +585,7 @@ impl Default for UpdateEntry {
         Self {
             title: None,
             content: None,
+            content_text: None,
             is_archived: None,
             archived_at: None,
             is_starred: None,
@@ -738,6 +745,7 @@ mod tests {
         let update = UpdateEntry {
             title: None,
             content: None,
+            content_text: None,
             is_archived: Some(Some(true)),
             archived_at: Some(Some(1_701_787_200)),
             is_starred: None,
@@ -848,6 +856,7 @@ mod tests {
             UpdateEntry {
                 title: Some(Some("new title".to_owned())),
                 content: Some(Some("new content".to_owned())),
+                content_text: Some(Some("new text content".to_owned())),
                 is_archived: Some(Some(true)),
                 archived_at: Some(Some(1_702_000_000)),
                 is_starred: Some(Some(true)),
@@ -879,7 +888,7 @@ mod tests {
                 hashed_given_url: Some("ghash1".to_owned()),
                 title: "new title".to_owned(),
                 content: "new content".to_owned(),
-                content_text: "content1".to_owned(),
+                content_text: "new text content".to_owned(),
                 is_archived: true,
                 archived_at: Some(1_702_000_000),
                 is_starred: true,

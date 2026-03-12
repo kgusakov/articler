@@ -384,6 +384,7 @@ pub(crate) async fn patch_entry(
     let repo_update = entries::UpdateEntry {
         title: request.title.map(Some),
         content: request.content.map(Some),
+        content_text: None,
         is_archived: request.archive.map(Some),
         archived_at: match request.archive {
             Some(true) => Some(Some(now)),
