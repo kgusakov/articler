@@ -24,11 +24,20 @@ where
     let mut q_builder = QueryBuilder::new(format!(
         r"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
         WHERE e.id in (
-            SELECT id FROM {ENTRIES_TABLE}
-            WHERE user_id = "
+            SELECT e2.id FROM {ENTRIES_TABLE} e2"
     ));
 
+    if params.search.is_some() {
+        q_builder.push(" JOIN entries_fts ON entries_fts.rowid = e2.id");
+    }
+
+    q_builder.push(" WHERE e2.user_id = ");
     q_builder.push_bind(params.user_id);
+
+    if let Some(ref search) = params.search {
+        q_builder.push(" AND entries_fts MATCH ");
+        q_builder.push_bind(search.clone());
+    }
 
     if let Some(a) = params.archive {
         q_builder.push(" AND is_archived = ");
@@ -179,8 +188,18 @@ where
     let mut q_builder = QueryBuilder::new(format!(
         r"SELECT COUNT(DISTINCT e.id) FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id",
     ));
+
+    if params.search.is_some() {
+        q_builder.push(" JOIN entries_fts ON entries_fts.rowid = e.id");
+    }
+
     q_builder.push(" WHERE e.user_id = ");
     q_builder.push_bind(params.user_id);
+
+    if let Some(ref search) = params.search {
+        q_builder.push(" AND entries_fts MATCH ");
+        q_builder.push_bind(search.clone());
+    }
 
     if let Some(a) = params.archive {
         q_builder.push(" AND is_archived = ");
@@ -647,6 +666,7 @@ pub struct FindParams {
     pub public: Option<bool>,
     pub detail: Option<Detail>,
     pub domain_name: Option<String>,
+    pub search: Option<String>,
 }
 
 #[derive(PartialEq)]
@@ -1028,5 +1048,214 @@ mod tests {
         .await
         .unwrap();
         assert!(!updated, "Should return false for wrong user_id");
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql")
+    )]
+    async fn test_find_all_search_phrase(pool: SqlitePool) {
+        create(
+            &pool,
+            CreateEntry {
+                user_id: 1,
+                url: "https://phrase.com/1".to_owned(),
+                hashed_url: "phrase_hash1".to_owned(),
+                given_url: "https://phrase.com/1".to_owned(),
+                hashed_given_url: "phrase_ghash1".to_owned(),
+                title: "Phrase Test".to_owned(),
+                content: "<p>the quick brown fox jumps</p>".to_owned(),
+                content_text: "the quick brown fox jumps".to_owned(),
+                is_archived: false,
+                archived_at: None,
+                is_starred: false,
+                starred_at: None,
+                created_at: 1_700_000_000,
+                updated_at: 1_700_000_001,
+                mimetype: None,
+                language: None,
+                reading_time: 1,
+                domain_name: "phrase.com".to_owned(),
+                preview_picture: None,
+                origin_url: None,
+                published_at: None,
+                published_by: None,
+                is_public: None,
+                uid: None,
+            },
+            &[],
+        )
+        .await
+        .unwrap();
+
+        let contiguous = find_all(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("\"quick brown\"".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(contiguous.len(), 1, "contiguous phrase should match");
+
+        let non_contiguous_phrase = find_all(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("\"quick fox\"".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(
+            non_contiguous_phrase.is_empty(),
+            "non-contiguous phrase should not match"
+        );
+
+        let both_words_present = find_all(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("quick fox".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            both_words_present.len(),
+            1,
+            "unquoted AND query should match when both words are present"
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_find_all_search_exact(pool: SqlitePool) {
+        let results = find_all(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("content1".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0.id, 1);
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_find_all_search_common_substring(pool: SqlitePool) {
+        let results = find_all(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("content".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 6);
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_find_all_search_no_match(pool: SqlitePool) {
+        let results = find_all(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("xyznotfound".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(results.is_empty());
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_find_all_search_combined_with_filter(pool: SqlitePool) {
+        let results = find_all(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("content".to_owned()),
+                archive: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 3);
+        let ids: Vec<Id> = results.iter().map(|(e, _)| e.id).collect();
+        assert!(ids.contains(&2));
+        assert!(ids.contains(&4));
+        assert!(ids.contains(&6));
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_count_with_search(pool: SqlitePool) {
+        let count_all = count(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("content".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(count_all, 6);
+
+        let count_specific = count(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("content3".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(count_specific, 1);
+
+        let count_none = count(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("xyznotfound".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(count_none, 0);
     }
 }

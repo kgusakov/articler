@@ -147,6 +147,7 @@ pub(crate) async fn entries(
         public: request.public,
         detail: Some(request.detail.into()),
         domain_name: request.domain_name,
+        search: None,
     };
 
     let mut tx = data.pool.begin().await?;
