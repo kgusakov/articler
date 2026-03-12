@@ -30,7 +30,7 @@ use crate::{
 
 use dto::{
     AddArticleForm, ArchiveForm, ArticleContext, ArticleCounters, ArticleMetadata, ArticlesContext,
-    Category, ClientDeleteForm, Clients, CreateClientForm, DeleteForm, FavouriteForm, Page,
+    Category, ClientDeleteForm, Clients, CreateClientForm, DeleteForm, FavouriteForm,
 };
 
 pub fn routes(cfg: &mut ServiceConfig) {
@@ -55,14 +55,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> Result<HttpResponse> {
-    let rendered = app.handlebars.render(
-        "index",
-        &Page {
-            nav_partial: None,
-            main_partial: "login".to_owned(),
-            back_location: None,
-        },
-    )?;
+    let rendered = app.handlebars.render("login", &serde_json::json!({}))?;
 
     Ok(HttpResponse::Ok()
         .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
@@ -78,15 +71,8 @@ async fn clients(session: Session, app: web::Data<AppState>) -> Result<HttpRespo
             .collect();
 
         let rendered = app.handlebars.render(
-            "index",
-            &Clients {
-                clients,
-                page: Page {
-                    nav_partial: Some("navigation".to_owned()),
-                    main_partial: "clients".to_owned(),
-                    back_location: None,
-                },
-            },
+            "page_clients",
+            &Clients { clients },
         )?;
 
         Ok(HttpResponse::Ok()
@@ -126,16 +112,12 @@ async fn article(
                     is_starred: article.is_starred,
                     source: HxSource::Article,
                 },
-                page: Page {
-                    nav_partial: Some("navigation".to_owned()),
-                    main_partial: "article".to_owned(),
-                    back_location: Some(referer_or_root(&req)),
-                },
+                back_location: Some(referer_or_root(&req)),
             };
 
             Ok(HttpResponse::Ok()
                 .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
-                .body(app.handlebars.render("index", &article_page)?))
+                .body(app.handlebars.render("page_article", &article_page)?))
         } else {
             // TODO make normal 404 screen
             NotFoundSnafu {
@@ -254,11 +236,6 @@ async fn main(
         .collect();
 
     let context = ArticlesContext {
-        page: Page {
-            nav_partial: Some("navigation".to_owned()),
-            main_partial: "main".to_owned(),
-            back_location: None,
-        },
         articles: articles_metadata,
         counters: ArticleCounters::load(&mut *tx, user_id).await?,
         active_category,
@@ -266,7 +243,7 @@ async fn main(
 
     tx.commit().await?;
 
-    let rendered = app.handlebars.render("index", &context)?;
+    let rendered = app.handlebars.render("page_articles", &context)?;
 
     Ok(HttpResponse::Ok()
         .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
@@ -704,8 +681,6 @@ mod dto {
 
     #[derive(Serialize)]
     pub struct Clients {
-        #[serde(flatten)]
-        pub page: Page,
         pub clients: Vec<Client>,
     }
 
@@ -741,14 +716,6 @@ mod dto {
     pub struct ArticleContext {
         #[serde(flatten)]
         pub article: PartialArticleContext,
-        #[serde(flatten)]
-        pub page: Page,
-    }
-
-    #[derive(Serialize)]
-    pub struct Page {
-        pub nav_partial: Option<String>,
-        pub main_partial: String,
         pub back_location: Option<String>,
     }
 
@@ -779,8 +746,6 @@ mod dto {
 
     #[derive(Serialize)]
     pub struct ArticlesContext {
-        #[serde(flatten)]
-        pub page: Page,
         pub articles: Vec<ArticleMetadata>,
         #[serde(flatten)]
         pub counters: ArticleCounters,

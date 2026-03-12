@@ -1,5 +1,5 @@
 <!-- Header -->
-<header class="h-[72px] px-4 md:px-8 lg:px-[120px] flex items-center justify-between border-b border-surface">
+<header class="h-[72px] shrink-0 px-4 md:px-8 lg:px-[120px] flex items-center justify-between border-b border-surface">
     <a href="/" class="flex items-center gap-3">
         <img src="/static/images/Logo.svg" class="h-12" />
     </a>
@@ -33,3 +33,28 @@
         </div>
     </nav>
 </header>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const profileButton = document.getElementById('profile-menu-button');
+        const profileMenu = document.getElementById('profile-menu');
+
+        if (profileButton && profileMenu) {
+            profileButton.addEventListener('click', function (e) {
+                e.stopPropagation();
+                profileMenu.classList.toggle('hidden');
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!profileButton.contains(e.target) && !profileMenu.contains(e.target)) {
+                    profileMenu.classList.add('hidden');
+                }
+            });
+        }
+    });
+</script>
+
+<!-- DO NOT REMOVE THIS. Needed for wallabag android app autorization -->
+<div style="display:none">
+    <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
+    <a href="/logout"><i class="material-icons">input</i> Logout</a>
+</div>

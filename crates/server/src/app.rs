@@ -40,7 +40,43 @@ pub fn app(
 // TODO manual file registration is a bad way
 pub fn init_handlebars() -> Result<Handlebars<'static>, TemplateError> {
     let mut handlebars = Handlebars::new();
-    handlebars.register_template_string("index", include_str!("../templates/index.hbs"))?;
+
+    handlebars.register_partial("base", include_str!("../templates/base.hbs"))?;
+    handlebars.register_partial("page", include_str!("../templates/page.hbs"))?;
+    handlebars.register_partial("navigation", include_str!("../templates/navigation.hbs"))?;
+    handlebars.register_partial("categories", include_str!("../templates/categories.hbs"))?;
+    handlebars.register_partial("article", include_str!("../templates/article.hbs"))?;
+    handlebars.register_partial(
+        "article_cards",
+        include_str!("../templates/article_cards.hbs"),
+    )?;
+    handlebars.register_partial(
+        "articles_and_categories",
+        include_str!("../templates/articles_and_categories.hbs"),
+    )?;
+    handlebars.register_partial("clients", include_str!("../templates/clients.hbs"))?;
+
+    handlebars.register_template_string("login", include_str!("../templates/login.hbs"))?;
+    handlebars
+        .register_template_string("page_articles", include_str!("../templates/page_articles.hbs"))?;
+    handlebars
+        .register_template_string("page_article", include_str!("../templates/page_article.hbs"))?;
+    handlebars
+        .register_template_string("page_clients", include_str!("../templates/page_clients.hbs"))?;
+
+    handlebars.register_template_string("article", include_str!("../templates/article.hbs"))?;
+    handlebars.register_template_string(
+        "article_cards",
+        include_str!("../templates/article_cards.hbs"),
+    )?;
+    handlebars.register_template_string(
+        "articles_and_categories",
+        include_str!("../templates/articles_and_categories.hbs"),
+    )?;
+    handlebars.register_template_string(
+        "categories",
+        include_str!("../templates/categories.hbs"),
+    )?;
 
     handlebars.register_template_string(
         "fake_development",
@@ -55,31 +91,6 @@ pub fn init_handlebars() -> Result<Handlebars<'static>, TemplateError> {
         include_str!("../templates/fake_client_create.hbs"),
     )?;
 
-    handlebars.register_partial("login", include_str!("../templates/login.hbs"))?;
-    handlebars.register_partial("navigation", include_str!("../templates/navigation.hbs"))?;
-    handlebars.register_partial("main", include_str!("../templates/main.hbs"))?;
-    handlebars.register_partial("categories", include_str!("../templates/categories.hbs"))?;
-
-    handlebars.register_template_string("article", include_str!("../templates/article.hbs"))?;
-    handlebars.register_partial("article", include_str!("../templates/article.hbs"))?;
-
-    handlebars.register_partial(
-        "article_cards",
-        include_str!("../templates/article_cards.hbs"),
-    )?;
-    handlebars.register_template_string(
-        "article_cards",
-        include_str!("../templates/article_cards.hbs"),
-    )?;
-    handlebars.register_partial(
-        "articles_and_categories",
-        include_str!("../templates/articles_and_categories.hbs"),
-    )?;
-    handlebars.register_template_string(
-        "articles_and_categories",
-        include_str!("../templates/articles_and_categories.hbs"),
-    )?;
-    handlebars.register_partial("clients", include_str!("../templates/clients.hbs"))?;
     Ok(handlebars)
 }
 

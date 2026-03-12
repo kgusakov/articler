@@ -1,4 +1,4 @@
-<main id="article-page" class="lg:min-w-3xl max-w-3xl mx-auto px-4 md:px-8 pt-6 lg:pt-[76px] pb-8 lg:pb-12">
+<section class="flex-1 min-w-0 max-w-prose mx-auto">
     <!-- Top bar -->
     <div class="flex items-center justify-between mb-8">
         <a href="{{#if back_location}}{{back_location}}{{else}}javascript:history.back(){{/if}}" {{#if
@@ -10,8 +10,8 @@
             Back
         </a>
         <div class="flex items-center gap-4">
-            <form method="post" action="/do_favourite" hx-post="/do_favourite" hx-target="#article-page"
-                hx-swap="morph:outerHTML" hx-vals='{"source": "{{source}}"}' class="flex items-center">
+            <form method="post" action="/do_favourite" hx-post="/do_favourite" hx-target="#main-block"
+                hx-swap="morph:innerHtml" hx-vals='{"source": "{{source}}"}' class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <input type="hidden" name="starred" value="{{#unless is_starred}}true{{else}}false{{/unless}}" />
                 {{#if is_starred}}
@@ -24,8 +24,8 @@
                 </button>
                 {{/if}}
             </form>
-            <form method="post" action="/do_archive" hx-post="/do_archive" hx-target="#article-page"
-                hx-swap="morph:outerHTML" hx-vals='{"source": "{{source}}"}' class="flex items-center">
+            <form method="post" action="/do_archive" hx-post="/do_archive" hx-target="#main-block"
+                hx-swap="morph:innerHtml" hx-vals='{"source": "{{source}}"}' class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <input type="hidden" name="archived" value="{{#unless is_archived}}true{{else}}false{{/unless}}" />
                 {{#if is_archived}}
@@ -44,7 +44,7 @@
                       then call #title-input.focus()">
                 <img src="/static/images/Edit.svg" alt="Edit" />
             </button>
-            <form method="post" action="/do_delete" hx-post="/do_delete" hx-target="#article-page"
+            <form method="post" action="/do_delete" hx-post="/do_delete" hx-target="#main-block"
                 hx-swap="morph:outerHTML" hx-vals='{"source": "{{source}}"}' class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <!-- TODO make this back location dependent -->
@@ -60,15 +60,15 @@
     <h1 class="text-3xl lg:text-4xl font-bold leading-tight mb-4 wrap-break-word">
         <span id="title-text">{{title}}</span>
 
-        <form id="title-input-form" post="/do_edit_title" hx-post="/do_edit_title" hx-target="#article-page"
-            hx-swap="morph:outerHTML" hx-vals='{"source": "{{source}}"}' class="hidden w-full">
+        <form id="title-input-form" post="/do_edit_title" hx-post="/do_edit_title" hx-target="#main-block"
+            hx-swap="morph:innerHtml" hx-vals='{"source": "{{source}}"}' class="hidden w-full">
             <input type="hidden" name="article_id" value="{{id}}" />
             <input id="title-input" type="text" name="title" value="{{title}}"
                 class="w-full text-3xl lg:text-4xl font-bold border-b-2 border-primary focus:outline-none" _="on keyup[key=='Enter'] call htmx.trigger(#title-input-form, 'submit')
                    on blur call htmx.trigger(#title-input-form, 'submit')" />
         </form>
     </h1>
-    <div class=" flex items-center gap-2 text-sm text-muted mb-8 pb-8 border-b border-border">
+    <div class="flex items-center gap-2 text-sm text-muted mb-8 pb-8 border-b border-border">
         <a href="{{url}}" target="_blank" rel="noopener noreferrer"
             class="hover:text-primary transition-colors underline">{{domain}}</a>
         <span>&middot;</span>
@@ -79,4 +79,4 @@
     <article class="prose prose-lg max-w-none prose-headings:text-primary prose-a:text-secondary">
         {{{content}}}
     </article>
-</main>
+</section>

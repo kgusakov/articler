@@ -1,64 +1,66 @@
-<main class="flex-1 flex lg:items-center items-start justify-center px-4 py-12">
-    <div
-        class="px-10 pt-10 pb-12 bg-white rounded-xl shadow-[0px_10px_24px_4px_rgba(91,107,134,0.12)] inline-flex flex-col justify-center items-center overflow-hidden">
-        <div class="mb-10">
-            <img src="/static/images/Logo.svg" alt="Logo" class="h-16 w-auto" />
-        </div>
+{{#> base}}
+  <main class="flex-1 flex lg:items-center items-start justify-center px-4 py-12">
+      <div
+          class="px-10 pt-10 pb-12 bg-white rounded-xl shadow-[0px_10px_24px_4px_rgba(91,107,134,0.12)] inline-flex flex-col justify-center items-center overflow-hidden">
+          <div class="mb-10">
+              <img src="/static/images/Logo.svg" alt="Logo" class="h-16 w-auto" />
+          </div>
 
-        <form action="/do_login" method="post" class="flex flex-col items-center gap-6 self-center" id="main-form">
-            <div
-                class="w-80 sm:w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
-                <img src="/static/images/Profile.svg" alt="Profile" />
-                <input type="text" id="main-login" name="_username" autocomplete="username" required
-                    class="flex-1 text-Token-Grey_2 text-base font-normal font-sans leading-6 outline-none bg-transparent"
-                    placeholder="Login" />
-            </div>
+          <form action="/do_login" method="post" class="flex flex-col items-center gap-6 self-center" id="main-form">
+              <div
+                  class="w-80 sm:w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
+                  <img src="/static/images/Profile.svg" alt="Profile" />
+                  <input type="text" id="main-login" name="_username" autocomplete="username" required
+                      class="flex-1 text-Token-Grey_2 text-base font-normal font-sans leading-6 outline-none bg-transparent"
+                      placeholder="Login" />
+              </div>
 
-            <div
-                class="w-80 sm:w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
-                <img src="/static/images/Password.svg" alt="Password" />
-                <input type="password" id="main-password" name="_password" autocomplete="current-password" required
-                    class="flex-1 text-Token-Grey_2 text-base font-normal font-sans leading-6 outline-none bg-transparent"
-                    placeholder="Password" />
-            </div>
+              <div
+                  class="w-80 sm:w-96 h-14 rounded-lg outline outline-Token-Grey_4 -outline-offset-1 flex items-center px-4 gap-2">
+                  <img src="/static/images/Password.svg" alt="Password" />
+                  <input type="password" id="main-password" name="_password" autocomplete="current-password" required
+                      class="flex-1 text-Token-Grey_2 text-base font-normal font-sans leading-6 outline-none bg-transparent"
+                      placeholder="Password" />
+              </div>
 
-            <button type="submit"
-                class="px-8 py-2 bg-secondary rounded flex justify-start items-center gap-1 text-white text-base font-medium font-sans leading-5 hover:bg-muted hover:cursor-pointer transition">
-                Login
-            </button>
-        </form>
-    </div>
-</main>
+              <button type="submit"
+                  class="px-8 py-2 bg-secondary rounded flex justify-start items-center gap-1 text-white text-base font-medium font-sans leading-5 hover:bg-muted hover:cursor-pointer transition">
+                  Login
+              </button>
+          </form>
+      </div>
+  </main>
 
-<!-- DO NOT REMOVE THIS. Needed for wallabag android app autorization -->
-<div class="card sw" style="display:none">
-    <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
-    <form action="/login_check" method="post" name="loginform">
-        <div class="card-content">
-            <div class="row">
-                <div class="input-field col s12">
-                    <label for="username" class="">Username</label>
-                    <input type="text" id="username" name="_username" value="" autofocus="">
-                </div>
-                <div class="input-field col s12">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="_password">
-                </div>
-                <div class="input-field col s12">
-                    <input type="checkbox" id="remember_me" name="_remember_me" checked="">
-                    <label for="remember_me">Keep me logged in</label>
-                </div>
-            </div>
-        </div>
-        <div class="card-action center">
-            <input type="hidden" name="_csrf_token" value="fUYkqRJIgF0uxA6GUEk9ZrwnUEnuvQEUxiPPls1CDOc">
-            <button class="btn waves-effect waves-light" type="submit" name="send">
-                Log in
-                <i class="material-icons right">send</i>
-            </button>
-        </div>
-        <div class="card-action center">
-            <a href="/resetting/request">Forgot your password?</a>
-        </div>
-    </form>
-</div>
+  <!-- DO NOT REMOVE THIS. Needed for wallabag android app autorization -->
+  <div class="card sw" style="display:none">
+      <div class="center"><img src="" class="typo-logo" alt="wallabag logo"></div>
+      <form action="/login_check" method="post" name="loginform">
+          <div class="card-content">
+              <div class="row">
+                  <div class="input-field col s12">
+                      <label for="username" class="">Username</label>
+                      <input type="text" id="username" name="_username" value="" autofocus="">
+                  </div>
+                  <div class="input-field col s12">
+                      <label for="password">Password</label>
+                      <input type="password" id="password" name="_password">
+                  </div>
+                  <div class="input-field col s12">
+                      <input type="checkbox" id="remember_me" name="_remember_me" checked="">
+                      <label for="remember_me">Keep me logged in</label>
+                  </div>
+              </div>
+          </div>
+          <div class="card-action center">
+              <input type="hidden" name="_csrf_token" value="fUYkqRJIgF0uxA6GUEk9ZrwnUEnuvQEUxiPPls1CDOc">
+              <button class="btn waves-effect waves-light" type="submit" name="send">
+                  Log in
+                  <i class="material-icons right">send</i>
+              </button>
+          </div>
+          <div class="card-action center">
+              <a href="/resetting/request">Forgot your password?</a>
+          </div>
+      </form>
+  </div>
+{{/base}}
