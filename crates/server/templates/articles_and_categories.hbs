@@ -31,6 +31,12 @@
 
 <!-- Content -->
 <section class="flex-1">
+    <form action="/search" method="get" class="mb-6">
+        <div class="input-wrapper focus-within:outline-primary">
+            <img src="/static/images/Search.svg" class="shrink-0" />
+            <input type="search" name="q" placeholder="Search articles..." class="input-ghost" />
+        </div>
+    </form>
     <div id="article-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8">
         {{> article_cards}}
     </div>
