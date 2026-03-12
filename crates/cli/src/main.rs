@@ -1,7 +1,7 @@
 use std::env;
 
 use clap::{Parser, Subcommand};
-use cli::{create_client, create_user};
+use cli::{create_client, create_user, reload_articles};
 use sqlx::sqlite::SqlitePoolOptions;
 use tokio::runtime::Runtime;
 
@@ -26,6 +26,9 @@ enum Commands {
     CreateClient {
         username: String,
         client_name: String,
+    },
+    ReloadArticles {
+        username: String,
     },
 }
 
@@ -57,6 +60,11 @@ fn main() -> Result<()> {
                 "Client created:\nclient_id: {}\nclient_secret: {}",
                 client.client_id, client.client_secret
             );
+        }
+        Commands::ReloadArticles { username } => {
+            rt.block_on(async { reload_articles(&pool, &username).await })?;
+
+            println!("Article content refetched and reparsed",);
         }
     }
 

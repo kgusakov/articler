@@ -20,6 +20,13 @@ pub enum Error {
         location: Location,
     },
     #[snafu(transparent)]
+    UrlParse {
+        #[snafu(source)]
+        error: url::ParseError,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
     Db {
         #[snafu(source)]
         error: db::error::Error,
@@ -30,6 +37,13 @@ pub enum Error {
     Helper {
         #[snafu(source)]
         error: helpers::error::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
+    Scraper {
+        #[snafu(source)]
+        error: article_scraper::error::Error,
         #[snafu(implicit)]
         location: Location,
     },
