@@ -1689,19 +1689,19 @@ mod helpers {
             .collect()
     }
 
-    /// Returns the `article_id` values from all delete forms in the page.
+    /// Returns the `article_id` values from all delete buttons in the page.
     pub fn find_delete_forms(content: &str) -> Vec<String> {
         let document = Html::parse_document(content);
-        let form_sel = Selector::parse(r#"form[action="/do_delete"]"#).unwrap();
-        let input_sel = Selector::parse(r#"input[name="article_id"]"#).unwrap();
+        let btn_sel = Selector::parse(r#"button[_*="articleDeleteId.value to '"]"#).unwrap();
+        let marker = "articleDeleteId.value to '";
 
         document
-            .select(&form_sel)
-            .filter_map(|form| {
-                form.select(&input_sel)
-                    .next()
-                    .and_then(|input| input.value().attr("value"))
-                    .map(std::borrow::ToOwned::to_owned)
+            .select(&btn_sel)
+            .filter_map(|btn| {
+                let script = btn.value().attr("_")?;
+                let start = script.find(marker)? + marker.len();
+                let end = script[start..].find('\'')?;
+                Some(script[start..start + end].to_owned())
             })
             .collect()
     }
@@ -1862,19 +1862,19 @@ mod helpers {
         None
     }
 
-    /// Returns the client id values from all client delete forms in the page.
+    /// Returns the client id values from all client delete buttons in the page.
     pub fn find_client_delete_forms(content: &str) -> Vec<String> {
         let document = Html::parse_document(content);
-        let form_sel = Selector::parse(r#"form[action="/do_client_delete"]"#).unwrap();
-        let input_sel = Selector::parse(r#"input[name="id"]"#).unwrap();
+        let btn_sel = Selector::parse(r#"button[_*="deleteClientId.value to '"]"#).unwrap();
+        let marker = "deleteClientId.value to '";
 
         document
-            .select(&form_sel)
-            .filter_map(|form| {
-                form.select(&input_sel)
-                    .next()
-                    .and_then(|input| input.value().attr("value"))
-                    .map(std::borrow::ToOwned::to_owned)
+            .select(&btn_sel)
+            .filter_map(|btn| {
+                let script = btn.value().attr("_")?;
+                let start = script.find(marker)? + marker.len();
+                let end = script[start..].find('\'')?;
+                Some(script[start..start + end].to_owned())
             })
             .collect()
     }
