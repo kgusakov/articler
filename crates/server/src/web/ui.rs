@@ -51,7 +51,8 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/do_edit_title", post().to(do_edit_title))
         .route("/add", post().to(do_add))
         .route("/partial/categories", get().to(partial_categories))
-        .route("/partial/articles/{category}", get().to(partial_articles));
+        .route("/partial/articles/{category}", get().to(partial_articles))
+        .route("/search", post().to(do_search));
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> Result<HttpResponse> {
@@ -537,6 +538,19 @@ async fn do_edit_title(
     }
 }
 
+async fn do_search(
+    session: Session,
+    req: HttpRequest,
+    app: web::Data<AppState>,
+    form: web::Form<dto::SearchForm>,
+) -> Result<HttpResponse> {
+    let user_id = check_user_id(&session)?;
+    let category = Category::from(&req);
+    let mut params = find_params_for_category(user_id, &category);
+    params.search = Some(form.into_inner().q);
+    main(app, user_id, params, category).await
+}
+
 fn check_user_id(session: &Session) -> Result<i64> {
     session.get("user_id")?.ok_or(ForbiddenSnafu.build())
 }
@@ -860,5 +874,10 @@ mod dto {
         pub article_id: Id,
         pub title: String,
         pub source: Option<HxSource>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct SearchForm {
+        pub q: String,
     }
 }

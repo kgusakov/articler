@@ -21,8 +21,9 @@ async fn main() -> Result<()> {
         _ => None,
     };
 
-    let connect_options =
-        SqliteConnectOptions::from_str(&db_path)?.journal_mode(SqliteJournalMode::Wal);
+    let connect_options = SqliteConnectOptions::from_str(&db_path)?
+        .journal_mode(SqliteJournalMode::Wal)
+        .pragma("trusted_schema", "OFF");
 
     let pool = SqlitePoolOptions::new()
         .connect_with(connect_options)
