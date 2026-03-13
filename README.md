@@ -34,7 +34,7 @@ The `create-client` command prints the `client_id` and `client_secret` needed to
 ### Building from Source
 #### Requirements
 - cargo
-- libclang - to build mupdf dependency
+- libclang and libfontconfig1 - to build mupdf dependency
 
     **macOS**
 
@@ -47,7 +47,7 @@ The `create-client` command prints the `client_id` and `client_secret` needed to
     **Ubuntu / Debian**
 
     ```sh
-    sudo apt-get install -y build-essential libclang-dev
+    sudo apt-get install -y build-essential libclang-dev libfontconfig1-dev
     ```
 
 - tailwindcss - to produce minified css with only needed classes
