@@ -58,7 +58,7 @@ jobs:
             alpine:3.23 \
             sh -c "
               set -ex
-              apk add --no-cache alpine-sdk
+              apk add --no-cache alpine-sdk fontconfig
               abuild-keygen -n -a
               cp /root/.abuild/*.rsa.pub /etc/apk/keys/
               abuild -F checksum
