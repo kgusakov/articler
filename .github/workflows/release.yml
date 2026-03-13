@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  TAILWIND_REBUILD: 1
+  TAILWIND_BIN: tailwindcss
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-alpine-package:
+    name: Build Alpine Package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.94.0"
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev clang musl-tools
+
+      - name: Install Tailwind CSS
+        run: |
+          curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
+          chmod +x tailwindcss-linux-x64
+          sudo mv tailwindcss-linux-x64 /usr/local/bin/tailwindcss
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-musl-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-musl-cargo-
+
+      - name: Build release binary (musl)
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+        run: |
+          cargo build --release --target x86_64-unknown-linux-musl
+          mkdir -p target/release
+          cp target/x86_64-unknown-linux-musl/release/articler target/release/articler
+          cp target/x86_64-unknown-linux-musl/release/articlerctl target/release/articlerctl
+
+      - name: Build Alpine package
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace/dist/alpine \
+            alpine:3.23 \
+            sh -c "
+              set -ex
+              apk add --no-cache alpine-sdk
+              abuild-keygen -n -a
+              cp /root/.abuild/*.rsa.pub /etc/apk/keys/
+              abuild -F checksum
+              abuild -F
+              cp /root/packages/dist/x86_64/*.apk /workspace/
+            "
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.apk"
