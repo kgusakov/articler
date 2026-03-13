@@ -19,21 +19,12 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.94.0"
-          targets: x86_64-unknown-linux-musl
+          fetch-tags: true
 
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libclang-dev clang musl-tools libfontconfig1-dev pkg-config
-
-      - name: Install Tailwind CSS
-        run: |
-          curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
-          chmod +x tailwindcss-linux-x64
-          sudo mv tailwindcss-linux-x64 /usr/local/bin/tailwindcss
+      - name: Resolve tag
+        id: tag
+        run: echo "value=$(git tag --points-at HEAD | head -n1)" >> $GITHUB_OUTPUT
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -42,19 +33,28 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-musl-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-musl-cargo-
+          key: alpine-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: alpine-cargo-
 
-      - name: Build release binary (musl)
-        env:
-          CC_x86_64_unknown_linux_musl: musl-gcc
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
-          PKG_CONFIG_ALLOW_CROSS: "1"
+      - name: Build release binary (Alpine)
         run: |
-          cargo build --release --target x86_64-unknown-linux-musl
-          mkdir -p target/release
-          cp target/x86_64-unknown-linux-musl/release/articler target/release/articler
-          cp target/x86_64-unknown-linux-musl/release/articlerctl target/release/articlerctl
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -v "$HOME/.cargo/registry:/root/.cargo/registry" \
+            -v "$HOME/.cargo/git:/root/.cargo/git" \
+            -w /workspace \
+            alpine:3.23 \
+            sh -c "
+              set -ex
+              apk add --no-cache curl bash musl-dev gcc g++ make cmake pkgconf \
+                clang-dev clang fontconfig-dev
+              curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64-musl
+              chmod +x tailwindcss-linux-x64-musl
+              mv tailwindcss-linux-x64-musl /usr/local/bin/tailwindcss
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.94.0
+              source /root/.cargo/env
+              TAILWIND_REBUILD=1 TAILWIND_BIN=tailwindcss cargo build --release
+            "
 
       - name: Build Alpine package
         run: |
@@ -64,7 +64,7 @@ jobs:
             alpine:3.23 \
             sh -c "
               set -ex
-              apk add --no-cache alpine-sdk
+              apk add --no-cache alpine-sdk fontconfig
               abuild-keygen -n -a
               cp /root/.abuild/*.rsa.pub /etc/apk/keys/
               abuild -F checksum
@@ -76,3 +76,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: "*.apk"
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
