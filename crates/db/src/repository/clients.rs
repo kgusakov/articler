@@ -199,6 +199,54 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql")
+    )]
+    async fn test_create_clients_with_the_same_name(pool: SqlitePool) {
+        let now = chrono::Utc::now().timestamp();
+
+        let client = create(
+            &pool,
+            1,
+            "Test Client NonUnique",
+            "test_client_id1",
+            "test_client_secret",
+            now,
+        )
+        .await
+        .unwrap();
+        assert!(client.id > 0, "Client should have a positive id");
+
+        let client = create(
+            &pool,
+            2,
+            "Test Client NonUnique",
+            "test_client_id2",
+            "test_client_secret",
+            now,
+        )
+        .await
+        .unwrap();
+        assert!(client.id > 0, "Client should have a positive id");
+
+        let found_client =
+            find_by_user_id_client_id_and_secret(&pool, 1, "test_client_id1", "test_client_secret")
+                .await
+                .unwrap();
+
+        assert!(found_client.is_some(), "Should find newly created client");
+        assert_eq!(found_client.unwrap().name, "Test Client NonUnique");
+
+        let found_client =
+            find_by_user_id_client_id_and_secret(&pool, 2, "test_client_id2", "test_client_secret")
+                .await
+                .unwrap();
+
+        assert!(found_client.is_some(), "Should find newly created client");
+        assert_eq!(found_client.unwrap().name, "Test Client NonUnique");
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_find_by_user_id_client_id_and_secret(pool: SqlitePool) {
