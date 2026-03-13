@@ -18,13 +18,15 @@
             </button>
             --}}
             <div class="relative">
-                <button class="cursor-pointer" id="profile-menu-button" class="text-secondary hover:text-primary"
-                    title="Open user menu">
+                <button class="cursor-pointer text-secondary hover:text-primary"
+                    title="Open user menu"
+                    _="on click halt the event then toggle .hidden on #profile-menu">
                     <img src="/static/images/Profile.svg" />
                 </button>
                 <div id="profile-menu"
                     class="hidden absolute right-0 translate-y-2 bg-white border border-border rounded"
-                    style="min-width: 160px;">
+                    style="min-width: 160px;"
+                    _="on click elsewhere add .hidden">
                     <a href="/clients" class="block px-4 py-3 text-sm hover:bg-surface">Clients</a>
                     <a href="/logout" class="block px-4 py-3 text-sm hover:bg-surface">Logout</a>
                 </div>
@@ -32,25 +34,6 @@
         </div>
     </nav>
 </header>
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const profileButton = document.getElementById('profile-menu-button');
-        const profileMenu = document.getElementById('profile-menu');
-
-        if (profileButton && profileMenu) {
-            profileButton.addEventListener('click', function (e) {
-                e.stopPropagation();
-                profileMenu.classList.toggle('hidden');
-            });
-
-            document.addEventListener('click', function (e) {
-                if (!profileButton.contains(e.target) && !profileMenu.contains(e.target)) {
-                    profileMenu.classList.add('hidden');
-                }
-            });
-        }
-    });
-</script>
 
 <!-- DO NOT REMOVE THIS. Needed for wallabag android app autorization -->
 <div style="display:none">
