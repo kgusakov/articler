@@ -1622,6 +1622,156 @@ async fn partial_articles_archived(pool: SqlitePool) {
     assert_eq!(active_category, Some("archived".to_owned()));
 }
 
+#[sqlx::test(migrations = "../../migrations")]
+async fn search_without_auth_must_redirect_to_login(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+
+    let req = test::TestRequest::get().uri("/search?q=test").to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::FOUND);
+    let location = resp
+        .headers()
+        .get(header::LOCATION)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(location, "/login");
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn search_htmx_returns_partial_cards(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/search?q=content1")
+        .insert_header(("HX-Request", "true"))
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    assert_eq!(
+        resp.headers().get("HX-Push-Url").unwrap().to_str().unwrap(),
+        "/search?q=content1"
+    );
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(content);
+    assert_eq!(titles, vec!["title1"]);
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn search_htmx_with_category_filter(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/search?q=content&category=archived")
+        .insert_header(("HX-Request", "true"))
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
+    assert_eq!(titles_set, HashSet::from(["title2", "title4", "title6"]));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn search_htmx_no_results(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/search?q=xyznotfound")
+        .insert_header(("HX-Request", "true"))
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(content);
+    assert!(titles.is_empty());
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn search_full_page(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/search?q=content1")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    assert!(resp.headers().get("HX-Push-Url").is_none());
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(content);
+    assert_eq!(titles, vec!["title1"]);
+
+    let active_category = helpers::find_active_category(content);
+    assert_eq!(active_category, Some("all".to_owned()));
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
+async fn search_full_page_with_category_filter(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::get()
+        .uri("/search?q=content&category=favourite")
+        .cookie(cookie)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = test::read_body(resp).await;
+    let content = str::from_utf8(&body).unwrap();
+
+    let titles = helpers::find_article_titles(content);
+    let titles_set: HashSet<&str> = titles.iter().map(std::string::String::as_str).collect();
+    assert_eq!(titles_set, HashSet::from(["title3", "title4", "title6"]));
+
+    let active_category = helpers::find_active_category(content);
+    assert_eq!(active_category, Some("favourite".to_owned()));
+}
+
 async fn login(
     username: &str,
     password: &str,

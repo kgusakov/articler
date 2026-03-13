@@ -52,7 +52,7 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/add", post().to(do_add))
         .route("/partial/categories", get().to(partial_categories))
         .route("/partial/articles/{category}", get().to(partial_articles))
-        .route("/search", post().to(do_search));
+        .route("/search", get().to(search));
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> Result<HttpResponse> {
@@ -71,10 +71,9 @@ async fn clients(session: Session, app: web::Data<AppState>) -> Result<HttpRespo
             .map(Client::from)
             .collect();
 
-        let rendered = app.handlebars.render(
-            "page_clients",
-            &Clients { clients },
-        )?;
+        let rendered = app
+            .handlebars
+            .render("page_clients", &Clients { clients })?;
 
         Ok(HttpResponse::Ok()
             .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
@@ -538,17 +537,46 @@ async fn do_edit_title(
     }
 }
 
-async fn do_search(
+async fn search(
     session: Session,
     req: HttpRequest,
     app: web::Data<AppState>,
-    form: web::Form<dto::SearchForm>,
+    query: web::Query<dto::SearchQuery>,
 ) -> Result<HttpResponse> {
     let user_id = check_user_id(&session)?;
-    let category = Category::from(&req);
+    let query = query.into_inner();
+    let search_term = query.q;
+    let category = query.category.unwrap_or(Category::All);
+
     let mut params = find_params_for_category(user_id, &category);
-    params.search = Some(form.into_inner().q);
-    main(app, user_id, params, category).await
+    params.search = Some(search_term);
+
+    if is_htmx_request(&req) {
+        let mut tx = app.pool.begin().await?;
+
+        let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut *tx, &params)
+            .await?
+            .into_iter()
+            .map(|e| e.0.into())
+            .collect();
+
+        let context = PartialArticlesContext {
+            articles: articles_metadata,
+            counters: ArticleCounters::load(&mut *tx, user_id).await?,
+            active_category: category.clone(),
+        };
+
+        tx.commit().await?;
+
+        let rendered = app.handlebars.render("article_cards", &context)?;
+
+        Ok(HttpResponse::Ok()
+            .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+            .append_header(("HX-Push-Url", req.uri().to_string()))
+            .body(rendered))
+    } else {
+        main(app, user_id, params, category).await
+    }
 }
 
 fn check_user_id(session: &Session) -> Result<i64> {
@@ -766,7 +794,7 @@ mod dto {
         pub active_category: Category,
     }
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Serialize, Deserialize, Clone)]
     #[serde(rename_all = "lowercase")]
     pub enum Category {
         All,
@@ -877,7 +905,8 @@ mod dto {
     }
 
     #[derive(Deserialize)]
-    pub struct SearchForm {
+    pub struct SearchQuery {
         pub q: String,
+        pub category: Option<Category>,
     }
 }

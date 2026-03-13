@@ -29,7 +29,9 @@
 
 <!-- Content -->
 <section class="flex-1">
-    <form action="/search" method="post" class="mb-6">
+    <form action="/search" method="get" hx-get="/search" hx-target="#article-cards" hx-push-url="true"
+        class="mb-6">
+        <input type="hidden" name="category" value="{{active_category}}" />
         <div class="input-wrapper focus-within:outline-primary">
             <img src="/static/images/Search.svg" class="shrink-0" />
             <input type="search" name="q" placeholder="Search articles..." class="input-ghost" />
