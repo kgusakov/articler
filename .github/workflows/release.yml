@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name for the release"
+        required: true
 
 env:
   TAILWIND_REBUILD: 1
@@ -70,3 +74,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: "*.apk"
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
