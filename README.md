@@ -1,6 +1,6 @@
 # Articler
 
-A self-hosted, Wallabag-compatible read-it-later service written. Lightweight, single-binary, SQLite-backed.
+A self-hosted, Wallabag-compatible read-it-later service. Lightweight, single-binary, SQLite-backed.
 
 ## Features
 
