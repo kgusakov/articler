@@ -16,6 +16,7 @@ source="
         articler.profile
         articler.post-install
         articler.pre-install
+        articler.profile.d.sh
         "
 
 package() {
@@ -23,4 +24,5 @@ package() {
         install -Dm755 "$srcdir"/articlerctl "$pkgdir"/usr/bin/articlerctl
         install -Dm755 "$srcdir"/articler.openrc "$pkgdir"/etc/init.d/articler
         install -Dm644 "$srcdir"/articler.profile "$pkgdir"/etc/conf.d/articler
+        install -Dm644 "$srcdir"/articler.profile.d.sh "$pkgdir"/etc/profile.d/articler.sh
 }
