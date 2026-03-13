@@ -42,9 +42,9 @@ jobs:
               set -ex
               apk add --no-cache curl bash musl-dev gcc g++ make cmake pkgconf \
                 clang-dev clang fontconfig-dev
-              curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
-              chmod +x tailwindcss-linux-x64
-              mv tailwindcss-linux-x64 /usr/local/bin/tailwindcss
+              curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64-musl
+              chmod +x tailwindcss-linux-x64-musl
+              mv tailwindcss-linux-x64-musl /usr/local/bin/tailwindcss
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.94.0
               source /root/.cargo/env
               TAILWIND_REBUILD=1 TAILWIND_BIN=tailwindcss cargo build --release
