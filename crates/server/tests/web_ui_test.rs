@@ -1623,20 +1623,13 @@ async fn partial_articles_archived(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn search_without_auth_must_redirect_to_login(pool: SqlitePool) {
+async fn search_without_auth_must_return_forbidden_status(pool: SqlitePool) {
     let app = init_ui_app(pool).await;
 
     let req = test::TestRequest::get().uri("/search?q=test").to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::FOUND);
-    let location = resp
-        .headers()
-        .get(header::LOCATION)
-        .unwrap()
-        .to_str()
-        .unwrap();
-    assert_eq!(location, "/login");
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
 }
 
 #[sqlx::test(
