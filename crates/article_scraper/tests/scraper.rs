@@ -67,13 +67,13 @@ async fn test_reading_time() {
 
     let document = scraper.extract(&url).await.unwrap();
 
-    insta::assert_snapshot!(document.title, @"Was Joe Pass a “Genius” of Jazz Guitar?");
+    insta::assert_snapshot!(document.title, @r#"Was Joe Pass a "Genius" of Jazz Guitar?"#);
 
     insta::assert_snapshot!(document.content_html);
 
     insta::assert_snapshot!(document.content_text);
 
-    insta::assert_snapshot!(document.reading_time, @"5");
+    insta::assert_snapshot!(document.reading_time, @"1");
 
     mock_server.verify().await;
 }

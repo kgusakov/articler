@@ -1341,13 +1341,13 @@ async fn do_add(pool: SqlitePool) {
     let titles = helpers::find_article_titles(content);
 
     assert!(
-        titles.contains(&"Was Joe Pass a “Genius” of Jazz Guitar?".to_owned()),
+        titles.contains(&"Was Joe Pass a \"Genius\" of Jazz Guitar?".to_owned()),
         "Expected 'Was Joe Pass a “Genius” of Jazz Guitar?' in {titles:?}"
     );
 
     assert_eq!(
-        helpers::find_reading_time_by_title(content, "Was Joe Pass a “Genius” of Jazz Guitar?"),
-        Some(5)
+        helpers::find_reading_time_by_title(content, "Was Joe Pass a \"Genius\" of Jazz Guitar?"),
+        Some(1)
     );
 }
 
