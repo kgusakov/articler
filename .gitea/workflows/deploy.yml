@@ -42,6 +42,8 @@ jobs:
           scp -o StrictHostKeyChecking=no -i ~/.ssh/private.key *.apk root@${{ vars.DEPLOY_HOST }}:/tmp/
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/private.key root@${{ vars.DEPLOY_HOST }} "
             set -x
+            TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
+            su -s /bin/sh articler -c \"sqlite3 /var/lib/articler/articler.db \\\".backup '/var/lib/articler/articler_backup_\${TIMESTAMP}.db'\\\"\"
             apk add --allow-untrusted /tmp/articler-*.apk
             rc-service articler restart
             rm /tmp/articler-*.apk
