@@ -18,6 +18,8 @@ Download the `.apk` package from the [releases page](../../releases) and install
 
 ```sh
 apk add --allow-untrusted articler.apk
+rc-update add articler
+rc-service articler start
 ```
 
 Create your first user and an OAuth client for Wallabag apps:
