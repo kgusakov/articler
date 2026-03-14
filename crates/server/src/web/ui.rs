@@ -593,6 +593,8 @@ fn referer_or_root(req: &HttpRequest) -> String {
 
 fn is_htmx_request(req: &HttpRequest) -> bool {
     req.headers().get("HX-Request").is_some()
+        && req.headers().get("HX-Boosted").is_none()
+        && req.headers().get("HX-History-Restore-Request").is_none()
 }
 
 fn find_params_for_category(user_id: Id, category: &Category) -> FindParams {
