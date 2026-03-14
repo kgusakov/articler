@@ -383,7 +383,7 @@ checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
 name = "app_state"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "article_scraper",
  "db",
@@ -406,7 +406,7 @@ dependencies = [
 
 [[package]]
 name = "article_scraper"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "dateparser",
@@ -451,7 +451,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "auth"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "db",
  "helpers",
@@ -756,7 +756,7 @@ checksum = "c3e64b0cc0439b12df2fa678eae89a1c56a529fd067a9115f7827f1fffd22b32"
 
 [[package]]
 name = "cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "article_scraper",
  "chrono",
@@ -1127,7 +1127,7 @@ dependencies = [
 
 [[package]]
 name = "db"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "indexmap 2.13.0",
@@ -1933,7 +1933,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "helpers"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "argon2",
  "rand 0.10.0",
@@ -3841,7 +3841,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "actix-http",
  "actix-service",
@@ -4478,7 +4478,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "token_storage"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "dashmap",
@@ -4674,7 +4674,7 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
 name = "types"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "ucd-trie"
@@ -4810,7 +4810,7 @@ dependencies = [
 
 [[package]]
 name = "wallabag_api"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "actix-cors",
  "actix-http",

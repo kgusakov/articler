@@ -1,7 +1,7 @@
 # Contributor: Kirill Gusakov <kgusakov@gmail.com>
 # Maintainer: Kirill Gusakov <kgusakov@gmail.com>
 pkgname=articler
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=0
 pkgdesc="Read-it-later service with wallabag-compatible API "
 arch="all"
