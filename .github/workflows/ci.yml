@@ -48,7 +48,7 @@ jobs:
         run: cargo +nightly install cargo-udeps --locked
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libclang-dev clang libfontconfig1-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev clang libfontconfig1-dev pkg-config gperf
 
       - name: Run cargo check
         run: cargo check --all-targets
