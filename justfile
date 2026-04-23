@@ -19,4 +19,4 @@ dev fixture=".tmp/data.sql" db_path="target/tmp":
     sqlx migrate run --database-url "sqlite://{{db_path}}/db.sqlite"
     cat {{fixture}} | sqlite3 {{db_path}}/db.sqlite
 
-    HTTP_PORT=80 COOKIE_KEY=`head -c 32 /dev/urandom | xxd -p -c 0` DATABASE_URL="sqlite://{{db_path}}/db.sqlite" cargo run
+    HTTP_PORT=80 COOKIE_KEY=`head -c 32 /dev/urandom | xxd -p -c 0` DATABASE_URL="sqlite://{{db_path}}/db.sqlite" cargo run -p server
