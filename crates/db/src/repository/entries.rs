@@ -13,6 +13,8 @@ use types::{Id, ReadingTime};
 
 pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
 
+// TODO: split the method
+#[expect(clippy::too_many_lines)]
 pub async fn find_all<'c, C>(
     conn: C,
     params: &FindParams,
@@ -22,13 +24,23 @@ where
 {
     let mut conn = conn.acquire().await?;
     let mut q_builder = QueryBuilder::new(format!(
-        r"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
-        WHERE e.id in (
+        r"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e
+        LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id
+        LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"
+    ));
+
+    if let Some(ref search) = params.search {
+        q_builder.push(" JOIN entries_fts fts ON fts.rowid = e.id AND entries_fts MATCH ");
+        q_builder.push_bind(search.clone());
+    }
+
+    q_builder.push(format!(
+        r" WHERE e.id in (
             SELECT e2.id FROM {ENTRIES_TABLE} e2"
     ));
 
     if params.search.is_some() {
-        q_builder.push(" JOIN entries_fts ON entries_fts.rowid = e2.id");
+        q_builder.push(" JOIN entries_fts fts ON fts.rowid = e2.id");
     }
 
     q_builder.push(" WHERE e2.user_id = ");
@@ -67,6 +79,8 @@ where
             q_builder.push(" ");
             q_builder.push(order.to_string());
         }
+    } else if params.search.is_some() {
+        q_builder.push(" ORDER BY fts.rank");
     }
 
     if let Some(pp) = params.per_page {
@@ -88,6 +102,8 @@ where
             q_builder.push(" ");
             q_builder.push(order.to_string());
         }
+    } else if params.search.is_some() {
+        q_builder.push(" ORDER BY fts.rank");
     }
 
     // TODO implement detail filtering
@@ -1232,6 +1248,93 @@ mod tests {
         assert!(ids.contains(&2));
         assert!(ids.contains(&4));
         assert!(ids.contains(&6));
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql")
+    )]
+    async fn test_find_all_search_orders_by_rank(pool: SqlitePool) {
+        create(
+            &pool,
+            CreateEntry {
+                user_id: 1,
+                url: "https://rank.com/1".to_owned(),
+                hashed_url: "rank_h1".to_owned(),
+                given_url: "https://rank.com/1".to_owned(),
+                hashed_given_url: "rank_gh1".to_owned(),
+                title: "No match here".to_owned(),
+                content: "<p>a]pple banana cherry date elderberry fig grape hazelnut kiwi lemon mango nectarine orange papaya quince raspberry strawberry tangerine ugli vanilla walnut xigua yam zucchini apricot blueberry cranberry dragonfruit eggplant fennel guava honeydew i]mbe jackfruit kumquat lime mulberry nutmeg olive plum rust raisin</p>".to_owned(),
+                content_text: "apple banana cherry date elderberry fig grape hazelnut kiwi lemon mango nectarine orange papaya quince raspberry strawberry tangerine ugli vanilla walnut xigua yam zucchini apricot blueberry cranberry dragonfruit eggplant fennel guava honeydew imbe jackfruit kumquat lime mulberry nutmeg olive plum rust raisin".to_owned(),
+                is_archived: false,
+                archived_at: None,
+                is_starred: false,
+                starred_at: None,
+                created_at: 1_700_000_000,
+                updated_at: 1_700_000_001,
+                mimetype: None,
+                language: None,
+                reading_time: 1,
+                domain_name: "rank.com".to_owned(),
+                preview_picture: None,
+                origin_url: None,
+                published_at: None,
+                published_by: None,
+                is_public: None,
+                uid: None,
+            },
+            &[],
+        )
+        .await
+        .unwrap();
+
+        create(
+            &pool,
+            CreateEntry {
+                user_id: 1,
+                url: "https://rank.com/2".to_owned(),
+                hashed_url: "rank_h2".to_owned(),
+                given_url: "https://rank.com/2".to_owned(),
+                hashed_given_url: "rank_gh2".to_owned(),
+                title: "No match here either".to_owned(),
+                content: "<p>rust rust rust</p>".to_owned(),
+                content_text: "rust rust rust".to_owned(),
+                is_archived: false,
+                archived_at: None,
+                is_starred: false,
+                starred_at: None,
+                created_at: 1_700_000_002,
+                updated_at: 1_700_000_003,
+                mimetype: None,
+                language: None,
+                reading_time: 1,
+                domain_name: "rank.com".to_owned(),
+                preview_picture: None,
+                origin_url: None,
+                published_at: None,
+                published_by: None,
+                is_public: None,
+                uid: None,
+            },
+            &[],
+        )
+        .await
+        .unwrap();
+
+        let results = find_all(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("rust".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0.url, "https://rank.com/2");
+        assert_eq!(results[1].0.url, "https://rank.com/1");
     }
 
     #[sqlx::test(

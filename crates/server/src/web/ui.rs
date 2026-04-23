@@ -550,6 +550,8 @@ async fn search(
 
     let mut params = find_params_for_category(user_id, &category);
     params.search = Some(search_term);
+    params.order = None;
+    params.sort = None;
 
     if is_htmx_request(&req) {
         let mut tx = app.pool.begin().await?;
