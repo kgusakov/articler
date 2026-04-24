@@ -5,7 +5,6 @@ pub mod tokens;
 pub mod users;
 
 use sqlx::Sqlite;
-use thiserror::Error;
 
 pub type Db = Sqlite;
 type Timestamp = i64;
@@ -17,9 +16,3 @@ const USERS_TABLE: &str = "users";
 const CLIENTS_TABLE: &str = "clients";
 const TOKENS_TABLE: &str = "tokens";
 const SQLITE_LIMIT_VARIABLE_NUMBER: usize = 999;
-
-#[derive(Error, Debug)]
-pub enum DbErrorType {
-    #[error("Repository error: {0}")]
-    RepositoryError(String),
-}
