@@ -14,7 +14,7 @@ use db::repository::{
 };
 use helpers::{generate_client_id, generate_client_secret, hash_url};
 use sqlx::{Acquire, SqlitePool};
-use types::Id;
+use types::{ClientName, Id};
 use url::Url;
 
 use crate::{
@@ -431,7 +431,7 @@ async fn do_create_client(
     let _ = clients::create(
         &app.pool,
         user_id,
-        &form.client_name,
+        &ClientName::try_from(form.client_name.as_str())?,
         &generate_client_id(),
         &generate_client_secret(),
         now,

@@ -1,4 +1,5 @@
 use snafu::{Location, Snafu};
+use types::ValidationError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -44,6 +45,13 @@ pub enum Error {
     Scraper {
         #[snafu(source)]
         error: article_scraper::error::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
+    Validation {
+        #[snafu(source)]
+        error: ValidationError,
         #[snafu(implicit)]
         location: Location,
     },

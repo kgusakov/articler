@@ -1,6 +1,7 @@
 use actix_http::StatusCode;
 use actix_web::ResponseError;
 use snafu::{Location, Snafu};
+use types::ValidationError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -69,6 +70,13 @@ pub enum Error {
     Auth {
         #[snafu(source)]
         error: auth::error::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
+    Validation {
+        #[snafu(source)]
+        error: ValidationError,
         #[snafu(implicit)]
         location: Location,
     },

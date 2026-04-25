@@ -2,12 +2,12 @@ use crate::error::Result;
 use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
 use super::{CLIENTS_TABLE, Db, Timestamp};
-use types::Id;
+use types::{ClientName, Id};
 
 pub async fn create<'c, C>(
     conn: C,
     user_id: Id,
-    client_name: &str,
+    client_name: &ClientName<'_>,
     client_id: &str,
     client_secret: &str,
     created_at: Timestamp,
@@ -18,7 +18,7 @@ where
     let mut conn = conn.acquire().await?;
 
     Ok(sqlx::query_as::<_, ClientRow>(&format!("INSERT INTO {CLIENTS_TABLE} (name, client_id, client_secret, user_id, created_at) VALUES(?, ?, ?, ?, ?) RETURNING *;"))
-            .bind(client_name)
+            .bind(**client_name)
             .bind(client_id)
             .bind(client_secret)
             .bind(user_id)
@@ -164,7 +164,7 @@ mod tests {
         let client = create(
             &pool,
             user_id,
-            "Test Client",
+            &ClientName::try_from("Test Client").unwrap(),
             "test_client_id",
             "test_client_secret",
             now,
@@ -207,7 +207,7 @@ mod tests {
         let client = create(
             &pool,
             1,
-            "Test Client NonUnique",
+            &ClientName::try_from("Test Client NonUnique").unwrap(),
             "test_client_id1",
             "test_client_secret",
             now,
@@ -219,7 +219,7 @@ mod tests {
         let client = create(
             &pool,
             2,
-            "Test Client NonUnique",
+            &ClientName::try_from("Test Client NonUnique").unwrap(),
             "test_client_id2",
             "test_client_secret",
             now,

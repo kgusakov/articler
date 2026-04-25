@@ -16,6 +16,7 @@ use crate::web::{
 };
 use crate::{error::Result, web::fake_ui::dto::CreateClientForm};
 use db::repository::clients::{self};
+use types::ClientName;
 
 // The whole file is just a fake pages to support the way of authorization, which Android app and browser extensions are using
 
@@ -79,7 +80,7 @@ async fn post_client_create(
         let client = clients::create(
             &app.pool,
             user_id,
-            &form.name,
+            &ClientName::try_from(form.name.as_str())?,
             &generate_client_id(),
             &generate_client_secret(),
             now,

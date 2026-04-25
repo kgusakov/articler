@@ -11,6 +11,7 @@ name = "articlerctl"
 path = "src/main.rs"
 
 [dependencies]
+types.workspace = true
 db.workspace = true
 helpers.workspace = true
 article_scraper.workspace = true
