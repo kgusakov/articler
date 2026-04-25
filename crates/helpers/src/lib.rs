@@ -59,7 +59,7 @@ mod tests {
     use crate::{hash_password, verify_password};
 
     #[test]
-    fn hash_passowrd_test() {
+    fn hash_password_test() {
         let password = "password";
         let hash = hash_password(password).unwrap();
 
