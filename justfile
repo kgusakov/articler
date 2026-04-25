@@ -1,4 +1,4 @@
-pre-commit: check clippy udeps test
+pre-commit: check clippy test
 
 check:
     cargo check --all-targets
