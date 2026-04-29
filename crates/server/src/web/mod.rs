@@ -1,5 +1,5 @@
 use actix_session::{SessionMiddleware, storage::CookieSessionStore};
-use actix_web::{cookie::Key, web};
+use actix_web::{cookie::Key, http::header, middleware::DefaultHeaders, web};
 
 pub mod fake_ui;
 pub mod ui;
@@ -7,6 +7,7 @@ pub mod ui;
 pub fn routes(cfg: &mut web::ServiceConfig, cookie_key: Key) {
     cfg.service(
         web::scope("")
+            .wrap(DefaultHeaders::new().add((header::CACHE_CONTROL, "no-store")))
             .wrap(
                 SessionMiddleware::builder(CookieSessionStore::default(), cookie_key)
                     .cookie_secure(false) // TODO Set to true in production with HTTPS
