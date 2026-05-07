@@ -5,6 +5,7 @@ on:
     branches: [ "*" ]
   pull_request:
     branches: [ "*" ]
+  workflow_dispatch:
 
 env:
   TAILWIND_REBUILD: 1
@@ -13,9 +14,21 @@ env:
 jobs:
   check:
     name: Check
-    runs-on: alpine-3.23
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ vars.REGISTRY }}/${{ gitea.repository }}/ci:latest
+      options: "-v /srv/cache/cargo-registry:/root/.cargo/registry -v /srv/cache/cargo-git:/root/.cargo/git"
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Run cargo check
         run: cargo check --all-targets
       - name: Run cargo clippy

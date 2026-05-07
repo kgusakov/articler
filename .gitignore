@@ -1,4 +1,5 @@
 target/
 .*
+!.gitea/
 *.code-workspace
 crates/server/static/css
