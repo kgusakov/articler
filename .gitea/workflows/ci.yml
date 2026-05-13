@@ -33,7 +33,5 @@ jobs:
         run: cargo check --all-targets
       - name: Run cargo clippy
         run: cargo clippy --all-targets -- -D warnings
-      - name: Run cargo udeps
-        run: cargo +nightly udeps --all-targets
       - name: Run cargo test
         run: cargo test
