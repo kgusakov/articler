@@ -57,12 +57,18 @@ pub fn init_handlebars() -> Result<Handlebars<'static>, TemplateError> {
     handlebars.register_partial("clients", include_str!("../templates/clients.hbs"))?;
 
     handlebars.register_template_string("login", include_str!("../templates/login.hbs"))?;
-    handlebars
-        .register_template_string("page_articles", include_str!("../templates/page_articles.hbs"))?;
-    handlebars
-        .register_template_string("page_article", include_str!("../templates/page_article.hbs"))?;
-    handlebars
-        .register_template_string("page_clients", include_str!("../templates/page_clients.hbs"))?;
+    handlebars.register_template_string(
+        "page_articles",
+        include_str!("../templates/page_articles.hbs"),
+    )?;
+    handlebars.register_template_string(
+        "page_article",
+        include_str!("../templates/page_article.hbs"),
+    )?;
+    handlebars.register_template_string(
+        "page_clients",
+        include_str!("../templates/page_clients.hbs"),
+    )?;
 
     handlebars.register_template_string("article", include_str!("../templates/article.hbs"))?;
     handlebars.register_template_string(
@@ -73,10 +79,8 @@ pub fn init_handlebars() -> Result<Handlebars<'static>, TemplateError> {
         "articles_and_categories",
         include_str!("../templates/articles_and_categories.hbs"),
     )?;
-    handlebars.register_template_string(
-        "categories",
-        include_str!("../templates/categories.hbs"),
-    )?;
+    handlebars
+        .register_template_string("categories", include_str!("../templates/categories.hbs"))?;
 
     handlebars.register_template_string(
         "fake_development",
