@@ -9,7 +9,6 @@ workspace = true
 [dependencies]
 types.workspace = true
 chrono.workspace = true
-thiserror.workspace = true
 log.workspace = true
 snafu.workspace = true
 dom_smoothie = "0.15.0"
