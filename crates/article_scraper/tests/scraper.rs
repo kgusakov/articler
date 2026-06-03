@@ -5,7 +5,10 @@ use wiremock::{
     matchers::{method, path},
 };
 
+use std::io::Write;
+
 use article_scraper::{Document, Scraper, error::Error};
+use rstest::rstest;
 
 #[tokio::test]
 async fn test_success() {
@@ -206,4 +209,73 @@ async fn test_pdf_fallback_on_invalid_data() {
     assert_eq!(Some("application/pdf".to_owned()), document.mime_type);
     assert_eq!("", document.content_html);
     mock_server.verify().await;
+}
+
+#[rstest]
+#[case::brotli(compress_brotli)]
+#[case::gzip(compress_gzip)]
+#[case::deflate(compress_deflate)]
+#[case::zstd(compress_zstd)]
+#[tokio::test]
+async fn test_decompression(#[case] compress: fn(&[u8]) -> (String, Vec<u8>)) {
+    let mock_server = MockServer::start().await;
+
+    let html = r#"
+            <!DOCTYPE html><html lang="en"><head><title>Compression Test</title></head><body><p>Compressed content</p></body></html>
+        "#;
+
+    let (encoding, compressed) = compress(html.as_bytes());
+
+    Mock::given(method("GET"))
+        .and(path("/compressed-article"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-encoding", encoding)
+                .set_body_raw(compressed, "text/html"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let url = Url::parse(format!("{}/compressed-article", mock_server.uri()).as_str()).unwrap();
+
+    let scraper = Scraper::new(None).unwrap();
+    let document = scraper.extract(&url).await.unwrap();
+
+    assert_eq!("Compression Test", document.title);
+    assert!(document.content_html.contains("Compressed content"));
+    mock_server.verify().await;
+}
+
+fn compress_brotli(data: &[u8]) -> (String, Vec<u8>) {
+    let mut compressed = Vec::new();
+    let mut writer = brotli::CompressorWriter::new(&mut compressed, data.len(), 11, 22);
+    writer.write_all(data).unwrap();
+    drop(writer);
+    ("br".to_owned(), compressed)
+}
+
+fn compress_gzip(data: &[u8]) -> (String, Vec<u8>) {
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
+
+    let mut compressed = Vec::new();
+    let mut writer = GzEncoder::new(&mut compressed, Compression::default());
+    writer.write_all(data).unwrap();
+    writer.finish().unwrap();
+    ("gzip".to_owned(), compressed)
+}
+
+fn compress_deflate(data: &[u8]) -> (String, Vec<u8>) {
+    use flate2::Compression;
+    use flate2::write::ZlibEncoder;
+
+    let mut compressed = Vec::new();
+    let mut writer = ZlibEncoder::new(&mut compressed, Compression::default());
+    writer.write_all(data).unwrap();
+    writer.finish().unwrap();
+    ("deflate".to_owned(), compressed)
+}
+
+fn compress_zstd(data: &[u8]) -> (String, Vec<u8>) {
+    ("zstd".to_owned(), zstd::encode_all(data, 3).unwrap())
 }

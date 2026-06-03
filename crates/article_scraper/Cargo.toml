@@ -13,7 +13,7 @@ log.workspace = true
 snafu.workspace = true
 dom_smoothie = "0.15.0"
 dateparser = "0.2.1"
-reqwest = { version = "0.13.1", features = ["socks"] }
+reqwest = { version = "0.13.1", features = ["socks", "brotli", "gzip", "zstd", "deflate"] }
 url = { version = "2.5.7" }
 icu_segmenter = "2.1.2"
 mupdf = "0.5"
@@ -22,4 +22,8 @@ mupdf = "0.5"
 insta.workspace = true
 tokio.workspace = true
 wiremock = "0.6.5"
+rstest = "0.26.1"
+brotli = "8.0.2"
+flate2 = "1.1.5"
+zstd = "0.13.3"
 
