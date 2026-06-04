@@ -1,21 +1,21 @@
 <!-- Unread (active) -->
 <a href="/" hx-push-url="/" hx-get="/partial/articles/unread" hx-target="#main-block"
     class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 {{#if (eq active_category 'unread')}}bg-surface{{else}}hover:bg-surface{{/if}} rounded text-left">
-    <img src="/static/images/MarkUnRead.svg" />
+    <img src="/static/images/MarkUnRead.svg" class="icon" />
     <span class="hidden lg:inline flex-1 font-medium">Unread</span>
     <span class="hidden lg:inline text-xs text-muted">{{unread_counter}}</span>
 </a>
 <!-- All -->
 <a href="/all" hx-push-url="/all" hx-get="/partial/articles/all" hx-target="#main-block"
     class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left {{#if (eq active_category 'all')}}bg-surface{{else}}hover:bg-surface{{/if}}">
-    <img src="/static/images/All.svg" />
+    <img src="/static/images/All.svg" class="icon" />
     <span class="hidden lg:inline flex-1">All</span>
     <span class="hidden lg:inline text-xs text-muted">{{all_counter}}</span>
 </a>
 <!-- Starred -->
 <a href="/favourite" hx-push-url="/favourite" hx-get="/partial/articles/favourite" hx-target="#main-block"
     class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left {{#if (eq active_category 'favourite')}}bg-surface{{else}}hover:bg-surface{{/if}}">
-    <img src="/static/images/FavoriteOff.svg" />
+    <img src="/static/images/FavoriteOff.svg" class="icon" />
     <span class="hidden lg:inline flex-1">Starred</span>
     <span class="hidden lg:inline text-xs text-muted">{{starred_counter}}</span>
 </a>
@@ -23,7 +23,7 @@
 <a href="/archive" hx-push-url="/archive" hx-get="/partial/articles/archived" hx-swap="morph:innerHTML"
     hx-target="#main-block"
     class="shrink-0 lg:w-full h-12 px-3 lg:px-4 flex items-center gap-3 rounded text-left {{#if (eq active_category 'archived')}}bg-surface{{else}}hover:bg-surface{{/if}}">
-    <img src="/static/images/Archived.svg" />
+    <img src="/static/images/Archived.svg" class="icon" />
     <span class="hidden lg:inline flex-1">Archived</span>
     <span class="hidden lg:inline text-xs text-muted">{{archived_counter}}</span>
 </a>

@@ -73,6 +73,15 @@
         @apply hover:scale-110 transition-transform;
     }
 
+    .btn-icon img {
+        @apply w-6 h-6;
+    }
+
+    /* Fixed-size inline icon (sidebar categories, search, profile, login fields) */
+    .icon {
+        @apply w-6 h-6 shrink-0;
+    }
+
     /* === Inputs === */
 
     /* Standard bordered input (URL bar, search fields) */

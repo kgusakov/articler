@@ -1,7 +1,7 @@
 <!-- Header -->
 <header class="h-[72px] shrink-0 px-4 md:px-8 lg:px-[120px] flex items-center justify-between border-b border-surface">
     <a href="/" class="flex items-center gap-3">
-        <img src="/static/images/Logo.svg" class="h-12" />
+        <img src="/static/images/Logo.svg" class="h-12 aspect-[254/96] w-auto" />
     </a>
     <nav class="flex-1 flex items-center gap-6">
         <form action="/add" method="post" class="flex-1 max-w-lg mx-auto">
@@ -21,7 +21,7 @@
                 <button class="cursor-pointer text-secondary hover:text-primary"
                     title="Open user menu"
                     _="on click halt the event then toggle .hidden on #profile-menu">
-                    <img src="/static/images/Profile.svg" />
+                    <img src="/static/images/Profile.svg" class="icon" />
                 </button>
                 <div id="profile-menu"
                     class="hidden absolute right-0 translate-y-2 bg-white border border-border rounded"
