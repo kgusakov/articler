@@ -107,7 +107,7 @@ pub async fn reload_articles(pool: &Pool<Sqlite>, username: &str) -> Result<()> 
 
         println!("Reloading article {} {}/{}", e.id, i, entries.len());
 
-        let url = Url::parse(&e.url)?;
+        let url = Url::parse(&e.url)?.try_into()?;
 
         match scraper.extract(&url).await {
             Ok(doc) => {

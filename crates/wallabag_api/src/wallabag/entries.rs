@@ -9,6 +9,7 @@ use app_state::AppState;
 use chrono::Utc;
 use slug::slugify;
 use snafu::ResultExt;
+use types::ArticleUrl;
 use url::Url;
 
 use crate::{
@@ -49,9 +50,11 @@ pub(crate) async fn post_entries(
         .fail();
     }
 
-    let document = data.scraper.extract_or_fallback(&add_entry.url).await;
+    let url: &ArticleUrl = &add_entry.url.try_into()?;
 
-    let domain_name = add_entry.url.domain().or(add_entry.url.host_str());
+    let document = data.scraper.extract_or_fallback(url).await;
+
+    let domain_name = url.domain().or(url.host_str());
 
     let now = Utc::now().timestamp();
 
@@ -66,10 +69,10 @@ pub(crate) async fn post_entries(
     let create_entry = entries::CreateEntry {
         user_id: user_info.user_id,
         // TODO actually here we must have url without redirects already
-        url: add_entry.url.to_string(),
-        hashed_url: hash_url(&add_entry.url),
-        given_url: add_entry.url.to_string(),
-        hashed_given_url: hash_url(&add_entry.url),
+        url: url.to_string(),
+        hashed_url: hash_url(url),
+        given_url: url.to_string(),
+        hashed_given_url: hash_url(url),
         title: document.title,
         content: document.content_html,
         content_text: document.content_text,

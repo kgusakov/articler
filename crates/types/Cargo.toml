@@ -8,3 +8,4 @@ workspace = true
 
 [dependencies]
 snafu.workspace = true
+url.workspace = true

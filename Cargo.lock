@@ -4716,6 +4716,7 @@ name = "types"
 version = "0.1.1"
 dependencies = [
  "snafu",
+ "url",
 ]
 
 [[package]]

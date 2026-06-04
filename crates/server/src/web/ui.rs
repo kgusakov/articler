@@ -450,6 +450,7 @@ async fn do_add(
     let user_id = check_user_id(&session)?;
 
     let url: Url = form.into_inner().url.parse()?;
+    let url = url.try_into()?;
 
     let document = app.scraper.extract_or_fallback(&url).await;
 

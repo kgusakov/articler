@@ -24,7 +24,10 @@ async fn test_success() {
         .mount(&mock_server)
         .await;
 
-    let url = Url::parse(format!("{}/test-article", mock_server.uri()).as_str()).unwrap();
+    let url = Url::parse(format!("{}/test-article", mock_server.uri()).as_str())
+        .unwrap()
+        .try_into()
+        .unwrap();
 
     let scraper = Scraper::new(None).unwrap();
 
@@ -64,7 +67,10 @@ async fn test_reading_time() {
         .mount(&mock_server)
         .await;
 
-    let url = Url::parse(format!("{}/test-article", mock_server.uri()).as_str()).unwrap();
+    let url = Url::parse(format!("{}/test-article", mock_server.uri()).as_str())
+        .unwrap()
+        .try_into()
+        .unwrap();
 
     let scraper = Scraper::new(None).unwrap();
 
@@ -95,7 +101,10 @@ async fn test_relative_image() {
         .mount(&mock_server)
         .await;
 
-    let url = Url::parse(format!("{}/test-article", mock_server.uri()).as_str()).unwrap();
+    let url = Url::parse(format!("{}/test-article", mock_server.uri()).as_str())
+        .unwrap()
+        .try_into()
+        .unwrap();
 
     let scraper = Scraper::new(None).unwrap();
 
@@ -120,6 +129,8 @@ async fn test_empty_title() {
         .await;
 
     let url = Url::parse(format!("{}/test-article/slug-like-url-path", mock_server.uri()).as_str())
+        .unwrap()
+        .try_into()
         .unwrap();
 
     let scraper = Scraper::new(None).unwrap();
@@ -140,7 +151,10 @@ async fn test_unsupported_mime_type() {
         .mount(&mock_server)
         .await;
 
-    let url = Url::parse(format!("{}/test-article/file.zip", mock_server.uri()).as_str()).unwrap();
+    let url = Url::parse(format!("{}/test-article/file.zip", mock_server.uri()).as_str())
+        .unwrap()
+        .try_into()
+        .unwrap();
 
     let scraper = Scraper::new(None).unwrap();
 
@@ -173,8 +187,10 @@ async fn test_pdf_extraction() {
         .mount(&mock_server)
         .await;
 
-    let url =
-        Url::parse(format!("{}/papers/2310.11703v2.pdf", mock_server.uri()).as_str()).unwrap();
+    let url = Url::parse(format!("{}/papers/2310.11703v2.pdf", mock_server.uri()).as_str())
+        .unwrap()
+        .try_into()
+        .unwrap();
 
     let scraper = Scraper::new(None).unwrap();
 
@@ -199,7 +215,10 @@ async fn test_pdf_fallback_on_invalid_data() {
         .mount(&mock_server)
         .await;
 
-    let url = Url::parse(format!("{}/test-article/new.pdf", mock_server.uri()).as_str()).unwrap();
+    let url = Url::parse(format!("{}/test-article/new.pdf", mock_server.uri()).as_str())
+        .unwrap()
+        .try_into()
+        .unwrap();
 
     let scraper = Scraper::new(None).unwrap();
 
@@ -236,7 +255,10 @@ async fn test_decompression(#[case] compress: fn(&[u8]) -> (String, Vec<u8>)) {
         .mount(&mock_server)
         .await;
 
-    let url = Url::parse(format!("{}/compressed-article", mock_server.uri()).as_str()).unwrap();
+    let url = Url::parse(format!("{}/compressed-article", mock_server.uri()).as_str())
+        .unwrap()
+        .try_into()
+        .unwrap();
 
     let scraper = Scraper::new(None).unwrap();
     let document = scraper.extract(&url).await.unwrap();

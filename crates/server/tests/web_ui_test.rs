@@ -1355,6 +1355,25 @@ async fn do_add(pool: SqlitePool) {
     migrations = "../../migrations",
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
+async fn do_add_wrong_scheme(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::post()
+        .uri("/add")
+        .insert_header((header::REFERER, "/all"))
+        .cookie(cookie)
+        .set_form([("url", "ftp://example.com/article")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
 async fn do_edit_title(pool: SqlitePool) {
     let app = init_ui_app(pool).await;
     let cookie = login("wallabag", "wallabag", &app).await;

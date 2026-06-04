@@ -5,6 +5,7 @@ use reqwest::header;
 use reqwest::header::USER_AGENT;
 use snafu::ResultExt;
 use std::time::Duration;
+use types::ArticleUrl;
 use url::Url;
 
 use crate::ArticleMimeType;
@@ -32,7 +33,7 @@ impl Scraper {
         })
     }
 
-    pub async fn extract(&self, url: &Url) -> Result<Document> {
+    pub async fn extract(&self, url: &ArticleUrl) -> Result<Document> {
         let response = self
             .client
             .get(url.as_str())
@@ -67,7 +68,7 @@ impl Scraper {
         }
     }
 
-    pub async fn extract_or_fallback(&self, url: &Url) -> Document {
+    pub async fn extract_or_fallback(&self, url: &ArticleUrl) -> Document {
         match self.extract(url).await {
             Ok(document) => document,
             Err(err) => {
