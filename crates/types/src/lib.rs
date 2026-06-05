@@ -201,16 +201,22 @@ impl From<Username> for String {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Password(String);
 
 impl Password {
     const MAX_LENGTH: usize = 512;
 }
 
+impl std::fmt::Debug for Password {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Password([REDACTED])")
+    }
+}
+
 impl std::fmt::Display for Password {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        f.write_str("[REDACTED]")
     }
 }
 
@@ -218,8 +224,6 @@ impl TryFrom<String> for Password {
     type Error = Validation;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let value = value.trim().to_owned();
-
         ensure!(
             !value.is_empty(),
             ValidationSnafu {

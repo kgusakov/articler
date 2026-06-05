@@ -9,6 +9,7 @@ use argon2::{
 use rand::RngExt;
 use rand::distr::Alphanumeric;
 use sha1::{Digest, Sha1};
+use types::Password;
 use url::Url;
 
 use crate::error::Result;
@@ -19,7 +20,7 @@ pub fn hash_url(url: &Url) -> String {
     format!("{:x}", Sha1::digest(url.as_str()))
 }
 
-pub fn hash_password(password: &str) -> Result<String> {
+pub fn hash_password(password: &Password) -> Result<String> {
     let salt = SaltString::generate(OsRng);
     let hash: PasswordHashString = PASSWORD_HASHER
         .hash_password(password.as_bytes(), &salt)?
@@ -56,15 +57,16 @@ pub fn generate_client_secret() -> String {
 
 #[cfg(test)]
 mod tests {
+    use types::Password;
     use crate::{hash_password, verify_password};
 
     #[test]
     fn hash_password_test() {
-        let password = "password";
-        let hash = hash_password(password).unwrap();
+        let password = Password::try_from("password").unwrap();
+        let hash = hash_password(&password).unwrap();
 
         assert!(
-            verify_password(password, &hash).unwrap(),
+            verify_password("password", &hash).unwrap(),
             "Correct password pass verification"
         );
 
