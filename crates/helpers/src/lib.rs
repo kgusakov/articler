@@ -57,8 +57,8 @@ pub fn generate_client_secret() -> String {
 
 #[cfg(test)]
 mod tests {
-    use types::Password;
     use crate::{hash_password, verify_password};
+    use types::Password;
 
     #[test]
     fn hash_password_test() {
