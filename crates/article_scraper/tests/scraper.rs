@@ -8,8 +8,8 @@ use wiremock::{
 use std::io::Write;
 
 use article_scraper::{Document, Scraper, error::Error};
-use types::Title;
 use rstest::rstest;
+use types::Title;
 
 #[tokio::test]
 async fn test_success() {

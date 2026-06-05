@@ -1,4 +1,7 @@
-pre-commit: check clippy test
+pre-commit: check fmt-check clippy test
+
+fmt-check:
+     cargo fmt --check
 
 check:
     cargo check --all-targets

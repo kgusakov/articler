@@ -6,8 +6,9 @@ use url::Url;
 use types::Title;
 
 use crate::{
-    ArticleMimeType, Document, extract_title,
+    ArticleMimeType, Document,
     error::{PdfContentParsingSnafu, PdfTitleFromMetadataSnafu, Result},
+    extract_title,
     helpers::reading_time,
 };
 

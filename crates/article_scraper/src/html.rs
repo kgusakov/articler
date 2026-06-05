@@ -37,8 +37,7 @@ impl HtmlExtractor {
             None => None,
         };
 
-        let title = Title::try_from(article.title)
-            .unwrap_or_else(|_| extract_title(url));
+        let title = Title::try_from(article.title).unwrap_or_else(|_| extract_title(url));
 
         let content_text = article.text_content.deref().to_owned();
         let reading_time = reading_time(&content_text)?;

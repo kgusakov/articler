@@ -386,7 +386,8 @@ pub(crate) async fn patch_entry(
     let now = Utc::now().timestamp();
 
     let repo_update = entries::UpdateEntry {
-        title: request.title
+        title: request
+            .title
             .map(|t| Title::try_from(t).map(Some))
             .transpose()?,
         content: request.content.map(Some),
