@@ -225,7 +225,7 @@ impl TryFrom<String> for Password {
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         ensure!(
-            !value.is_empty(),
+            !value.trim().is_empty(),
             ValidationSnafu {
                 message: "Password can't be empty",
             }
