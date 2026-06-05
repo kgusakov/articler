@@ -57,6 +57,7 @@ pub fn init_handlebars() -> Result<Handlebars<'static>, TemplateError> {
     handlebars.register_partial("clients", include_str!("../templates/clients.hbs"))?;
 
     handlebars.register_template_string("login", include_str!("../templates/login.hbs"))?;
+    handlebars.register_template_string("setup", include_str!("../templates/setup.hbs"))?;
     handlebars.register_template_string(
         "page_articles",
         include_str!("../templates/page_articles.hbs"),

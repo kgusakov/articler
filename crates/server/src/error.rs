@@ -80,6 +80,13 @@ pub enum Error {
         #[snafu(implicit)]
         location: Location,
     },
+    #[snafu(transparent)]
+    Helpers {
+        #[snafu(source)]
+        error: helpers::error::Error,
+        #[snafu(implicit)]
+        location: Location,
+    },
 }
 
 impl ResponseError for Error {

@@ -1,0 +1,41 @@
+{{#> base}}
+  <main class="flex-1 flex lg:items-center items-start justify-center px-4 py-12">
+      <div
+          class="px-10 pt-10 pb-12 bg-white rounded-xl shadow-[0px_10px_24px_4px_rgba(91,107,134,0.12)] inline-flex flex-col justify-center items-center overflow-hidden">
+          <div class="mb-10">
+              <img src="/static/images/Logo.svg" alt="Logo" class="h-16 w-auto aspect-[254/96]" />
+          </div>
+
+          {{#if error}}
+          <p id="setup-error" class="text-red-500 text-sm mb-4">{{error}}</p>
+          {{/if}}
+
+          <form action="/do_setup" method="post" class="flex flex-col items-center gap-6 self-center" id="setup-form">
+              <div class="input-wrapper w-80 sm:w-96">
+                  <img src="/static/images/Profile.svg" alt="Profile" class="icon" />
+                  <input type="text" name="username" autocomplete="username" required
+                      class="input-ghost text-muted"
+                      placeholder="Username" />
+              </div>
+
+              <div class="input-wrapper w-80 sm:w-96">
+                  <img src="/static/images/Password.svg" alt="Password" class="icon" />
+                  <input type="password" name="password" autocomplete="new-password" required
+                      class="input-ghost text-muted"
+                      placeholder="Password" />
+              </div>
+
+              <div class="input-wrapper w-80 sm:w-96">
+                  <img src="/static/images/Password.svg" alt="Confirm password" class="icon" />
+                  <input type="password" name="confirm_password" autocomplete="new-password" required
+                      class="input-ghost text-muted"
+                      placeholder="Confirm password" />
+              </div>
+
+              <button type="submit" class="btn-primary">
+                  Create account
+              </button>
+          </form>
+      </div>
+  </main>
+{{/base}}

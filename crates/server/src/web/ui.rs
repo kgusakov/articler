@@ -11,6 +11,7 @@ use chrono::Utc;
 use db::repository::{
     Db, clients,
     entries::{self, FindParams, SortOrder, UpdateEntry},
+    users,
 };
 use helpers::{generate_client_id, generate_client_secret, hash_url};
 use sqlx::{Acquire, SqlitePool};
@@ -56,6 +57,13 @@ pub fn routes(cfg: &mut ServiceConfig) {
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> Result<HttpResponse> {
+    let user_count = users::count(&app.pool).await?;
+    if user_count == 0 {
+        return Ok(HttpResponse::Found()
+            .append_header(("Location", "/setup"))
+            .finish());
+    }
+
     let rendered = app.handlebars.render("login", &serde_json::json!({}))?;
 
     Ok(HttpResponse::Ok()

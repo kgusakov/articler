@@ -59,7 +59,10 @@ async fn index_without_auth_must_redirect_to_login(pool: SqlitePool) {
     assert_eq!(location, "/login");
 }
 
-#[sqlx::test(migrations = "../../migrations")]
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql")
+)]
 async fn login_page(pool: SqlitePool) {
     let app = init_ui_app(pool).await;
 

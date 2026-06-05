@@ -66,6 +66,17 @@ where
     Ok(result)
 }
 
+pub async fn count<'c, C>(conn: C) -> Result<i64>
+where
+    C: sqlx::Acquire<'c, Database = Db>,
+{
+    let mut conn = conn.acquire().await?;
+    let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {USERS_TABLE}"))
+        .fetch_one(&mut *conn)
+        .await?;
+    Ok(count)
+}
+
 #[derive(Debug, Clone)]
 pub struct UserRow {
     pub id: Id,
@@ -250,5 +261,24 @@ mod tests {
             no_user.is_none(),
             "Should not find user with wrong username and password"
         );
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn test_count_users_empty(pool: SqlitePool) {
+        let count = count(&pool).await.unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn test_count_users_with_users(pool: SqlitePool) {
+        sqlx::query(
+            "INSERT INTO users (username, email, name, password_hash, created_at, updated_at) VALUES ('user1', '', '', '', 0, 0), ('user2', '', '', '', 0, 0)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let count = count(&pool).await.unwrap();
+        assert_eq!(count, 2);
     }
 }
