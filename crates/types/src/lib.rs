@@ -138,3 +138,65 @@ impl Deref for ArticleUrl {
         &self.0
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Username(String);
+
+impl Username {
+    const MAX_LENGTH: usize = 512;
+}
+
+impl std::fmt::Display for Username {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<String> for Username {
+    type Error = Validation;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let value = value.trim().to_owned();
+
+        ensure!(
+            !value.is_empty(),
+            ValidationSnafu {
+                message: "Username can't be empty",
+            }
+        );
+
+        ensure!(
+            value.chars().count() <= Username::MAX_LENGTH,
+            ValidationSnafu {
+                message: format!(
+                    "Username must be at most {} characters",
+                    Username::MAX_LENGTH
+                ),
+            }
+        );
+
+        Ok(Self(value))
+    }
+}
+
+impl TryFrom<&str> for Username {
+    type Error = Validation;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_owned())
+    }
+}
+
+impl Deref for Username {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_str()
+    }
+}
+
+impl From<Username> for String {
+    fn from(u: Username) -> Self {
+        u.0
+    }
+}
