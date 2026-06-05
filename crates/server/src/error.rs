@@ -1,7 +1,7 @@
 use actix_http::StatusCode;
 use actix_web::ResponseError;
 use snafu::{Location, Snafu};
-use types::ValidationError;
+use types::error::ValidationError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 

@@ -2,7 +2,7 @@ use actix_http::{StatusCode, header::TryIntoHeaderValue};
 use actix_web::{ResponseError, web::BufMut};
 use serde_json::json;
 use snafu::{Location, Snafu};
-use types::ValidationError;
+use types::error::ValidationError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 

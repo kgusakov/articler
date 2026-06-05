@@ -1,7 +1,11 @@
+pub mod error;
+
 use std::ops::Deref;
 
-use snafu::{Location, prelude::*};
+use snafu::ensure;
 use url::Url;
+
+use crate::error::{ValidationError, ValidationSnafu};
 
 pub type Id = i64;
 pub type ReadingTime = i32;
@@ -77,12 +81,4 @@ impl Deref for ArticleUrl {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
-}
-
-#[derive(Debug, Snafu)]
-#[snafu(display("{message}"))]
-pub struct ValidationError {
-    message: String,
-    #[snafu(implicit)]
-    location: Location,
 }

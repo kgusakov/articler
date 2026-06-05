@@ -1,5 +1,5 @@
 use snafu::{Location, Snafu};
-use types::ValidationError;
+use types::error::ValidationError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
