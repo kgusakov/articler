@@ -9,7 +9,7 @@ use sqlx::{
 
 use super::{Db, ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE, Timestamp};
 use crate::error::{NotSupportedYetSnafu, Result};
-use types::{Id, ReadingTime};
+use types::{Id, ReadingTime, Title};
 
 pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
 
@@ -290,7 +290,7 @@ where
     .bind(entry.hashed_url)
     .bind(entry.given_url)
     .bind(entry.hashed_given_url)
-    .bind(entry.title)
+    .bind(&*entry.title)
     .bind(entry.content)
     .bind(entry.content_text)
     .bind(entry.is_archived)
@@ -385,7 +385,7 @@ where
 
     if let Some(title) = update.title {
         separated.push("title = ");
-        push_bind_or_default(&mut separated, title);
+        push_bind_or_default(&mut separated, title.map(String::from));
     }
 
     if let Some(content) = update.content {
@@ -569,7 +569,7 @@ pub struct CreateEntry {
     pub hashed_url: String,
     pub given_url: String,
     pub hashed_given_url: String,
-    pub title: String,
+    pub title: Title,
     pub content: String,
     pub content_text: String,
     pub is_archived: bool,
@@ -597,7 +597,7 @@ type UpdateField<T> = Option<Option<T>>;
 
 #[derive(Debug)]
 pub struct UpdateEntry {
-    pub title: UpdateField<String>,
+    pub title: UpdateField<Title>,
     pub content: UpdateField<String>,
     pub content_text: UpdateField<String>,
     pub is_archived: UpdateField<bool>,
@@ -890,7 +890,7 @@ mod tests {
             1,
             1,
             UpdateEntry {
-                title: Some(Some("new title".to_owned())),
+                title: Some(Some(Title::try_from("new title".to_owned()).unwrap())),
                 content: Some(Some("new content".to_owned())),
                 content_text: Some(Some("new text content".to_owned())),
                 is_archived: Some(Some(true)),
@@ -957,7 +957,9 @@ mod tests {
             1,
             1,
             UpdateEntry {
-                title: Some(Some("only title changed".to_owned())),
+                title: Some(Some(
+                    Title::try_from("only title changed".to_owned()).unwrap(),
+                )),
                 updated_at: 1_702_300_000,
                 ..Default::default()
             },
@@ -1042,7 +1044,7 @@ mod tests {
             1,
             999,
             UpdateEntry {
-                title: Some(Some("nope".to_owned())),
+                title: Some(Some(Title::try_from("nope".to_owned()).unwrap())),
                 updated_at: 1_702_300_000,
                 ..Default::default()
             },
@@ -1056,7 +1058,7 @@ mod tests {
             999,
             1,
             UpdateEntry {
-                title: Some(Some("nope".to_owned())),
+                title: Some(Some(Title::try_from("nope".to_owned()).unwrap())),
                 updated_at: 1_702_300_000,
                 ..Default::default()
             },
@@ -1079,7 +1081,7 @@ mod tests {
                 hashed_url: "phrase_hash1".to_owned(),
                 given_url: "https://phrase.com/1".to_owned(),
                 hashed_given_url: "phrase_ghash1".to_owned(),
-                title: "Phrase Test".to_owned(),
+                title: Title::try_from("Phrase Test".to_owned()).unwrap(),
                 content: "<p>the quick brown fox jumps</p>".to_owned(),
                 content_text: "the quick brown fox jumps".to_owned(),
                 is_archived: false,
@@ -1263,7 +1265,7 @@ mod tests {
                 hashed_url: "rank_h1".to_owned(),
                 given_url: "https://rank.com/1".to_owned(),
                 hashed_given_url: "rank_gh1".to_owned(),
-                title: "No match here".to_owned(),
+                title: Title::try_from("No match here".to_owned()).unwrap(),
                 content: "<p>a]pple banana cherry date elderberry fig grape hazelnut kiwi lemon mango nectarine orange papaya quince raspberry strawberry tangerine ugli vanilla walnut xigua yam zucchini apricot blueberry cranberry dragonfruit eggplant fennel guava honeydew i]mbe jackfruit kumquat lime mulberry nutmeg olive plum rust raisin</p>".to_owned(),
                 content_text: "apple banana cherry date elderberry fig grape hazelnut kiwi lemon mango nectarine orange papaya quince raspberry strawberry tangerine ugli vanilla walnut xigua yam zucchini apricot blueberry cranberry dragonfruit eggplant fennel guava honeydew imbe jackfruit kumquat lime mulberry nutmeg olive plum rust raisin".to_owned(),
                 is_archived: false,
@@ -1296,7 +1298,7 @@ mod tests {
                 hashed_url: "rank_h2".to_owned(),
                 given_url: "https://rank.com/2".to_owned(),
                 hashed_given_url: "rank_gh2".to_owned(),
-                title: "No match here either".to_owned(),
+                title: Title::try_from("No match here either".to_owned()).unwrap(),
                 content: "<p>rust rust rust</p>".to_owned(),
                 content_text: "rust rust rust".to_owned(),
                 is_archived: false,

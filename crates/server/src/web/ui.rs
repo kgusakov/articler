@@ -14,7 +14,7 @@ use db::repository::{
 };
 use helpers::{generate_client_id, generate_client_secret, hash_url};
 use sqlx::{Acquire, SqlitePool};
-use types::{ClientName, Id};
+use types::{ClientName, Id, Title};
 use url::Url;
 
 use crate::{
@@ -518,8 +518,9 @@ async fn do_edit_title(
 
     let form = form.into_inner();
 
+    let title = Title::try_from(form.title)?;
     let update = UpdateEntry {
-        title: Some(Some(form.title)),
+        title: Some(Some(title)),
         ..Default::default()
     };
 

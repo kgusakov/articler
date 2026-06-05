@@ -9,7 +9,7 @@ use app_state::AppState;
 use chrono::Utc;
 use slug::slugify;
 use snafu::ResultExt;
-use types::ArticleUrl;
+use types::{ArticleUrl, Title};
 use url::Url;
 
 use crate::{
@@ -386,7 +386,9 @@ pub(crate) async fn patch_entry(
     let now = Utc::now().timestamp();
 
     let repo_update = entries::UpdateEntry {
-        title: request.title.map(Some),
+        title: request.title
+            .map(|t| Title::try_from(t).map(Some))
+            .transpose()?,
         content: request.content.map(Some),
         content_text: None,
         is_archived: request.archive.map(Some),

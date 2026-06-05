@@ -1,5 +1,5 @@
 use snafu::{Location, Snafu};
-use types::error::ValidationError;
+use types::error::Validation;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -51,7 +51,7 @@ pub enum Error {
     #[snafu(transparent)]
     Validation {
         #[snafu(source)]
-        error: ValidationError,
+        error: Validation,
         #[snafu(implicit)]
         location: Location,
     },

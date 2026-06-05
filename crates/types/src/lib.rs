@@ -5,7 +5,7 @@ use std::ops::Deref;
 use snafu::ensure;
 use url::Url;
 
-use crate::error::{ValidationError, ValidationSnafu};
+use crate::error::{Validation, ValidationSnafu};
 
 pub type Id = i64;
 pub type ReadingTime = i32;
@@ -17,7 +17,7 @@ impl ClientName<'_> {
 }
 
 impl<'a> TryFrom<&'a str> for ClientName<'a> {
-    type Error = ValidationError;
+    type Error = Validation;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         let value = value.trim();
@@ -51,6 +51,62 @@ impl<'a> Deref for ClientName<'a> {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Title(String);
+
+impl Title {
+    const MAX_LENGTH: usize = 1024;
+}
+
+impl std::fmt::Display for Title {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<String> for Title {
+    type Error = Validation;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let value = value.trim().to_owned();
+
+        ensure!(
+            !value.is_empty(),
+            ValidationSnafu {
+                message: "Title can't be empty",
+            }
+        );
+
+        let value = if value.chars().count() >= Title::MAX_LENGTH {
+            value.chars().take(Title::MAX_LENGTH).collect()
+        } else {
+            value
+        };
+
+        Ok(Self(value))
+    }
+}
+
+impl Default for Title {
+    fn default() -> Self {
+        Self("Title N/A".to_owned())
+    }
+}
+
+impl Deref for Title {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<Title> for String {
+    fn from(t: Title) -> Self {
+        t.0
+    }
+}
+
 #[derive(Debug)]
 pub struct ArticleUrl(Url);
 
@@ -61,7 +117,7 @@ impl std::fmt::Display for ArticleUrl {
 }
 
 impl TryFrom<Url> for ArticleUrl {
-    type Error = ValidationError;
+    type Error = Validation;
 
     fn try_from(value: Url) -> Result<Self, Self::Error> {
         ensure!(

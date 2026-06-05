@@ -5,7 +5,7 @@ use reqwest::header;
 use reqwest::header::USER_AGENT;
 use snafu::ResultExt;
 use std::time::Duration;
-use types::ArticleUrl;
+use types::{ArticleUrl, Title};
 use url::Url;
 
 use crate::ArticleMimeType;
@@ -75,7 +75,7 @@ impl Scraper {
                 error!("Error while parsing url {url}: {err:?}");
 
                 Document {
-                    title: extract_title(url).to_owned(),
+                    title: extract_title(url),
                     content_html: String::new(),
                     content_text: String::new(),
                     image_url: None,
@@ -90,23 +90,14 @@ impl Scraper {
 }
 
 #[must_use]
-pub fn extract_title(url: &Url) -> &str {
-    if let Some(mut segments) = url.path_segments()
-        && let Some(last) = segments.next_back()
-        && !last.is_empty()
-    {
-        return last;
-    }
-
-    if let Some(domain) = url.domain() {
-        return domain;
-    }
-
-    if let Some(host) = url.host_str() {
-        return host;
-    }
-
-    url.as_str()
+pub fn extract_title(url: &Url) -> Title {
+    let s = url
+        .path_segments()
+        .and_then(|mut seg| seg.next_back().filter(|s| !s.is_empty()))
+        .or_else(|| url.domain())
+        .or_else(|| url.host_str())
+        .unwrap_or_else(|| url.as_str());
+    Title::try_from(s.to_owned()).unwrap_or_default()
 }
 
 pub struct Scraper {
@@ -123,17 +114,17 @@ mod tests {
     fn test_extract_title() {
         assert_eq!(
             "some-text",
-            extract_title(&Url::parse("http://site.com/some-text").unwrap())
+            &*extract_title(&Url::parse("http://site.com/some-text").unwrap())
         );
 
         assert_eq!(
             "site.com",
-            extract_title(&Url::parse("http://site.com").unwrap())
+            &*extract_title(&Url::parse("http://site.com").unwrap())
         );
 
         assert_eq!(
             "127.0.0.1",
-            extract_title(&Url::parse("http://127.0.0.1").unwrap())
+            &*extract_title(&Url::parse("http://127.0.0.1").unwrap())
         );
     }
 }

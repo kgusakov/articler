@@ -8,6 +8,7 @@ use wiremock::{
 use std::io::Write;
 
 use article_scraper::{Document, Scraper, error::Error};
+use types::Title;
 use rstest::rstest;
 
 #[tokio::test]
@@ -35,7 +36,7 @@ async fn test_success() {
 
     assert_eq!(
         Document {
-            title: "Test Title".to_owned(),
+            title: Title::try_from("Test Title".to_owned()).unwrap(),
             content_html:
                 "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>"
                     .into(),
@@ -137,7 +138,7 @@ async fn test_empty_title() {
 
     let document = scraper.extract(&url).await.unwrap();
 
-    assert_eq!("slug-like-url-path", document.title);
+    assert_eq!("slug-like-url-path", &*document.title);
     mock_server.verify().await;
 }
 
@@ -224,7 +225,7 @@ async fn test_pdf_fallback_on_invalid_data() {
 
     let document = scraper.extract_or_fallback(&url).await;
 
-    assert_eq!("new", document.title);
+    assert_eq!("new", &*document.title);
     assert_eq!(Some("application/pdf".to_owned()), document.mime_type);
     assert_eq!("", document.content_html);
     mock_server.verify().await;
@@ -263,7 +264,7 @@ async fn test_decompression(#[case] compress: fn(&[u8]) -> (String, Vec<u8>)) {
     let scraper = Scraper::new(None).unwrap();
     let document = scraper.extract(&url).await.unwrap();
 
-    assert_eq!("Compression Test", document.title);
+    assert_eq!("Compression Test", &*document.title);
     assert!(document.content_html.contains("Compressed content"));
     mock_server.verify().await;
 }

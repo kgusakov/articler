@@ -8,12 +8,12 @@ use std::fmt::Display;
 
 use chrono::{DateTime, Utc};
 pub use scraper::*;
-use types::ReadingTime;
+use types::{ReadingTime, Title};
 use url::Url;
 
 #[derive(Debug, PartialEq)]
 pub struct Document {
-    pub title: String,
+    pub title: Title,
     pub content_html: String,
     pub content_text: String,
     pub image_url: Option<Url>,

@@ -2,6 +2,7 @@ use std::num::TryFromIntError;
 
 use dom_smoothie::ReadabilityError;
 use snafu::{Location, Snafu};
+use types::error::Validation;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -26,6 +27,13 @@ pub enum Error {
     ReadabilityParse {
         #[snafu(source)]
         error: ReadabilityError,
+        #[snafu(implicit)]
+        location: Location,
+    },
+    #[snafu(transparent)]
+    Validation {
+        #[snafu(source)]
+        error: Validation,
         #[snafu(implicit)]
         location: Location,
     },

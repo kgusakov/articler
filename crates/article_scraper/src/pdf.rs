@@ -3,8 +3,10 @@ use snafu::ResultExt;
 use std::path::Path;
 use url::Url;
 
+use types::Title;
+
 use crate::{
-    ArticleMimeType, Document,
+    ArticleMimeType, Document, extract_title,
     error::{PdfContentParsingSnafu, PdfTitleFromMetadataSnafu, Result},
     helpers::reading_time,
 };
@@ -26,12 +28,12 @@ impl PdfExtractor {
         let Some(doc) = doc else {
             let title = get_file_name(url)
                 .and_then(|f| {
-                    std::path::Path::new(&f.to_lowercase())
+                    Path::new(&f.to_lowercase())
                         .file_stem()
                         .and_then(|s| s.to_str())
-                        .map(ToOwned::to_owned)
+                        .and_then(|s| Title::try_from(s.to_owned()).ok())
                 })
-                .unwrap_or_default();
+                .unwrap_or_else(|| extract_title(url));
 
             return Document {
                 title,
@@ -65,13 +67,13 @@ impl PdfExtractor {
         let title = get_pdf_title(url, &doc)
             .or_else(|| {
                 get_file_name(url).and_then(|f| {
-                    std::path::Path::new(&f.to_lowercase())
+                    Path::new(&f.to_lowercase())
                         .file_stem()
                         .and_then(|s| s.to_str())
-                        .map(ToOwned::to_owned)
+                        .and_then(|s| Title::try_from(s.to_owned()).ok())
                 })
             })
-            .unwrap_or_default();
+            .unwrap_or_else(|| extract_title(url));
 
         Document {
             title,
@@ -97,7 +99,7 @@ fn get_file_name(url: &Url) -> Option<&str> {
     }
 }
 
-fn get_pdf_title(url: &Url, doc: &mupdf::Document) -> Option<String> {
+fn get_pdf_title(url: &Url, doc: &mupdf::Document) -> Option<Title> {
     let title = match extract_title_from_metadata(doc) {
         Ok(t) => t,
         Err(e) => {
@@ -116,17 +118,17 @@ fn get_pdf_title(url: &Url, doc: &mupdf::Document) -> Option<String> {
             .to_lowercase();
 
         let Some(filename) = filename else {
-            return Some(title);
+            return Title::try_from(title).ok();
         };
 
         // Check if title from metadata is not just filename - some pdfs do it
         if title_base.as_str() != filename {
-            return Some(title);
+            return Title::try_from(title).ok();
         }
     }
 
     match extract_title_from_content(doc) {
-        Ok(t) if t.is_some() => return t,
+        Ok(t) if t.is_some() => return t.and_then(|s| Title::try_from(s).ok()),
         Err(e) => {
             log::warn!("Extract pdf title from content error: {e:?} with url {url}");
         }
@@ -134,7 +136,7 @@ fn get_pdf_title(url: &Url, doc: &mupdf::Document) -> Option<String> {
     }
 
     // Fallback to filename
-    filename.and_then(|f| f.to_str().map(ToOwned::to_owned))
+    filename.and_then(|f| f.to_str().and_then(|s| Title::try_from(s.to_owned()).ok()))
 }
 
 fn extract_title_from_metadata(doc: &mupdf::Document) -> Result<Option<String>> {
@@ -291,7 +293,7 @@ mod tests {
 
     fn extract_title(filename: &str, data: &[u8]) -> String {
         let url = Url::parse(&format!("http://example.com/{filename}")).unwrap();
-        PdfExtractor::extract(&url, data).title
+        PdfExtractor::extract(&url, data).title.to_string()
     }
 
     #[test]

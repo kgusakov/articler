@@ -4,6 +4,8 @@ use snafu::ResultExt;
 use std::ops::Deref;
 use url::Url;
 
+use types::Title;
+
 use crate::{
     ArticleMimeType, Document,
     error::{ReadabilityInitSnafu, ReadabilityParseSnafu, Result},
@@ -35,11 +37,8 @@ impl HtmlExtractor {
             None => None,
         };
 
-        let mut title = article.title;
-
-        if title.is_empty() {
-            extract_title(url).clone_into(&mut title);
-        }
+        let title = Title::try_from(article.title)
+            .unwrap_or_else(|_| extract_title(url));
 
         let content_text = article.text_content.deref().to_owned();
         let reading_time = reading_time(&content_text)?;
