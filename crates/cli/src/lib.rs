@@ -12,7 +12,7 @@ use email_address::EmailAddress;
 use helpers::{generate_client_id, generate_client_secret, hash_password};
 use sqlx::Pool;
 use sqlx::Sqlite;
-use types::ClientName;
+use types::{ClientName, Username};
 use url::Url;
 
 use crate::error::{EmailInvalidSnafu, Result, UserNotFoundSnafu, UsernameBusySnafu};
@@ -30,14 +30,19 @@ pub async fn create_user(
         return EmailInvalidSnafu.fail();
     }
 
-    if users::find_by_username(&mut *tx, username).await?.is_some() {
+    let username = Username::try_from(username)?;
+
+    if users::find_by_username(&mut *tx, &username)
+        .await?
+        .is_some()
+    {
         return UsernameBusySnafu.fail();
     }
 
     let now = chrono::Utc::now().timestamp();
     users::create_user(
         &mut *tx,
-        username,
+        &username,
         &hash_password(password)?,
         name,
         email,

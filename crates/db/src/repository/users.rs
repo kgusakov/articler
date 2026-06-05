@@ -2,11 +2,11 @@ use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
 use super::{Db, Timestamp, USERS_TABLE};
 use crate::error::Result;
-use types::Id;
+use types::{Id, Username};
 
 pub async fn create_user<'c, C>(
     conn: C,
-    username: &str,
+    username: &Username,
     password_hash: &str,
     name: &str,
     email: &str,
@@ -19,7 +19,7 @@ where
     let mut conn = conn.acquire().await?;
 
     Ok(sqlx::query_as::<_, UserRow>(&format!("INSERT INTO {USERS_TABLE} (username, email, name, password_hash, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?) RETURNING *;"))
-            .bind(username)
+            .bind(&**username)
             .bind(email)
             .bind(name)
             .bind(password_hash)
@@ -100,10 +100,11 @@ mod tests {
     async fn test_create_user(pool: SqlitePool) {
         let now = chrono::Utc::now().timestamp();
         let password_hash = "$argon2id$v=19$m=19456,t=2,p=1$test$testhash";
+        let username = Username::try_from("testuser").unwrap();
 
         let user = create_user(
             &pool,
-            "testuser",
+            &username,
             password_hash,
             "Test User",
             "test@example.com",
@@ -136,10 +137,11 @@ mod tests {
 
         let now = chrono::Utc::now().timestamp();
         let password_hash = "$argon2id$v=19$m=19456,t=2,p=1$test$testhash";
+        let username = Username::try_from("duplicateuser").unwrap();
 
         let first_user = create_user(
             &pool,
-            "duplicateuser",
+            &username,
             password_hash,
             "First User",
             "first@example.com",
@@ -153,7 +155,7 @@ mod tests {
 
         let result = create_user(
             &mut *tx,
-            "duplicateuser",
+            &username,
             "$argon2id$v=19$m=19456,t=2,p=1$other$otherhash",
             "Second User",
             "second@example.com",
