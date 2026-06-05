@@ -200,3 +200,65 @@ impl From<Username> for String {
         u.0
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Password(String);
+
+impl Password {
+    const MAX_LENGTH: usize = 512;
+}
+
+impl std::fmt::Display for Password {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl TryFrom<String> for Password {
+    type Error = Validation;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let value = value.trim().to_owned();
+
+        ensure!(
+            !value.is_empty(),
+            ValidationSnafu {
+                message: "Password can't be empty",
+            }
+        );
+
+        ensure!(
+            value.chars().count() < Password::MAX_LENGTH,
+            ValidationSnafu {
+                message: format!(
+                    "Password must be shorter than {} characters",
+                    Password::MAX_LENGTH
+                ),
+            }
+        );
+
+        Ok(Self(value))
+    }
+}
+
+impl TryFrom<&str> for Password {
+    type Error = Validation;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_owned())
+    }
+}
+
+impl Deref for Password {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_str()
+    }
+}
+
+impl From<Password> for String {
+    fn from(p: Password) -> Self {
+        p.0
+    }
+}
