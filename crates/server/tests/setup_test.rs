@@ -102,12 +102,11 @@ async fn do_setup_with_mismatched_passwords_returns_error(pool: SqlitePool) {
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let body = test::read_body(resp).await;
-    let content = std::str::from_utf8(&body).unwrap();
     assert_eq!(
-        helpers::find_error_message(content),
-        Some("Passwords do not match".to_owned())
+        std::str::from_utf8(&body).unwrap(),
+        "Passwords do not match"
     );
 }
 
@@ -125,13 +124,9 @@ async fn do_setup_creates_user_and_redirects_to_login(pool: SqlitePool) {
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+    assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(
-        resp.headers()
-            .get(header::LOCATION)
-            .unwrap()
-            .to_str()
-            .unwrap(),
+        resp.headers().get("HX-Redirect").unwrap().to_str().unwrap(),
         "/login"
     );
 
@@ -141,14 +136,6 @@ async fn do_setup_creates_user_and_redirects_to_login(pool: SqlitePool) {
 
 mod helpers {
     use scraper::{Html, Selector};
-
-    pub fn find_error_message(content: &str) -> Option<String> {
-        let document = Html::parse_document(content);
-        document
-            .select(&Selector::parse("#setup-error").unwrap())
-            .next()
-            .map(|el| el.text().collect::<String>())
-    }
 
     pub fn find_submit_button_text(content: &str) -> Option<String> {
         let document = Html::parse_document(content);

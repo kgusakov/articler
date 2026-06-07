@@ -7,11 +7,12 @@ use actix_web::{
 use app_state::AppState;
 use chrono::Utc;
 use db::repository::users;
+use handlebars::Context;
 use helpers::hash_password;
 use types::{Password, Username};
 
 use crate::error::Result;
-use dto::{SetupForm, SetupFormError};
+use dto::SetupForm;
 
 pub fn routes(cfg: &mut ServiceConfig) {
     cfg.route("/setup", get().to(setup))
@@ -25,13 +26,9 @@ async fn setup(app: web::Data<AppState>) -> Result<HttpResponse> {
             .append_header(("Location", "/login"))
             .finish());
     }
-    let rendered = app.handlebars.render(
-        "setup",
-        &SetupFormError {
-            error: None,
-            username: None,
-        },
-    )?;
+    let rendered = app
+        .handlebars
+        .render_with_context("setup", &Context::null())?;
     Ok(HttpResponse::Ok()
         .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
         .body(rendered))
@@ -49,21 +46,21 @@ async fn do_setup(app: web::Data<AppState>, form: Form<SetupForm>) -> Result<Htt
 
     let username = match Username::try_from(form.username.as_str()) {
         Ok(u) => u,
-        Err(err) => return render_error(&app, &err.to_string(), &form.username),
+        Err(err) => return Ok(error_response(&err.to_string())),
     };
 
     let password = match Password::try_from(form.password.as_str()) {
         Ok(p) => p,
-        Err(err) => return render_error(&app, &err.to_string(), &form.username),
+        Err(err) => return Ok(error_response(&err.to_string())),
     };
 
     let confirm_password = match Password::try_from(form.confirm_password.as_str()) {
         Ok(p) => p,
-        Err(err) => return render_error(&app, &err.to_string(), &form.username),
+        Err(err) => return Ok(error_response(&err.to_string())),
     };
 
     if password != confirm_password {
-        return render_error(&app, "Passwords do not match", &form.username);
+        return Ok(error_response("Passwords do not match"));
     }
 
     let password_hash = hash_password(&password)?;
@@ -80,37 +77,24 @@ async fn do_setup(app: web::Data<AppState>, form: Form<SetupForm>) -> Result<Htt
     users::create_user(&mut *tx, &username, &password_hash, "", "", now, now).await?;
     tx.commit().await?;
 
-    Ok(HttpResponse::SeeOther()
-        .append_header(("Location", "/login"))
+    Ok(HttpResponse::Ok()
+        .append_header(("HX-Redirect", "/login"))
         .finish())
 }
 
-fn render_error(app: &web::Data<AppState>, error: &str, username: &str) -> Result<HttpResponse> {
-    let rendered = app.handlebars.render(
-        "setup",
-        &SetupFormError {
-            error: Some(error.to_owned()),
-            username: Some(username.to_owned()),
-        },
-    )?;
-    Ok(HttpResponse::Ok()
-        .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
-        .body(rendered))
+fn error_response(error: &str) -> HttpResponse {
+    HttpResponse::UnprocessableEntity()
+        .content_type(mime::TEXT_HTML)
+        .body(error.to_owned())
 }
 
 mod dto {
-    use serde::{Deserialize, Serialize};
+    use serde::Deserialize;
 
     #[derive(Deserialize)]
     pub struct SetupForm {
         pub username: String,
         pub password: String,
         pub confirm_password: String,
-    }
-
-    #[derive(Serialize)]
-    pub struct SetupFormError {
-        pub error: Option<String>,
-        pub username: Option<String>,
     }
 }
