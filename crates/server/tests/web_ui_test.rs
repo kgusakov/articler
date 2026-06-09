@@ -236,16 +236,8 @@ async fn do_archive(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .uri("/do_archive")
         .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
         .set_form([("article_id", "1"), ("archived", "true")])
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
-
-    let req = test::TestRequest::get()
-        .uri("/")
-        .cookie(cookie)
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -459,12 +451,20 @@ async fn do_delete_with_back_location(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .uri("/do_delete")
         .cookie(cookie.clone())
-        .set_form([("article_id", "1"), ("back_location", "/archive")])
+        .insert_header(("HX-Request", "true"))
+        .set_form([
+            ("article_id", "1"),
+            ("source", "article"),
+            ("back_location", "/archive"),
+        ])
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/archive");
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        resp.headers().get("HX-Redirect").unwrap().to_str().unwrap(),
+        "/archive"
+    );
 }
 
 #[sqlx::test(
@@ -479,16 +479,8 @@ async fn do_unarchive(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .uri("/do_archive")
         .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
         .set_form([("article_id", "2"), ("archived", "false")])
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
-
-    let req = test::TestRequest::get()
-        .uri("/")
-        .cookie(cookie)
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -670,12 +662,12 @@ async fn do_favourite(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .uri("/do_favourite")
         .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
         .set_form([("article_id", "1"), ("starred", "true")])
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
+    assert_eq!(resp.status(), StatusCode::OK);
 
     let req = test::TestRequest::get()
         .uri("/favourite")
@@ -773,12 +765,12 @@ async fn do_unfavourite(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .uri("/do_favourite")
         .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
         .set_form([("article_id", "3"), ("starred", "false")])
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
+    assert_eq!(resp.status(), StatusCode::OK);
 
     let req = test::TestRequest::get()
         .uri("/favourite")
@@ -1011,12 +1003,12 @@ async fn do_delete(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .uri("/do_delete")
         .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
         .set_form([("article_id", "1")])
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
+    assert_eq!(resp.status(), StatusCode::OK);
 
     let req = test::TestRequest::get()
         .uri("/article/1")
@@ -1398,12 +1390,12 @@ async fn do_edit_title(pool: SqlitePool) {
     let req = test::TestRequest::post()
         .uri("/do_edit_title")
         .cookie(cookie.clone())
+        .insert_header(("HX-Request", "true"))
         .set_form([("article_id", "1"), ("title", "Updated Title")])
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
+    assert_eq!(resp.status(), StatusCode::OK);
 
     let req = test::TestRequest::get()
         .uri("/article/1")
@@ -1747,7 +1739,6 @@ async fn search_full_page(pool: SqlitePool) {
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
-
     assert!(resp.headers().get("HX-Push-Url").is_none());
 
     let body = test::read_body(resp).await;
@@ -1775,6 +1766,7 @@ async fn search_full_page_with_category_filter(pool: SqlitePool) {
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
+    assert!(resp.headers().get("HX-Push-Url").is_none());
 
     let body = test::read_body(resp).await;
     let content = str::from_utf8(&body).unwrap();

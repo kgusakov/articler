@@ -335,16 +335,10 @@ async fn do_archive(
 
     entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
 
-    if is_htmx_request(&req) {
-        if let Some(HxSource::Article) = form.source {
-            render_article(&app, &app.pool, user_id, form.article_id).await
-        } else {
-            render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
-        }
+    if let Some(HxSource::Article) = form.source {
+        render_article(&app, &app.pool, user_id, form.article_id).await
     } else {
-        Ok(HttpResponse::SeeOther()
-            .append_header((header::LOCATION, referer_or_root(&req)))
-            .finish())
+        render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
     }
 }
 
@@ -370,16 +364,10 @@ async fn do_favourite(
 
     entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
 
-    if is_htmx_request(&req) {
-        if let Some(HxSource::Article) = form.source {
-            render_article(&app, &app.pool, user_id, form.article_id).await
-        } else {
-            render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
-        }
+    if let Some(HxSource::Article) = form.source {
+        render_article(&app, &app.pool, user_id, form.article_id).await
     } else {
-        Ok(HttpResponse::SeeOther()
-            .append_header((header::LOCATION, referer_or_root(&req)))
-            .finish())
+        render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
     }
 }
 
@@ -395,20 +383,13 @@ async fn do_delete(
 
     entries::delete_by_id(&app.pool, user_id, form.article_id).await?;
 
-    if is_htmx_request(&req) {
-        if let Some(HxSource::Article) = form.source {
-            let referer = form.back_location.unwrap_or(String::from("/"));
-            Ok(HttpResponse::Ok()
-                .append_header(("HX-Redirect", referer))
-                .finish())
-        } else {
-            render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
-        }
-    } else {
-        let referer = form.back_location.unwrap_or(referer_or_root(&req));
-        Ok(HttpResponse::SeeOther()
-            .append_header((header::LOCATION, referer))
+    if let Some(HxSource::Article) = form.source {
+        let referer = form.back_location.unwrap_or(String::from("/"));
+        Ok(HttpResponse::Ok()
+            .append_header(("HX-Redirect", referer))
             .finish())
+    } else {
+        render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
     }
 }
 
@@ -534,16 +515,10 @@ async fn do_edit_title(
 
     entries::update_by_id(&app.pool, user_id, form.article_id, update).await?;
 
-    if is_htmx_request(&req) {
-        if let Some(HxSource::Article) = form.source {
-            render_article(&app, &app.pool, user_id, form.article_id).await
-        } else {
-            render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
-        }
+    if let Some(HxSource::Article) = form.source {
+        render_article(&app, &app.pool, user_id, form.article_id).await
     } else {
-        Ok(HttpResponse::SeeOther()
-            .append_header((header::LOCATION, referer_or_root(&req)))
-            .finish())
+        render_article_cards(&app, &app.pool, user_id, &Category::from(&req)).await
     }
 }
 
@@ -563,7 +538,10 @@ async fn search(
     params.order = None;
     params.sort = None;
 
-    if is_htmx_request(&req) {
+    if req.headers().get("HX-Request").is_some()
+        && req.headers().get("HX-Boosted").is_none()
+        && req.headers().get("HX-History-Restore-Request").is_none()
+    {
         let mut tx = app.pool.begin().await?;
 
         let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut *tx, &params)
@@ -601,12 +579,6 @@ fn referer_or_root(req: &HttpRequest) -> String {
         .and_then(|v| v.to_str().ok())
         .unwrap_or("/")
         .to_owned()
-}
-
-fn is_htmx_request(req: &HttpRequest) -> bool {
-    req.headers().get("HX-Request").is_some()
-        && req.headers().get("HX-Boosted").is_none()
-        && req.headers().get("HX-History-Restore-Request").is_none()
 }
 
 fn find_params_for_category(user_id: Id, category: &Category) -> FindParams {
