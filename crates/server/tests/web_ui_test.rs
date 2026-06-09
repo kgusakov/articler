@@ -1179,14 +1179,16 @@ async fn do_create_client(pool: SqlitePool) {
 
     let req = test::TestRequest::post()
         .uri("/do_create_client")
-        .insert_header((header::REFERER, "/clients"))
         .cookie(cookie.clone())
         .set_form([("client_name", "New Test Client")])
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/clients");
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        resp.headers().get("HX-Redirect").unwrap().to_str().unwrap(),
+        "/clients"
+    );
 
     let req = test::TestRequest::get()
         .uri("/clients")
@@ -1213,6 +1215,26 @@ async fn do_create_client(pool: SqlitePool) {
         !new_client.2.is_empty(),
         "Client secret should not be empty"
     );
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql")
+)]
+async fn do_create_client_with_empty_name_returns_error(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::post()
+        .uri("/do_create_client")
+        .cookie(cookie)
+        .set_form([("client_name", "")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = test::read_body(resp).await;
+    assert_eq!(str::from_utf8(&body).unwrap(), "Client name can't be empty");
 }
 
 #[sqlx::test(

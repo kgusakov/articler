@@ -410,24 +410,36 @@ async fn do_client_delete(
 
 async fn do_create_client(
     session: Session,
-    req: HttpRequest,
     form: web::Form<CreateClientForm>,
     app: web::Data<AppState>,
-) -> Result<impl Responder> {
+) -> Result<HttpResponse> {
     let user_id = check_user_id(&session)?;
+
+    let form = form.into_inner();
+
+    let client_name = match ClientName::try_from(form.client_name.as_str()) {
+        Ok(n) => n,
+        Err(err) => {
+            return Ok(HttpResponse::UnprocessableEntity()
+                .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+                .body(err.to_string()));
+        }
+    };
 
     let now = chrono::Utc::now().timestamp();
     let _ = clients::create(
         &app.pool,
         user_id,
-        &ClientName::try_from(form.client_name.as_str())?,
+        &client_name,
         &generate_client_id(),
         &generate_client_secret(),
         now,
     )
     .await?;
 
-    Ok(Redirect::to(referer_or_root(&req)).see_other())
+    Ok(HttpResponse::Ok()
+        .append_header(("HX-Redirect", "/clients"))
+        .finish())
 }
 
 async fn do_add(

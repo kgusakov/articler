@@ -36,7 +36,11 @@
     </div>
 
     <!-- Create Form -->
-    <form method="post" action="/do_create_client" class="flex gap-3 mb-8 pb-8 border-b">
+    <p id="client-create-error" class="text-red-500 text-sm mb-2 empty:hidden"></p>
+    <form hx-post="/do_create_client"
+          hx-ext="response-targets"
+          hx-target-422="#client-create-error"
+          class="flex gap-3 mb-8 pb-8 border-b">
         <input type="text" name="client_name" placeholder="Client name"
             class="input-underline flex-1 px-4 py-2 border-border focus:border-primary">
         <button type="submit" class="btn-outline">
