@@ -43,8 +43,7 @@
                       then call #title-input.focus()">
                 <img src="/static/images/Edit.svg" alt="Edit" />
             </button>
-            <button type="button" class="btn-icon" title="Delete"
-                _="on click
+            <button type="button" class="btn-icon" title="Delete" _="on click
                     set #articleDeleteId.value to '{{id}}'
                     set #articleDeleteSource.value to '{{source}}'
                     call #articleDeleteDialog.showModal()">
@@ -57,14 +56,15 @@
     <h1 class="text-3xl lg:text-4xl font-bold leading-tight mb-4 wrap-break-word">
         <span id="title-text">{{title}}</span>
 
-        <form id="title-input-form" post="/do_edit_title" hx-post="/do_edit_title" hx-target="#main-block"
-            hx-swap="morph:innerHtml" hx-vals='{"source": "{{source}}"}' class="hidden w-full">
+        <form id="title-input-form" hx-post="/do_edit_title" hx-target="#main-block" hx-swap="morph:innerHtml"
+            hx-vals='{"source": "{{source}}"}' hx-target-422="#title-edit-error" class="hidden w-full">
             <input type="hidden" name="article_id" value="{{id}}" />
             <input id="title-input" type="text" name="title" value="{{title}}"
                 class="input-underline w-full text-3xl lg:text-4xl font-bold border-primary" _="on keyup[key=='Enter'] call htmx.trigger(#title-input-form, 'submit')
                    on blur call htmx.trigger(#title-input-form, 'submit')" />
         </form>
     </h1>
+    <p id="title-edit-error" class="text-red-500 text-sm mb-2 empty:hidden"></p>
     <div class="flex items-center gap-2 text-sm text-muted mb-8 pb-8 border-b border-border">
         <a href="{{url}}" target="_blank" rel="noopener noreferrer"
             class="hover:text-primary transition-colors underline">{{domain}}</a>
@@ -90,8 +90,7 @@
                 Are you sure you want to delete this article? This action cannot be undone.
             </p>
             <div class="flex justify-end gap-3 pt-2">
-                <button type="button" class="btn-outline"
-                    _="on click call #articleDeleteDialog.close()">
+                <button type="button" class="btn-outline" _="on click call #articleDeleteDialog.close()">
                     Cancel
                 </button>
                 <button type="submit" class="btn-danger">

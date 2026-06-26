@@ -514,12 +514,19 @@ async fn do_edit_title(
     req: HttpRequest,
     app: web::Data<AppState>,
     form: web::Form<EditArticleTitleForm>,
-) -> Result<impl Responder> {
+) -> Result<HttpResponse> {
     let user_id = check_user_id(&session)?;
 
     let form = form.into_inner();
 
-    let title = Title::try_from(form.title)?;
+    let title = match Title::try_from(form.title) {
+        Ok(t) => t,
+        Err(err) => {
+            return Ok(HttpResponse::UnprocessableEntity()
+                .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+                .body(err.to_string()));
+        }
+    };
     let update = UpdateEntry {
         title: Some(Some(title)),
         ..Default::default()

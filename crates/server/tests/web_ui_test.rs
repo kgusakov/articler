@@ -1551,6 +1551,29 @@ async fn do_edit_title_htmx_from_article_page(pool: SqlitePool) {
     migrations = "../../migrations",
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
+async fn do_edit_title_empty_returns_error(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+    let cookie = login("wallabag", "wallabag", &app).await;
+
+    let req = test::TestRequest::post()
+        .uri("/do_edit_title")
+        .cookie(cookie)
+        .insert_header(("HX-Request", "true"))
+        .insert_header((header::REFERER, "/article/1"))
+        .set_form([("article_id", "1"), ("title", ""), ("source", "article")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+    let body = test::read_body(resp).await;
+    assert_eq!(str::from_utf8(&body).unwrap(), "Title can't be empty");
+}
+
+#[sqlx::test(
+    migrations = "../../migrations",
+    fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
+)]
 async fn partial_articles_unread(pool: SqlitePool) {
     let app = init_ui_app(pool).await;
     let cookie = login("wallabag", "wallabag", &app).await;
