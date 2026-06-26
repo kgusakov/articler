@@ -21,6 +21,7 @@ use serde_json::{Value, json};
 use serde_json_assert::{assert_json_eq, assert_json_include};
 use server::app::{app, init_handlebars};
 use sqlx::SqlitePool;
+use std::assert_matches;
 use types::Id;
 use url::Url;
 use wiremock::{
@@ -331,7 +332,7 @@ async fn post_entries_form_data(f: &str, #[ignore] pool: SqlitePool) {
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
     assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
-    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
+    assert_matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty());
 
     assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
     assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
@@ -380,7 +381,7 @@ async fn post_entries_json_data(f: &str, #[ignore] pool: SqlitePool) {
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
     assert!(result.get("id").unwrap().as_i64().unwrap() >= 0);
-    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
+    assert_matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty());
 
     assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
     assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
@@ -448,7 +449,7 @@ async fn post_entries_with_scraping_needed(pool: SqlitePool) {
         result.get("hashed_given_url").unwrap().as_str().unwrap()
     );
 
-    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
+    assert_matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty());
 
     assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
     assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
@@ -538,7 +539,7 @@ async fn post_entries_with_scraping_real_article(pool: SqlitePool) {
         result.get("hashed_given_url").unwrap().as_str().unwrap()
     );
 
-    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
+    assert_matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty());
 
     assert_json_date_between(&before_call_time, &after_call_time, "created_at", &result);
     assert_json_date_between(&before_call_time, &after_call_time, "updated_at", &result);
@@ -847,7 +848,7 @@ async fn patch_entry_make_public(pool: SqlitePool) {
     let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
 
     assert!(result.get("is_public").unwrap().as_bool().unwrap());
-    assert!(matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty()));
+    assert_matches!(result.get("uid").unwrap(), Value::String(s) if !s.is_empty());
 }
 
 #[apply(formats)]

@@ -135,7 +135,7 @@ where
 {
     let mut conn = conn.acquire().await?;
     Ok(
-        sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {TAGS_TABLE} t WHERE user_id = ?",))
+        sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {TAGS_TABLE} t WHERE user_id = ?"))
             .bind(user_id)
             .fetch_all(&mut *conn)
             .await?,

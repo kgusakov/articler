@@ -144,6 +144,8 @@ async fn test_empty_title() {
 
 #[tokio::test]
 async fn test_unsupported_mime_type() {
+    use std::assert_matches;
+
     let mock_server = MockServer::start().await;
 
     Mock::given(method("GET"))
@@ -162,10 +164,10 @@ async fn test_unsupported_mime_type() {
     let document = scraper.extract(&url).await;
 
     let err = document.unwrap_err();
-    assert!(matches!(
+    assert_matches!(
         &err,
         Error::MimeTypeNotSupported { mime_type, .. } if mime_type == "application/octet-stream"
-    ));
+    );
     assert_eq!(
         err.to_string(),
         "Mime type is not supported: application/octet-stream"

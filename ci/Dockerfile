@@ -1,4 +1,4 @@
-FROM rust:1.94.0-alpine3.23
+FROM rust:1.96.0-alpine3.23
 
 RUN apk update && apk add --no-cache nodejs alpine-sdk openssl-dev openssl-libs-static curl fontconfig-dev freetype-dev zlib-static clang18-libclang
 
