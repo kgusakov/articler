@@ -7,5 +7,6 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+ammonia = "4.1.2"
 snafu.workspace = true
 url.workspace = true

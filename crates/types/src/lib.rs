@@ -1,6 +1,7 @@
 pub mod error;
 
 use std::ops::Deref;
+use std::sync::LazyLock;
 
 use snafu::ensure;
 use url::Url;
@@ -9,6 +10,56 @@ use crate::error::{Validation, ValidationSnafu};
 
 pub type Id = i64;
 pub type ReadingTime = i32;
+
+static SANITIZER: LazyLock<ammonia::Builder<'static>> = LazyLock::new(ammonia::Builder::default);
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SafeHtml(String);
+
+impl From<&str> for SafeHtml {
+    fn from(raw: &str) -> Self {
+        Self(SANITIZER.clean(raw).to_string())
+    }
+}
+
+impl std::fmt::Display for SafeHtml {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Deref for SafeHtml {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<SafeHtml> for String {
+    fn from(h: SafeHtml) -> Self {
+        h.0
+    }
+}
+
+#[cfg(test)]
+mod safe_html_tests {
+    use super::SafeHtml;
+
+    fn clean(raw: &str) -> String {
+        SafeHtml::from(raw).to_string()
+    }
+
+    #[test]
+    fn sanitizes_on_construction() {
+        assert_eq!(
+            clean(
+                r#"<p>kept</p><script>alert(1)</script><img src="https://a.com/x.png" onerror="alert(2)"><a href="javascript:alert(3)">link</a>"#
+            ),
+            r#"<p>kept</p><img src="https://a.com/x.png"><a rel="noopener noreferrer">link</a>"#
+        );
+    }
+}
 
 pub struct ClientName<'a>(&'a str);
 

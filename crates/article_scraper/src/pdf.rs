@@ -3,7 +3,7 @@ use snafu::ResultExt;
 use std::path::Path;
 use url::Url;
 
-use types::Title;
+use types::{SafeHtml, Title};
 
 use crate::{
     ArticleMimeType, Document,
@@ -38,7 +38,7 @@ impl PdfExtractor {
 
             return Document {
                 title,
-                content_html: String::new(),
+                content_html: SafeHtml::default(),
                 content_text: String::new(),
                 image_url: None,
                 mime_type: Some(ArticleMimeType::Pdf.to_string()),
@@ -78,7 +78,7 @@ impl PdfExtractor {
 
         Document {
             title,
-            content_html: String::new(),
+            content_html: SafeHtml::default(),
             content_text,
             image_url: None,
             mime_type: Some(ArticleMimeType::Pdf.to_string()),

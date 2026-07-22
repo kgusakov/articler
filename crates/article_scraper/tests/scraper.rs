@@ -200,7 +200,7 @@ async fn test_pdf_extraction() {
     let document = scraper.extract(&url).await.unwrap();
 
     insta::assert_snapshot!(document.title, @"A Comprehensive Survey on Vector Database: Storage and Retrieval Technique, Challenge");
-    assert_eq!("", document.content_html);
+    assert_eq!("", &*document.content_html);
     insta::assert_snapshot!(document.content_text);
     assert_eq!(Some("application/pdf".to_owned()), document.mime_type);
     insta::assert_snapshot!(document.reading_time, @"6");
@@ -229,7 +229,7 @@ async fn test_pdf_fallback_on_invalid_data() {
 
     assert_eq!("new", &*document.title);
     assert_eq!(Some("application/pdf".to_owned()), document.mime_type);
-    assert_eq!("", document.content_html);
+    assert_eq!("", &*document.content_html);
     mock_server.verify().await;
 }
 

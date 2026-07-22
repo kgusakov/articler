@@ -1,6 +1,6 @@
 {
     "title": "Test Title",
-    "content": "<div id=\"readability-page-1\" class=\"page\"><p>Test Content</p>\n        </div>",
+    "content": "<div><p>Test Content</p>\n        </div>",
     "is_archived": 1,
     "is_starred": 1,
     "tags": [

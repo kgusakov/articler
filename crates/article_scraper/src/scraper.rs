@@ -5,7 +5,7 @@ use reqwest::header;
 use reqwest::header::USER_AGENT;
 use snafu::ResultExt;
 use std::time::Duration;
-use types::{ArticleUrl, Title};
+use types::{ArticleUrl, SafeHtml, Title};
 use url::Url;
 
 use crate::ArticleMimeType;
@@ -76,7 +76,7 @@ impl Scraper {
 
                 Document {
                     title: extract_title(url),
-                    content_html: String::new(),
+                    content_html: SafeHtml::default(),
                     content_text: String::new(),
                     image_url: None,
                     mime_type: None,

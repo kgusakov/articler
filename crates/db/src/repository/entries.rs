@@ -9,7 +9,7 @@ use sqlx::{
 
 use super::{Db, ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE, Timestamp};
 use crate::error::{NotSupportedYetSnafu, Result};
-use types::{Id, ReadingTime, Title};
+use types::{Id, ReadingTime, SafeHtml, Title};
 
 pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
 
@@ -291,7 +291,7 @@ where
     .bind(entry.given_url)
     .bind(entry.hashed_given_url)
     .bind(&*entry.title)
-    .bind(entry.content)
+    .bind(&*entry.content)
     .bind(entry.content_text)
     .bind(entry.is_archived)
     .bind(entry.archived_at)
@@ -390,7 +390,7 @@ where
 
     if let Some(content) = update.content {
         separated.push("content = ");
-        push_bind_or_default(&mut separated, content);
+        push_bind_or_default(&mut separated, content.map(String::from));
     }
 
     if let Some(content_text) = update.content_text {
@@ -570,7 +570,7 @@ pub struct CreateEntry {
     pub given_url: String,
     pub hashed_given_url: String,
     pub title: Title,
-    pub content: String,
+    pub content: SafeHtml,
     pub content_text: String,
     pub is_archived: bool,
     pub archived_at: Option<Timestamp>,
@@ -598,7 +598,7 @@ type UpdateField<T> = Option<Option<T>>;
 #[derive(Debug)]
 pub struct UpdateEntry {
     pub title: UpdateField<Title>,
-    pub content: UpdateField<String>,
+    pub content: UpdateField<SafeHtml>,
     pub content_text: UpdateField<String>,
     pub is_archived: UpdateField<bool>,
     pub archived_at: UpdateField<Timestamp>,
@@ -891,7 +891,7 @@ mod tests {
             1,
             UpdateEntry {
                 title: Some(Some(Title::try_from("new title".to_owned()).unwrap())),
-                content: Some(Some("new content".to_owned())),
+                content: Some(Some(SafeHtml::from("new content"))),
                 content_text: Some(Some("new text content".to_owned())),
                 is_archived: Some(Some(true)),
                 archived_at: Some(Some(1_702_000_000)),
@@ -1082,7 +1082,7 @@ mod tests {
                 given_url: "https://phrase.com/1".to_owned(),
                 hashed_given_url: "phrase_ghash1".to_owned(),
                 title: Title::try_from("Phrase Test".to_owned()).unwrap(),
-                content: "<p>the quick brown fox jumps</p>".to_owned(),
+                content: SafeHtml::from("<p>the quick brown fox jumps</p>"),
                 content_text: "the quick brown fox jumps".to_owned(),
                 is_archived: false,
                 archived_at: None,
@@ -1266,7 +1266,7 @@ mod tests {
                 given_url: "https://rank.com/1".to_owned(),
                 hashed_given_url: "rank_gh1".to_owned(),
                 title: Title::try_from("No match here".to_owned()).unwrap(),
-                content: "<p>a]pple banana cherry date elderberry fig grape hazelnut kiwi lemon mango nectarine orange papaya quince raspberry strawberry tangerine ugli vanilla walnut xigua yam zucchini apricot blueberry cranberry dragonfruit eggplant fennel guava honeydew i]mbe jackfruit kumquat lime mulberry nutmeg olive plum rust raisin</p>".to_owned(),
+                content: SafeHtml::from("<p>a]pple banana cherry date elderberry fig grape hazelnut kiwi lemon mango nectarine orange papaya quince raspberry strawberry tangerine ugli vanilla walnut xigua yam zucchini apricot blueberry cranberry dragonfruit eggplant fennel guava honeydew i]mbe jackfruit kumquat lime mulberry nutmeg olive plum rust raisin</p>"),
                 content_text: "apple banana cherry date elderberry fig grape hazelnut kiwi lemon mango nectarine orange papaya quince raspberry strawberry tangerine ugli vanilla walnut xigua yam zucchini apricot blueberry cranberry dragonfruit eggplant fennel guava honeydew imbe jackfruit kumquat lime mulberry nutmeg olive plum rust raisin".to_owned(),
                 is_archived: false,
                 archived_at: None,
@@ -1299,7 +1299,7 @@ mod tests {
                 given_url: "https://rank.com/2".to_owned(),
                 hashed_given_url: "rank_gh2".to_owned(),
                 title: Title::try_from("No match here either".to_owned()).unwrap(),
-                content: "<p>rust rust rust</p>".to_owned(),
+                content: SafeHtml::from("<p>rust rust rust</p>"),
                 content_text: "rust rust rust".to_owned(),
                 is_archived: false,
                 archived_at: None,

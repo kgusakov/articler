@@ -739,6 +739,30 @@ async fn patch_entry_archive_and_star(pool: SqlitePool) {
 }
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
+async fn patch_entry_sanitizes_content(pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    let req = test::TestRequest::patch()
+        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
+        .uri("/api/entries/1")
+        .set_form([(
+            "content",
+            r#"<p>kept</p><script>alert(1)</script><img src="x" onerror="alert(2)"><a href="javascript:alert(3)">link</a>"#,
+        )])
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+    let result = serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap();
+
+    let content = result.get("content").unwrap().as_str().unwrap();
+
+    assert_eq!(
+        content,
+        r#"<p>kept</p><img src="x"><a rel="noopener noreferrer">link</a>"#
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
 async fn patch_entry_unarchive_and_unstar(pool: SqlitePool) {
     let app = init_app(pool).await;
 

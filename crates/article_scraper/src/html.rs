@@ -4,7 +4,7 @@ use snafu::ResultExt;
 use std::ops::Deref;
 use url::Url;
 
-use types::Title;
+use types::{SafeHtml, Title};
 
 use crate::{
     ArticleMimeType, Document,
@@ -44,7 +44,7 @@ impl HtmlExtractor {
 
         Ok(Document {
             title,
-            content_html: article.content.deref().to_owned(),
+            content_html: SafeHtml::from(article.content.deref()),
             content_text,
             image_url,
             mime_type: Some(ArticleMimeType::Html.to_string()),
