@@ -114,13 +114,11 @@ pub(crate) async fn post_entries(
 
     let (entry_row, tag_rows) = entries::create(&data.pool, create_entry, &create_tags).await?;
 
-    let tags = tag_rows.into_iter().map(Tag::from).collect();
-
     // TODO replace by real url
     let self_url = Url::parse("https://example.com").context(UrlFormatSnafu)?;
 
     Ok(web::Json(AddEntryResponse {
-        entry: Entry::try_from((entry_row, tags))?,
+        entry: Entry::try_from((entry_row, tag_rows))?,
         _links: Links {
             _self: Link { href: self_url },
             first: None,
@@ -174,12 +172,10 @@ pub(crate) async fn entries(
         .fail();
     }
 
-    let mut ents = vec![];
-
-    for (e, tags) in entries {
-        let mapped_tags: Vec<Tag> = tags.into_iter().map(std::convert::Into::into).collect();
-        ents.push(Entry::try_from((e, mapped_tags))?);
-    }
+    let ents: Vec<Entry> = entries
+        .into_iter()
+        .map(Entry::try_from)
+        .collect::<Result<_>>()?;
 
     // TODO implement actual urls generating
     let url = Url::parse("http://example.com").context(UrlFormatSnafu)?;
@@ -212,7 +208,7 @@ pub(crate) async fn get_tags_by_entry(
         let result = tags::find_by_entry_id(&mut *tx, user_info.user_id, entry_id)
             .await?
             .into_iter()
-            .map(std::convert::Into::into)
+            .map(Tag::from)
             .collect();
 
         Ok(Json(result))
@@ -243,9 +239,7 @@ pub(crate) async fn delete_tag_from_entry(
         if let Some((entry_row, tag_rows)) =
             entries::find_by_id(&mut *tx, user_info.user_id, entry_id).await?
         {
-            let tags = tag_rows.into_iter().map(std::convert::Into::into).collect();
-
-            Ok(Json(Entry::try_from((entry_row, tags))?))
+            Ok(Json(Entry::try_from((entry_row, tag_rows))?))
         } else {
             UnexpectedStateSnafu {
                 msg: "Can't find entry by id",
@@ -307,8 +301,7 @@ pub(crate) async fn delete_entry(
                 .fail();
             }
 
-            let tags: Vec<Tag> = tag_rows.into_iter().map(std::convert::Into::into).collect();
-            let entry = Entry::try_from((entry_row, tags))?;
+            let entry = Entry::try_from((entry_row, tag_rows))?;
 
             Ok(Json(DeleteEntryResponse::Full {
                 entry: Box::new(entry),
@@ -359,9 +352,7 @@ pub(crate) async fn post_entry_tags(
                 .build(),
             )?;
 
-        let entry_tags = tag_rows.into_iter().map(Tag::from).collect();
-
-        Ok(Json(Entry::try_from((entry_row, entry_tags))?))
+        Ok(Json(Entry::try_from((entry_row, tag_rows))?))
     } else {
         NotFoundSnafu {
             msg: "Entry not found",
@@ -456,9 +447,7 @@ pub(crate) async fn patch_entry(
             .build()
         })?;
 
-    let entry_tags = tag_rows.into_iter().map(std::convert::Into::into).collect();
-
-    let entry = Entry::try_from((entry_row, entry_tags))?;
+    let entry = Entry::try_from((entry_row, tag_rows))?;
 
     tx.commit().await?;
 
@@ -569,12 +558,10 @@ mod dto {
         }
     }
 
-    impl TryFrom<(entries::EntryRow, Vec<Tag>)> for Entry {
+    impl TryFrom<entries::FullEntry> for Entry {
         type Error = crate::error::Error;
 
-        fn try_from(
-            (e, tags): (entries::EntryRow, Vec<Tag>),
-        ) -> std::result::Result<Self, Self::Error> {
+        fn try_from((e, tag_rows): entries::FullEntry) -> std::result::Result<Self, Self::Error> {
             Ok(Entry {
                 id: e.id,
                 url: Url::parse(&e.url).context(UrlFormatSnafu)?,
@@ -587,7 +574,7 @@ mod dto {
                 archived_at: try_parse_timestamp_opt(e.archived_at)?,
                 is_starred: e.is_starred,
                 starred_at: try_parse_timestamp_opt(e.starred_at)?,
-                tags,
+                tags: tag_rows.into_iter().map(Tag::from).collect(),
                 created_at: try_parse_timestamp(e.created_at)?,
                 updated_at: try_parse_timestamp(e.updated_at)?,
                 // TODO implement annotations support

@@ -17,7 +17,7 @@ pub(crate) async fn get_tags(
     let result = tags::get_all(&data.pool, user_info.user_id)
         .await?
         .into_iter()
-        .map(std::convert::Into::into)
+        .map(Tag::from)
         .collect();
 
     Ok(Json(result))
@@ -31,7 +31,7 @@ pub(crate) async fn delete_tags_by_label(
     let result = tags::delete_all_by_label(&data.pool, user_info.user_id, &label.labels)
         .await?
         .into_iter()
-        .map(std::convert::Into::into)
+        .map(Tag::from)
         .collect();
 
     Ok(Json(result))
@@ -44,7 +44,7 @@ pub(crate) async fn delete_tag_by_id(
 ) -> Result<Json<Tag>> {
     let result = tags::delete_by_id(&data.pool, user_info.user_id, tag_id.into_inner())
         .await?
-        .map(std::convert::Into::into);
+        .map(Tag::from);
 
     if let Some(delete_tag) = result {
         Ok(Json(delete_tag))
@@ -63,7 +63,7 @@ pub(crate) async fn delete_tag_by_label(
 ) -> Result<Json<Tag>> {
     let result = tags::delete_by_label(&data.pool, user_info.user_id, &label.label)
         .await?
-        .map(std::convert::Into::into);
+        .map(Tag::from);
 
     if let Some(delete_tag) = result {
         Ok(Json(delete_tag))

@@ -18,7 +18,7 @@ pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
 pub async fn find_all<'c, C>(
     conn: C,
     params: &FindParams,
-) -> Result<Vec<(EntryRow, Vec<crate::repository::tags::TagRow>)>>
+) -> Result<Vec<FullEntry>>
 where
     C: Acquire<'c, Database = Db>,
 {
@@ -268,7 +268,7 @@ pub async fn create<'c, C>(
     conn: C,
     entry: CreateEntry,
     tags: &[crate::repository::tags::CreateTag],
-) -> Result<(EntryRow, Vec<crate::repository::tags::TagRow>)>
+) -> Result<FullEntry>
 where
     C: sqlx::Acquire<'c, Database = Db>,
 {
