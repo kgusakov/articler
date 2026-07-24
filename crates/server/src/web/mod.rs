@@ -2,6 +2,7 @@ use actix_session::{SessionMiddleware, storage::CookieSessionStore};
 use actix_web::{cookie::Key, http::header, middleware::DefaultHeaders, web};
 
 pub mod fake_ui;
+mod session_user;
 pub mod setup;
 pub mod ui;
 

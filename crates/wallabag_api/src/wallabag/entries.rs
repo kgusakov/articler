@@ -381,9 +381,7 @@ pub(crate) async fn patch_entry(
             .title
             .map(|t| Title::try_from(t).map(Some))
             .transpose()?,
-        content: request
-            .content
-            .map(|c| Some(SafeHtml::from(c.as_str()))),
+        content: request.content.map(|c| Some(SafeHtml::from(c.as_str()))),
         content_text: None,
         is_archived: request.archive.map(Some),
         archived_at: match request.archive {

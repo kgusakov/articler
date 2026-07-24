@@ -1681,16 +1681,6 @@ async fn partial_articles_archived(pool: SqlitePool) {
     assert_eq!(active_category, Some("archived".to_owned()));
 }
 
-#[sqlx::test(migrations = "../../migrations")]
-async fn search_without_auth_must_return_forbidden_status(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-
-    let req = test::TestRequest::get().uri("/search?q=test").to_request();
-    let resp = test::call_service(&app, req).await;
-
-    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-}
-
 #[sqlx::test(
     migrations = "../../migrations",
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
@@ -1822,6 +1812,59 @@ async fn search_full_page_with_category_filter(pool: SqlitePool) {
 
     let active_category = helpers::find_active_category(content);
     assert_eq!(active_category, Some("favourite".to_owned()));
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn htmx_request_without_auth_returns_403_and_hx_redirect(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+
+    let req = test::TestRequest::post()
+        .uri("/do_archive")
+        .insert_header(("HX-Request", "true"))
+        .set_form([("article_id", "1"), ("archived", "true")])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        resp.headers().get("HX-Redirect").unwrap().to_str().unwrap(),
+        "/login"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn page_request_without_auth_redirects_to_login(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+
+    let req = test::TestRequest::get().uri("/search?q=test").to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::FOUND);
+    assert_eq!(
+        resp.headers()
+            .get(header::LOCATION)
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "/login"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn htmx_partial_categories_without_auth_returns_403_and_hx_redirect(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+
+    let req = test::TestRequest::get()
+        .uri("/partial/categories")
+        .insert_header(("HX-Request", "true"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        resp.headers().get("HX-Redirect").unwrap().to_str().unwrap(),
+        "/login"
+    );
 }
 
 async fn login(

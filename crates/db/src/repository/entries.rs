@@ -15,10 +15,7 @@ pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
 
 // TODO: split the method
 #[expect(clippy::too_many_lines)]
-pub async fn find_all<'c, C>(
-    conn: C,
-    params: &FindParams,
-) -> Result<Vec<FullEntry>>
+pub async fn find_all<'c, C>(conn: C, params: &FindParams) -> Result<Vec<FullEntry>>
 where
     C: Acquire<'c, Database = Db>,
 {

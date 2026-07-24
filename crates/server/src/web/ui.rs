@@ -19,9 +19,10 @@ use types::{ClientName, Id, Title};
 use url::Url;
 
 use crate::{
-    error::{ForbiddenSnafu, NotFoundSnafu, Result},
+    error::{NotFoundSnafu, Result},
     web::{
         dto::{Client, LoginForm},
+        session_user::SessionUser,
         ui::dto::{
             EditArticleTitleForm, HxSource, PartialArticleContext, PartialArticlesContext,
             PartialCategoriesContext,
@@ -71,26 +72,23 @@ async fn login(_session: Session, app: web::Data<AppState>) -> Result<HttpRespon
         .body(rendered))
 }
 
-async fn clients(session: Session, app: web::Data<AppState>) -> Result<HttpResponse> {
-    if let Some(user_id) = session.get("user_id")? {
-        let clients = clients::find_by_user_id(&app.pool, user_id)
-            .await?
-            .into_iter()
-            .map(Client::from)
-            .collect();
+async fn clients(
+    SessionUser { user_id }: SessionUser,
+    app: web::Data<AppState>,
+) -> Result<HttpResponse> {
+    let clients = clients::find_by_user_id(&app.pool, user_id)
+        .await?
+        .into_iter()
+        .map(Client::from)
+        .collect();
 
-        let rendered = app
-            .handlebars
-            .render("page_clients", &Clients { clients })?;
+    let rendered = app
+        .handlebars
+        .render("page_clients", &Clients { clients })?;
 
-        Ok(HttpResponse::Ok()
-            .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
-            .body(rendered))
-    } else {
-        Ok(HttpResponse::Found()
-            .append_header(("Location", "/login"))
-            .finish())
-    }
+    Ok(HttpResponse::Ok()
+        .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+        .body(rendered))
 }
 
 async fn logout(session: Session) -> Result<impl Responder> {
@@ -100,132 +98,112 @@ async fn logout(session: Session) -> Result<impl Responder> {
 }
 
 async fn article(
-    session: Session,
+    SessionUser { user_id }: SessionUser,
     app: web::Data<AppState>,
     id: web::Path<Id>,
     req: HttpRequest,
 ) -> Result<HttpResponse> {
-    if let Some(user_id) = session.get("user_id")? {
-        if let Some((article, _)) = entries::find_by_id(&app.pool, user_id, id.into_inner()).await?
-        {
-            let article_page = ArticleContext {
-                article: PartialArticleContext {
-                    id: article.id,
-                    title: article.title,
-                    content: article.content,
-                    domain: article.domain_name,
-                    url: article.url,
-                    reading_time: article.reading_time,
-                    is_archived: article.is_archived,
-                    is_starred: article.is_starred,
-                    source: HxSource::Article,
-                },
-                back_location: Some(referer_or_root(&req)),
-            };
+    if let Some((article, _)) = entries::find_by_id(&app.pool, user_id, id.into_inner()).await? {
+        let article_page = ArticleContext {
+            article: PartialArticleContext {
+                id: article.id,
+                title: article.title,
+                content: article.content,
+                domain: article.domain_name,
+                url: article.url,
+                reading_time: article.reading_time,
+                is_archived: article.is_archived,
+                is_starred: article.is_starred,
+                source: HxSource::Article,
+            },
+            back_location: Some(referer_or_root(&req)),
+        };
 
-            Ok(HttpResponse::Ok()
-                .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
-                .body(app.handlebars.render("page_article", &article_page)?))
-        } else {
-            // TODO make normal 404 screen
-            NotFoundSnafu {
-                msg: "Article not found",
-            }
-            .fail()
+        Ok(HttpResponse::Ok()
+            .append_header((header::CONTENT_TYPE, mime::TEXT_HTML))
+            .body(app.handlebars.render("page_article", &article_page)?))
+    } else {
+        // TODO make normal 404 screen
+        NotFoundSnafu {
+            msg: "Article not found",
         }
-    } else {
-        Ok(HttpResponse::Found()
-            .append_header(("Location", "/login"))
-            .finish())
+        .fail()
     }
 }
 
-async fn index(session: Session, app: web::Data<AppState>) -> Result<HttpResponse> {
-    // TODO check if user still exsists
-    if let Some(user_id) = session.get("user_id")? {
-        main(
-            app,
+async fn index(
+    SessionUser { user_id }: SessionUser,
+    app: web::Data<AppState>,
+) -> Result<HttpResponse> {
+    main(
+        app,
+        user_id,
+        FindParams {
             user_id,
-            FindParams {
-                user_id,
-                archive: Some(false),
-                sort: Some(entries::SortColumn::Created),
-                order: Some(SortOrder::Desc),
-                ..Default::default()
-            },
-            Category::Unread,
-        )
-        .await
-    } else {
-        Ok(HttpResponse::Found()
-            .append_header(("Location", "/login"))
-            .finish())
-    }
+            archive: Some(false),
+            sort: Some(entries::SortColumn::Created),
+            order: Some(SortOrder::Desc),
+            ..Default::default()
+        },
+        Category::Unread,
+    )
+    .await
 }
 
-async fn all(session: Session, app: web::Data<AppState>) -> Result<HttpResponse> {
-    if let Some(user_id) = session.get("user_id")? {
-        main(
-            app,
+async fn all(
+    SessionUser { user_id }: SessionUser,
+    app: web::Data<AppState>,
+) -> Result<HttpResponse> {
+    main(
+        app,
+        user_id,
+        FindParams {
             user_id,
-            FindParams {
-                user_id,
-                sort: Some(entries::SortColumn::Created),
-                order: Some(SortOrder::Desc),
-                ..Default::default()
-            },
-            Category::All,
-        )
-        .await
-    } else {
-        Ok(HttpResponse::Found()
-            .append_header(("Location", "/login"))
-            .finish())
-    }
+            sort: Some(entries::SortColumn::Created),
+            order: Some(SortOrder::Desc),
+            ..Default::default()
+        },
+        Category::All,
+    )
+    .await
 }
 
-async fn favourite(session: Session, app: web::Data<AppState>) -> Result<HttpResponse> {
-    if let Some(user_id) = session.get("user_id")? {
-        main(
-            app,
+async fn favourite(
+    SessionUser { user_id }: SessionUser,
+    app: web::Data<AppState>,
+) -> Result<HttpResponse> {
+    main(
+        app,
+        user_id,
+        FindParams {
             user_id,
-            FindParams {
-                user_id,
-                starred: Some(true),
-                sort: Some(entries::SortColumn::Created),
-                order: Some(SortOrder::Desc),
-                ..Default::default()
-            },
-            Category::Favourite,
-        )
-        .await
-    } else {
-        Ok(HttpResponse::Found()
-            .append_header(("Location", "/login"))
-            .finish())
-    }
+            starred: Some(true),
+            sort: Some(entries::SortColumn::Created),
+            order: Some(SortOrder::Desc),
+            ..Default::default()
+        },
+        Category::Favourite,
+    )
+    .await
 }
 
-async fn archive(session: Session, app: web::Data<AppState>) -> Result<HttpResponse> {
-    if let Some(user_id) = session.get("user_id")? {
-        main(
-            app,
+async fn archive(
+    SessionUser { user_id }: SessionUser,
+    app: web::Data<AppState>,
+) -> Result<HttpResponse> {
+    main(
+        app,
+        user_id,
+        FindParams {
             user_id,
-            FindParams {
-                user_id,
-                archive: Some(true),
-                sort: Some(entries::SortColumn::Created),
-                order: Some(SortOrder::Desc),
-                ..Default::default()
-            },
-            Category::Archived,
-        )
-        .await
-    } else {
-        Ok(HttpResponse::Found()
-            .append_header(("Location", "/login"))
-            .finish())
-    }
+            archive: Some(true),
+            sort: Some(entries::SortColumn::Created),
+            order: Some(SortOrder::Desc),
+            ..Default::default()
+        },
+        Category::Archived,
+    )
+    .await
 }
 
 async fn main(
@@ -259,13 +237,12 @@ async fn main(
 }
 
 async fn partial_articles(
-    session: Session,
+    SessionUser { user_id }: SessionUser,
     app: web::Data<AppState>,
     category: web::Path<Category>,
 ) -> Result<HttpResponse> {
     let mut tx = app.pool.begin().await?;
 
-    let user_id = check_user_id(&session)?;
     let params = find_params_for_category(user_id, &category);
 
     // TODO must load only metadata
@@ -291,14 +268,10 @@ async fn partial_articles(
 }
 
 async fn partial_categories(
-    session: Session,
+    SessionUser { user_id }: SessionUser,
     req: HttpRequest,
     app: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    let Some(user_id) = session.get("user_id")? else {
-        return Ok(HttpResponse::Forbidden().finish());
-    };
-
     let active_category = Category::from(&req);
 
     let context = PartialCategoriesContext {
@@ -314,13 +287,11 @@ async fn partial_categories(
 }
 
 async fn do_archive(
-    session: Session,
+    SessionUser { user_id }: SessionUser,
     req: HttpRequest,
     form: web::Form<ArchiveForm>,
     app: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    let user_id = check_user_id(&session)?;
-
     let form = form.into_inner();
 
     let update = UpdateEntry {
@@ -343,13 +314,11 @@ async fn do_archive(
 }
 
 async fn do_favourite(
-    session: Session,
+    SessionUser { user_id }: SessionUser,
     req: HttpRequest,
     form: web::Form<FavouriteForm>,
     app: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    let user_id = check_user_id(&session)?;
-
     let form = form.into_inner();
 
     let update = UpdateEntry {
@@ -372,13 +341,11 @@ async fn do_favourite(
 }
 
 async fn do_delete(
-    session: Session,
+    SessionUser { user_id }: SessionUser,
     req: HttpRequest,
     form: web::Form<DeleteForm>,
     app: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    let user_id = check_user_id(&session)?;
-
     let form = form.into_inner();
 
     entries::delete_by_id(&app.pool, user_id, form.article_id).await?;
@@ -394,13 +361,11 @@ async fn do_delete(
 }
 
 async fn do_client_delete(
-    session: Session,
+    SessionUser { user_id }: SessionUser,
     req: HttpRequest,
     form: web::Form<ClientDeleteForm>,
     app: web::Data<AppState>,
 ) -> Result<impl Responder> {
-    let user_id = check_user_id(&session)?;
-
     let form = form.into_inner();
 
     clients::delete_by_id(&app.pool, user_id, form.id).await?;
@@ -409,12 +374,10 @@ async fn do_client_delete(
 }
 
 async fn do_create_client(
-    session: Session,
+    SessionUser { user_id }: SessionUser,
     form: web::Form<CreateClientForm>,
     app: web::Data<AppState>,
 ) -> Result<HttpResponse> {
-    let user_id = check_user_id(&session)?;
-
     let form = form.into_inner();
 
     let client_name = match ClientName::try_from(form.client_name.as_str()) {
@@ -443,13 +406,11 @@ async fn do_create_client(
 }
 
 async fn do_add(
-    session: Session,
+    SessionUser { user_id }: SessionUser,
     req: HttpRequest,
     app: web::Data<AppState>,
     form: web::Form<AddArticleForm>,
 ) -> Result<impl Responder> {
-    let user_id = check_user_id(&session)?;
-
     let url: Url = form.into_inner().url.parse()?;
     let url = url.try_into()?;
 
@@ -510,13 +471,11 @@ pub(in crate::web) async fn do_login(
 }
 
 async fn do_edit_title(
-    session: Session,
+    SessionUser { user_id }: SessionUser,
     req: HttpRequest,
     app: web::Data<AppState>,
     form: web::Form<EditArticleTitleForm>,
 ) -> Result<HttpResponse> {
-    let user_id = check_user_id(&session)?;
-
     let form = form.into_inner();
 
     let title = match Title::try_from(form.title) {
@@ -542,12 +501,11 @@ async fn do_edit_title(
 }
 
 async fn search(
-    session: Session,
+    SessionUser { user_id }: SessionUser,
     req: HttpRequest,
     app: web::Data<AppState>,
     query: web::Query<dto::SearchQuery>,
 ) -> Result<HttpResponse> {
-    let user_id = check_user_id(&session)?;
     let query = query.into_inner();
     let search_term = query.q;
     let category = query.category.unwrap_or(Category::All);
@@ -586,10 +544,6 @@ async fn search(
     } else {
         main(app, user_id, params, category).await
     }
-}
-
-fn check_user_id(session: &Session) -> Result<i64> {
-    session.get("user_id")?.ok_or(ForbiddenSnafu.build())
 }
 
 fn referer_or_root(req: &HttpRequest) -> String {

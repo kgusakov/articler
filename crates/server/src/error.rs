@@ -43,10 +43,6 @@ pub enum Error {
         #[snafu(implicit)]
         location: Location,
     },
-    Forbidden {
-        #[snafu(implicit)]
-        location: Location,
-    },
     NotFound {
         msg: String,
         #[snafu(implicit)]
@@ -93,7 +89,6 @@ impl ResponseError for Error {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::NotFound { .. } => StatusCode::NOT_FOUND,
-            Self::Forbidden { .. } => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

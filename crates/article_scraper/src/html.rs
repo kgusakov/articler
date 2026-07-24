@@ -44,7 +44,7 @@ impl HtmlExtractor {
 
         Ok(Document {
             title,
-            content_html: SafeHtml::from(article.content.deref()),
+            content_html: SafeHtml::from(&*article.content),
             content_text,
             image_url,
             mime_type: Some(ArticleMimeType::Html.to_string()),
