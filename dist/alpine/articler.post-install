@@ -21,24 +21,23 @@ log() {
 if [ ! -d "$DB_DIR" ]; then
     log "Creating database directory: $DB_DIR"
     mkdir -p "$DB_DIR"
-    chmod 755 "$DB_DIR"
+    chmod 750 "$DB_DIR"
 fi
 
 if [ ! -f "$DB_FILE" ]; then
     log "Creating database file: $DB_FILE"
     touch "$DB_FILE"
     chmod 640 "$DB_FILE"
-
-    # Set ownership to articler user if it exists
-    if getent passwd articler >/dev/null 2>&1; then
-        chown articler:articler "$DB_FILE"
-        chown articler:articler "$DB_DIR"
-        log "Database ownership set to articler:articler"
-    else
-        log "Warning: articler user not found, database owned by root"
-    fi
 else
     log "Database file already exists: $DB_FILE"
+fi
+
+# Set ownership to the articler service user if it exists
+if getent passwd articler >/dev/null 2>&1; then
+    chown articler:articler "$DB_DIR" "$DB_FILE"
+    log "Database ownership set to articler:articler"
+else
+    log "Warning: articler user not found, database owned by root"
 fi
 
 # Update configuration file if DATABASE_URL is empty
@@ -66,28 +65,20 @@ else
     log "COOKIE_KEY already configured, skipping"
 fi
 
-# Create log files with proper permissions
+# Create log files with restricted permissions (may contain reading activity)
 LOG_FILE="/var/log/articler.log"
 ERR_FILE="/var/log/articler.err"
 
-if [ ! -f "$LOG_FILE" ]; then
-    log "Creating log file: $LOG_FILE"
-    touch "$LOG_FILE"
-    chmod 644 "$LOG_FILE"
-
-    if getent passwd articler >/dev/null 2>&1; then
-        chown articler:articler "$LOG_FILE"
+for f in "$LOG_FILE" "$ERR_FILE"; do
+    if [ ! -f "$f" ]; then
+        log "Creating log file: $f"
+        touch "$f"
+        chmod 640 "$f"
     fi
-fi
+done
 
-if [ ! -f "$ERR_FILE" ]; then
-    log "Creating error log file: $ERR_FILE"
-    touch "$ERR_FILE"
-    chmod 644 "$ERR_FILE"
-
-    if getent passwd articler >/dev/null 2>&1; then
-        chown articler:articler "$ERR_FILE"
-    fi
+if getent passwd articler >/dev/null 2>&1; then
+    chown articler:articler "$LOG_FILE" "$ERR_FILE"
 fi
 
 log "Post-installation complete"
