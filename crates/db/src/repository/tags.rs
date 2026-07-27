@@ -428,11 +428,12 @@ mod tests {
         assert_eq!(updated.len(), 1);
         let own_tag_id = updated[0].id;
 
-        let linked: Vec<Id> = sqlx::query_scalar("SELECT tag_id FROM entry_tags WHERE entry_id = ?")
-            .bind(200)
-            .fetch_all(&pool)
-            .await
-            .unwrap();
+        let linked: Vec<Id> =
+            sqlx::query_scalar("SELECT tag_id FROM entry_tags WHERE entry_id = ?")
+                .bind(200)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
 
         assert_eq!(
             linked,

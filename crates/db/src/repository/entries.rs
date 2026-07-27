@@ -23,7 +23,7 @@ where
     let mut q_builder = QueryBuilder::new(format!(
         r"SELECT e.*, t.id as tag_id, t.user_id as tag_user_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e
         LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id
-        LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"
+        LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id AND t.user_id = e.user_id"
     ));
 
     if let Some(ref search) = params.search {
@@ -327,10 +327,11 @@ where
         r"
         SELECT t.* FROM {ENTRIES_TAG_TABLE} as et
         LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
-        WHERE et.entry_id = ?
+        WHERE et.entry_id = ? AND t.user_id = ?
         "
     ))
     .bind(entry.id)
+    .bind(user_id)
     .fetch_all(&mut *tx)
     .await?;
 
@@ -363,10 +364,11 @@ where
         r"
         SELECT t.* FROM {ENTRIES_TAG_TABLE} as et
         LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
-        WHERE et.entry_id = ?
+        WHERE et.entry_id = ? AND t.user_id = ?
         "
     ))
     .bind(id)
+    .bind(user_id)
     .fetch_all(&mut *conn)
     .await?;
 
@@ -697,6 +699,63 @@ pub enum Detail {
 mod tests {
     use super::*;
     use sqlx::SqlitePool;
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures(
+            "../../tests/fixtures/users.sql",
+            "../../tests/fixtures/cross_user_tags.sql"
+        )
+    )]
+    async fn test_find_all_scopes_tags_to_owner(pool: SqlitePool) {
+        let user1_tags = crate::repository::tags::create_and_link(
+            &pool,
+            1,
+            100,
+            &[crate::repository::tags::CreateTag {
+                label: "rust".to_owned(),
+                slug: "rust".to_owned(),
+            }],
+        )
+        .await
+        .unwrap();
+        let foreign_tag_id = user1_tags[0].id;
+
+        sqlx::query("INSERT INTO entry_tags (entry_id, tag_id) VALUES (?, ?)")
+            .bind(200)
+            .bind(foreign_tag_id)
+            .execute(&pool)
+            .await
+            .expect("seed a legacy cross-user link");
+
+        let rows = find_all(
+            &pool,
+            &FindParams {
+                user_id: 2,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(rows.len(), 2, "user 2 owns entries 200 and 201");
+
+        let (_, tags) = rows
+            .iter()
+            .find(|(e, _)| e.id == 200)
+            .expect("entry 200 should be listed");
+        assert_eq!(
+            tags,
+            &vec![],
+            "entry 200's only link is to user 1's tag, which must not surface"
+        );
+
+        let (_, untagged) = rows
+            .iter()
+            .find(|(e, _)| e.id == 201)
+            .expect("the untagged entry must still be listed");
+        assert_eq!(untagged, &vec![], "entry 201 has no tags");
+    }
 
     #[sqlx::test(
         migrations = "../../migrations",
