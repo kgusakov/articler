@@ -7,6 +7,7 @@ use types::Id;
 /* Return Vec of tags, which was linked to entry_id. Vec consists of ALL tags, even tags, which was already linked before and included in tags argument. */
 pub async fn create_and_link<'c, C>(
     conn: C,
+    user_id: Id,
     entry_id: Id,
     tags: &[CreateTag],
 ) -> Result<Vec<TagRow>>
@@ -32,7 +33,7 @@ where
 
     let mut tag_builder = QueryBuilder::new("INSERT INTO tags (user_id, label, slug) ");
     tag_builder.push_values(tags.iter(), |mut b, tag| {
-        b.push_bind(tag.user_id)
+        b.push_bind(user_id)
             .push_bind(&tag.label)
             .push_bind(&tag.slug);
     });
@@ -40,10 +41,12 @@ where
     tag_builder.build().execute(&mut *tx).await?;
 
     let mut insert_query = QueryBuilder::new(format!(r"INSERT INTO {ENTRIES_TAG_TABLE} SELECT "));
-    insert_query.push(entry_id);
+    insert_query.push_bind(entry_id);
     insert_query.push(format!(
-        " as entry_id, id as tag_id FROM {TAGS_TABLE} WHERE label IN ("
+        " as entry_id, id as tag_id FROM {TAGS_TABLE} WHERE user_id = "
     ));
+    insert_query.push_bind(user_id);
+    insert_query.push(" AND label IN (");
     let mut separated = insert_query.separated(", ");
     for tag in tags {
         separated.push_bind(&tag.label);
@@ -52,7 +55,9 @@ where
 
     insert_query.build().execute(&mut *tx).await?;
 
-    let mut get_tags = QueryBuilder::new(format!("SELECT * from {TAGS_TABLE} WHERE label IN ("));
+    let mut get_tags = QueryBuilder::new(format!("SELECT * from {TAGS_TABLE} WHERE user_id = "));
+    get_tags.push_bind(user_id);
+    get_tags.push(" AND label IN (");
 
     let mut tags_separated = get_tags.separated(", ");
     for tag in tags {
@@ -80,7 +85,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
-    let result_tags = create_and_link(&mut *conn, entry_id, tags).await?;
+    let result_tags = create_and_link(&mut *conn, user_id, entry_id, tags).await?;
 
     let mut builder = QueryBuilder::new(format!(
         "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE entry_id =",
@@ -218,7 +223,6 @@ impl<'r> FromRow<'r, SqliteRow> for TagRow {
 
 #[derive(Debug)]
 pub struct CreateTag {
-    pub user_id: Id,
     pub label: String,
     pub slug: String,
 }
@@ -280,6 +284,105 @@ mod tests {
             duplicate.is_err(),
             "one user must not hold the same label twice"
         );
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures(
+            "../../tests/fixtures/users.sql",
+            "../../tests/fixtures/cross_user_tags.sql"
+        )
+    )]
+    async fn test_same_label_across_users(pool: SqlitePool) {
+        let user1_tags = create_and_link(
+            &pool,
+            1,
+            100,
+            &[CreateTag {
+                label: "rust".to_owned(),
+                slug: "rust".to_owned(),
+            }],
+        )
+        .await
+        .unwrap();
+        assert_eq!(user1_tags.len(), 1);
+        assert_eq!(user1_tags[0].user_id, 1);
+
+        let user2_tags = create_and_link(
+            &pool,
+            2,
+            200,
+            &[CreateTag {
+                label: "rust".to_owned(),
+                slug: "rust".to_owned(),
+            }],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(user2_tags.len(), 1, "user 2 must receive exactly one tag");
+        assert_eq!(user2_tags[0].user_id, 2, "the tag must belong to user 2");
+        assert_ne!(
+            user1_tags[0].id, user2_tags[0].id,
+            "each user must get a distinct tag row"
+        );
+
+        let entry_200_tags = find_by_entry_id(&pool, 2, 200).await.unwrap();
+        assert_eq!(entry_200_tags.len(), 1);
+        assert_eq!(
+            entry_200_tags[0].id, user2_tags[0].id,
+            "entry 200 must link to user 2's own tag row"
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures(
+            "../../tests/fixtures/users.sql",
+            "../../tests/fixtures/cross_user_tags.sql"
+        )
+    )]
+    async fn test_delete_tag_does_not_affect_other_user(pool: SqlitePool) {
+        create_and_link(
+            &pool,
+            1,
+            100,
+            &[CreateTag {
+                label: "rust".to_owned(),
+                slug: "rust".to_owned(),
+            }],
+        )
+        .await
+        .unwrap();
+        create_and_link(
+            &pool,
+            2,
+            200,
+            &[CreateTag {
+                label: "rust".to_owned(),
+                slug: "rust".to_owned(),
+            }],
+        )
+        .await
+        .unwrap();
+
+        let deleted = delete_by_label(&pool, 1, "rust").await.unwrap();
+        assert_eq!(
+            deleted.map(|t| t.user_id),
+            Some(1),
+            "user 1's own tag should be the one deleted"
+        );
+
+        let user2_tags = find_by_entry_id(&pool, 2, 200).await.unwrap();
+        assert_eq!(
+            user2_tags.len(),
+            1,
+            "user 2's entry must keep its tag after user 1 deletes theirs"
+        );
+        assert_eq!(user2_tags[0].label, "rust");
+
+        let user1_tags = find_by_entry_id(&pool, 1, 100).await.unwrap();
+        assert_eq!(user1_tags, vec![], "user 1's own link is gone");
     }
 
     #[sqlx::test(

@@ -96,7 +96,6 @@ pub(crate) async fn post_entries(
 
     let tag_to_create_tag = |label: String| -> tags::CreateTag {
         tags::CreateTag {
-            user_id: user_info.user_id,
             slug: slugify(&label),
             label,
         }
@@ -335,7 +334,6 @@ pub(crate) async fn post_entry_tags(
             .labels
             .into_iter()
             .map(|l| tags::CreateTag {
-                user_id: user_info.user_id,
                 slug: slugify(&l),
                 label: l,
             })
@@ -429,7 +427,6 @@ pub(crate) async fn patch_entry(
         let full_tags: Vec<tags::CreateTag> = tags_labels
             .into_iter()
             .map(|l| tags::CreateTag {
-                user_id: user_info.user_id,
                 slug: slugify(&l),
                 label: l,
             })
