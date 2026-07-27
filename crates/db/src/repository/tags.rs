@@ -88,7 +88,7 @@ where
     let result_tags = create_and_link(&mut *conn, user_id, entry_id, tags).await?;
 
     let mut builder = QueryBuilder::new(format!(
-        "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE entry_id =",
+        "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE id =",
     ));
 
     builder.push_bind(entry_id);
@@ -100,9 +100,10 @@ where
     builder.push(format!(
         r"
          AND tag_id NOT IN (
-            SELECT id FROM {TAGS_TABLE} t WHERE t.label IN (
-    ",
+            SELECT id FROM {TAGS_TABLE} t WHERE t.user_id = "
     ));
+    builder.push_bind(user_id);
+    builder.push(" AND t.label IN (");
 
     let mut separated = builder.separated(", ");
     for t in tags {
@@ -383,6 +384,72 @@ mod tests {
 
         let user1_tags = find_by_entry_id(&pool, 1, 100).await.unwrap();
         assert_eq!(user1_tags, vec![], "user 1's own link is gone");
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures(
+            "../../tests/fixtures/users.sql",
+            "../../tests/fixtures/cross_user_tags.sql"
+        )
+    )]
+    async fn test_update_tags_by_entry_id_removes_foreign_tag_link(pool: SqlitePool) {
+        let user1_tags = create_and_link(
+            &pool,
+            1,
+            100,
+            &[CreateTag {
+                label: "rust".to_owned(),
+                slug: "rust".to_owned(),
+            }],
+        )
+        .await
+        .unwrap();
+        let foreign_tag_id = user1_tags[0].id;
+
+        sqlx::query("INSERT INTO entry_tags (entry_id, tag_id) VALUES (?, ?)")
+            .bind(200)
+            .bind(foreign_tag_id)
+            .execute(&pool)
+            .await
+            .expect("seed a legacy cross-user link");
+
+        let updated = update_tags_by_entry_id(
+            &pool,
+            2,
+            200,
+            &[CreateTag {
+                label: "rust".to_owned(),
+                slug: "rust".to_owned(),
+            }],
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated.len(), 1);
+        let own_tag_id = updated[0].id;
+
+        let linked: Vec<Id> = sqlx::query_scalar("SELECT tag_id FROM entry_tags WHERE entry_id = ?")
+            .bind(200)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            linked,
+            vec![own_tag_id],
+            "entry 200 must link only to user 2's own tag"
+        );
+
+        let own = find_by_entry_id(&pool, 2, 200).await.unwrap();
+        assert_eq!(own.len(), 1, "user 2 keeps their own rust tag");
+        assert_eq!(own[0].user_id, 2);
+
+        let user1_still = find_by_entry_id(&pool, 1, 100).await.unwrap();
+        assert_eq!(
+            user1_still.len(),
+            1,
+            "user 1's own entry is untouched by user 2's update"
+        );
     }
 
     #[sqlx::test(
