@@ -326,7 +326,7 @@ where
     let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(&format!(
         r"
         SELECT t.* FROM {ENTRIES_TAG_TABLE} as et
-        LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
+        INNER JOIN {TAGS_TABLE} t on t.id = et.tag_id
         WHERE et.entry_id = ? AND t.user_id = ?
         "
     ))
@@ -363,7 +363,7 @@ where
     let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(&format!(
         r"
         SELECT t.* FROM {ENTRIES_TAG_TABLE} as et
-        LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
+        INNER JOIN {TAGS_TABLE} t on t.id = et.tag_id
         WHERE et.entry_id = ? AND t.user_id = ?
         "
     ))
@@ -755,6 +755,43 @@ mod tests {
             .find(|(e, _)| e.id == 201)
             .expect("the untagged entry must still be listed");
         assert_eq!(untagged, &vec![], "entry 201 has no tags");
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures(
+            "../../tests/fixtures/users.sql",
+            "../../tests/fixtures/cross_user_tags.sql"
+        )
+    )]
+    async fn test_find_by_id_scopes_tags_to_owner(pool: SqlitePool) {
+        let user1_tags = crate::repository::tags::create_and_link(
+            &pool,
+            1,
+            100,
+            &[crate::repository::tags::CreateTag {
+                label: "rust".to_owned(),
+                slug: "rust".to_owned(),
+            }],
+        )
+        .await
+        .unwrap();
+
+        sqlx::query("INSERT INTO entry_tags (entry_id, tag_id) VALUES (?, ?)")
+            .bind(200)
+            .bind(user1_tags[0].id)
+            .execute(&pool)
+            .await
+            .expect("seed a legacy cross-user link");
+
+        let (entry, tags) = find_by_id(&pool, 2, 200).await.unwrap().unwrap();
+
+        assert_eq!(entry.id, 200);
+        assert_eq!(
+            tags,
+            vec![],
+            "find_by_id must not surface user 1's tag on user 2's entry"
+        );
     }
 
     #[sqlx::test(

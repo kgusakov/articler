@@ -40,13 +40,16 @@ where
     tag_builder.push(" ON CONFLICT DO NOTHING");
     tag_builder.build().execute(&mut *tx).await?;
 
-    let mut insert_query = QueryBuilder::new(format!(r"INSERT INTO {ENTRIES_TAG_TABLE} SELECT "));
-    insert_query.push_bind(entry_id);
-    insert_query.push(format!(
-        " as entry_id, id as tag_id FROM {TAGS_TABLE} WHERE user_id = "
+    let mut insert_query = QueryBuilder::new(format!(
+        r"INSERT INTO {ENTRIES_TAG_TABLE} (entry_id, tag_id)
+          SELECT e.id, t.id FROM {ENTRIES_TABLE} e, {TAGS_TABLE} t WHERE e.id = "
     ));
+    insert_query.push_bind(entry_id);
+    insert_query.push(" AND e.user_id = ");
     insert_query.push_bind(user_id);
-    insert_query.push(" AND label IN (");
+    insert_query.push(" AND t.user_id = ");
+    insert_query.push_bind(user_id);
+    insert_query.push(" AND t.label IN (");
     let mut separated = insert_query.separated(", ");
     for tag in tags {
         separated.push_bind(&tag.label);
@@ -450,6 +453,40 @@ mod tests {
             user1_still.len(),
             1,
             "user 1's own entry is untouched by user 2's update"
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures(
+            "../../tests/fixtures/users.sql",
+            "../../tests/fixtures/cross_user_tags.sql"
+        )
+    )]
+    async fn test_create_and_link_ignores_foreign_entry(pool: SqlitePool) {
+        create_and_link(
+            &pool,
+            2,
+            100,
+            &[CreateTag {
+                label: "rust".to_owned(),
+                slug: "rust".to_owned(),
+            }],
+        )
+        .await
+        .unwrap();
+
+        let linked: Vec<Id> =
+            sqlx::query_scalar("SELECT tag_id FROM entry_tags WHERE entry_id = ?")
+                .bind(100)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+
+        assert_eq!(
+            linked,
+            Vec::<Id>::new(),
+            "user 2 must not attach tags to entry 100, which belongs to user 1"
         );
     }
 
