@@ -21,7 +21,7 @@ where
 {
     let mut conn = conn.acquire().await?;
     let mut q_builder = QueryBuilder::new(format!(
-        r"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e
+        r"SELECT e.*, t.id as tag_id, t.user_id as tag_user_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e
         LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id
         LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"
     ));
@@ -142,9 +142,12 @@ where
         let mut tags = vec![];
 
         for r in &e.1 {
+            let tag_id: Option<Id> = r.try_get("tag_id")?;
+            let Some(tag_id) = tag_id else { continue };
+
             tags.push(crate::repository::tags::TagRow {
-                id: r.try_get("tag_id")?,
-                user_id: r.try_get("user_id")?,
+                id: tag_id,
+                user_id: r.try_get("tag_user_id")?,
                 label: r.try_get("tag_label")?,
                 slug: r.try_get("tag_slug")?,
             });
@@ -694,6 +697,44 @@ pub enum Detail {
 mod tests {
     use super::*;
     use sqlx::SqlitePool;
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
+    )]
+    async fn test_find_all_omits_phantom_tag(pool: SqlitePool) {
+        let rows = find_all(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let (_, tags) = rows
+            .iter()
+            .find(|(e, _)| e.id == 1)
+            .expect("entry 1 should be listed");
+
+        assert_eq!(tags, &vec![], "entry 1 has no tags in the fixture");
+
+        let (_, tagged) = rows
+            .iter()
+            .find(|(e, _)| e.id == 2)
+            .expect("entry 2 should be listed");
+
+        let labels: Vec<&str> = tagged.iter().map(|t| t.label.as_str()).collect();
+        assert_eq!(labels, vec!["label1", "label2"]);
+
+        let owners: Vec<Id> = tagged.iter().map(|t| t.user_id).collect();
+        assert_eq!(
+            owners,
+            vec![1, 1],
+            "tag owner must come from tag_user_id, not the entry"
+        );
+    }
 
     #[sqlx::test(
         migrations = "../../migrations",

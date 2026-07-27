@@ -17,13 +17,7 @@
                 "archived_at": null,
                 "is_starred": 0,
                 "starred_at": null,
-                "tags": [
-                    {
-                        "id": 0,
-                        "label": "",
-                        "slug": ""
-                    }
-                ],
+                "tags": [],
                 "created_at": "2023-12-01T11:06:40Z",
                 "updated_at": "2023-12-10T15:06:40Z",
                 "annotations": [],
