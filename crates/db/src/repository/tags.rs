@@ -230,6 +230,60 @@ mod tests {
 
     #[sqlx::test(
         migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql")
+    )]
+    async fn test_schema_allows_same_label_for_different_users(pool: SqlitePool) {
+        sqlx::query("INSERT INTO tags (user_id, label, slug) VALUES (?, ?, ?)")
+            .bind(1)
+            .bind("rust")
+            .bind("rust")
+            .execute(&pool)
+            .await
+            .expect("user 1 should be able to create the tag");
+
+        sqlx::query("INSERT INTO tags (user_id, label, slug) VALUES (?, ?, ?)")
+            .bind(2)
+            .bind("rust")
+            .bind("rust")
+            .execute(&pool)
+            .await
+            .expect("user 2 must be able to own a tag with the same label");
+
+        let user1 = get_all(&pool, 1).await.unwrap();
+        assert_eq!(user1.len(), 1, "user 1 owns exactly one tag");
+        let user2 = get_all(&pool, 2).await.unwrap();
+        assert_eq!(user2.len(), 1, "user 2 owns exactly one tag");
+        assert_ne!(user1[0].id, user2[0].id, "the two tags are distinct rows");
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql")
+    )]
+    async fn test_schema_still_rejects_duplicate_label_for_one_user(pool: SqlitePool) {
+        sqlx::query("INSERT INTO tags (user_id, label, slug) VALUES (?, ?, ?)")
+            .bind(1)
+            .bind("rust")
+            .bind("rust")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let duplicate = sqlx::query("INSERT INTO tags (user_id, label, slug) VALUES (?, ?, ?)")
+            .bind(1)
+            .bind("rust")
+            .bind("rust")
+            .execute(&pool)
+            .await;
+
+        assert!(
+            duplicate.is_err(),
+            "one user must not hold the same label twice"
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
         fixtures("../../tests/fixtures/users.sql", "../../tests/fixtures/entries.sql")
     )]
     async fn test_delete_by_label(pool: SqlitePool) {
