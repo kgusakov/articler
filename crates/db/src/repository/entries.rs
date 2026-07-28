@@ -490,10 +490,8 @@ where
     Ok(result.rows_affected() > 0)
 }
 
-fn push_bind_or_default<'qb, 'args, DB, T>(
-    builder: &mut Separated<'qb, 'args, DB, &str>,
-    value: Option<T>,
-) where
+fn push_bind_or_default<'qb, 'args, DB, T>(builder: &mut Separated<'qb, DB, &str>, value: Option<T>)
+where
     DB: Database,
     T: 'args + Encode<'args, DB> + Type<DB>,
 {

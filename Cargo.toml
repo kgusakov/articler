@@ -18,7 +18,7 @@ version = "0.1.1"
 edition = "2024"
 
 [workspace.dependencies]
-sqlx = { version = "0.8.6", features = ["migrate", "sqlite", "runtime-tokio", "chrono"] }
+sqlx = { version = "0.9.0", features = ["migrate", "sqlite", "runtime-tokio", "chrono"] }
 actix-web = "4.12.1"
 serde = { version = "1.0.228", features = ["derive"] }
 chrono = { version = "0.4.42", features = ["serde"] }
