@@ -1,13 +1,10 @@
--- Add up migration script here
-CREATE TABLE entry_tags_backup (entry_id INTEGER NOT NULL, tag_id INTEGER NOT NULL);
+-- no-transaction
+PRAGMA foreign_keys = OFF;
 
-INSERT INTO entry_tags_backup (entry_id, tag_id)
-SELECT entry_id, tag_id FROM entry_tags;
+BEGIN;
 
-CREATE TABLE tags_seq_backup (seq INTEGER NOT NULL);
-
-INSERT INTO tags_seq_backup (seq)
-SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'tags'), 0);
+CREATE TEMP TABLE tags_seq_backup AS
+SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'tags'), 0) AS seq;
 
 CREATE TABLE tags_new (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,17 +23,20 @@ DROP TABLE tags;
 
 ALTER TABLE tags_new RENAME TO tags;
 
-INSERT INTO entry_tags (entry_id, tag_id)
-SELECT b.entry_id, b.tag_id
-FROM entry_tags_backup b
-JOIN entries e ON e.id = b.entry_id
-JOIN tags t ON t.id = b.tag_id
-WHERE e.user_id = t.user_id;
+DELETE FROM entry_tags
+WHERE NOT EXISTS (SELECT 1 FROM entries e WHERE e.id = entry_tags.entry_id)
+   OR NOT EXISTS (SELECT 1 FROM tags    t WHERE t.id = entry_tags.tag_id)
+   OR EXISTS (
+        SELECT 1 FROM entries e JOIN tags t ON t.id = entry_tags.tag_id
+        WHERE e.id = entry_tags.entry_id AND e.user_id <> t.user_id
+      );
 
 UPDATE sqlite_sequence
 SET seq = (SELECT seq FROM tags_seq_backup)
 WHERE name = 'tags' AND seq < (SELECT seq FROM tags_seq_backup);
 
-DROP TABLE entry_tags_backup;
-
 DROP TABLE tags_seq_backup;
+
+COMMIT;
+
+PRAGMA foreign_keys = ON;
