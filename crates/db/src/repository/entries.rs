@@ -271,6 +271,8 @@ where
 {
     let mut tx = conn.begin().await?;
 
+    let user_id = entry.user_id;
+
     let id: i64 = sqlx::query_scalar(
         r"
         INSERT INTO entries (
@@ -310,7 +312,7 @@ where
     .await?;
 
     if !tags.is_empty() {
-        crate::repository::tags::create_and_link(&mut *tx, id, tags).await?;
+        crate::repository::tags::create_and_link(&mut *tx, user_id, id, tags).await?;
     }
 
     let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")

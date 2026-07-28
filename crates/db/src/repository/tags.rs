@@ -7,6 +7,7 @@ use types::Id;
 /* Return Vec of tags, which was linked to entry_id. Vec consists of ALL tags, even tags, which was already linked before and included in tags argument. */
 pub async fn create_and_link<'c, C>(
     conn: C,
+    user_id: Id,
     entry_id: Id,
     tags: &[CreateTag],
 ) -> Result<Vec<TagRow>>
@@ -17,12 +18,12 @@ where
         return Ok(vec![]);
     }
 
-    if tags.len() > SQLITE_LIMIT_VARIABLE_NUMBER / 2 {
+    if tags.len() > SQLITE_LIMIT_VARIABLE_NUMBER / 3 {
         return TooManySqliteHostParametersSnafu {
             msg: format!(
                 "Too many tags: {} exceeds limit of {}",
                 tags.len(),
-                SQLITE_LIMIT_VARIABLE_NUMBER / 2
+                SQLITE_LIMIT_VARIABLE_NUMBER / 3
             ),
         }
         .fail();
@@ -32,18 +33,23 @@ where
 
     let mut tag_builder = QueryBuilder::new("INSERT INTO tags (user_id, label, slug) ");
     tag_builder.push_values(tags.iter(), |mut b, tag| {
-        b.push_bind(tag.user_id)
+        b.push_bind(user_id)
             .push_bind(&tag.label)
             .push_bind(&tag.slug);
     });
     tag_builder.push(" ON CONFLICT DO NOTHING");
     tag_builder.build().execute(&mut *tx).await?;
 
-    let mut insert_query = QueryBuilder::new(format!(r"INSERT INTO {ENTRIES_TAG_TABLE} SELECT "));
-    insert_query.push(entry_id);
-    insert_query.push(format!(
-        " as entry_id, id as tag_id FROM {TAGS_TABLE} WHERE label IN ("
+    let mut insert_query = QueryBuilder::new(format!(
+        r"INSERT INTO {ENTRIES_TAG_TABLE} (entry_id, tag_id)
+          SELECT e.id, t.id FROM {ENTRIES_TABLE} e, {TAGS_TABLE} t WHERE e.id = "
     ));
+    insert_query.push_bind(entry_id);
+    insert_query.push(" AND e.user_id = ");
+    insert_query.push_bind(user_id);
+    insert_query.push(" AND t.user_id = ");
+    insert_query.push_bind(user_id);
+    insert_query.push(" AND t.label IN (");
     let mut separated = insert_query.separated(", ");
     for tag in tags {
         separated.push_bind(&tag.label);
@@ -52,7 +58,9 @@ where
 
     insert_query.build().execute(&mut *tx).await?;
 
-    let mut get_tags = QueryBuilder::new(format!("SELECT * from {TAGS_TABLE} WHERE label IN ("));
+    let mut get_tags = QueryBuilder::new(format!("SELECT * from {TAGS_TABLE} WHERE user_id = "));
+    get_tags.push_bind(user_id);
+    get_tags.push(" AND label IN (");
 
     let mut tags_separated = get_tags.separated(", ");
     for tag in tags {
@@ -80,10 +88,10 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
-    let result_tags = create_and_link(&mut *conn, entry_id, tags).await?;
+    let result_tags = create_and_link(&mut *conn, user_id, entry_id, tags).await?;
 
     let mut builder = QueryBuilder::new(format!(
-        "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE entry_id =",
+        "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE id =",
     ));
 
     builder.push_bind(entry_id);
@@ -95,9 +103,10 @@ where
     builder.push(format!(
         r"
          AND tag_id NOT IN (
-            SELECT id FROM {TAGS_TABLE} t WHERE t.label IN (
-    ",
+            SELECT id FROM {TAGS_TABLE} t WHERE t.user_id = "
     ));
+    builder.push_bind(user_id);
+    builder.push(" AND t.label IN (");
 
     let mut separated = builder.separated(", ");
     for t in tags {
@@ -218,7 +227,6 @@ impl<'r> FromRow<'r, SqliteRow> for TagRow {
 
 #[derive(Debug)]
 pub struct CreateTag {
-    pub user_id: Id,
     pub label: String,
     pub slug: String,
 }
@@ -227,6 +235,72 @@ pub struct CreateTag {
 mod tests {
     use super::*;
     use sqlx::SqlitePool;
+
+    fn create_tag(label: &str) -> CreateTag {
+        CreateTag {
+            label: label.to_owned(),
+            slug: label.to_owned(),
+        }
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures(
+            "../../tests/fixtures/users.sql",
+            "../../tests/fixtures/cross_user_tags.sql"
+        )
+    )]
+    async fn test_create_and_link_scopes_tag_to_user(pool: SqlitePool) {
+        let user1_tags = create_and_link(&pool, 1, 100, &[create_tag("rust")])
+            .await
+            .unwrap();
+        assert_eq!(user1_tags.len(), 1);
+        assert_eq!(user1_tags[0].user_id, 1);
+
+        let user2_tags = create_and_link(&pool, 2, 200, &[create_tag("rust")])
+            .await
+            .unwrap();
+
+        assert_eq!(user2_tags.len(), 1, "user 2 must receive exactly one tag");
+        assert_eq!(user2_tags[0].user_id, 2, "the tag must belong to user 2");
+        assert_ne!(
+            user1_tags[0].id, user2_tags[0].id,
+            "each user must get a distinct tag row"
+        );
+
+        let entry_200_tags = find_by_entry_id(&pool, 2, 200).await.unwrap();
+        assert_eq!(entry_200_tags.len(), 1);
+        assert_eq!(
+            entry_200_tags[0].id, user2_tags[0].id,
+            "entry 200 must link to user 2's own tag row"
+        );
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures(
+            "../../tests/fixtures/users.sql",
+            "../../tests/fixtures/cross_user_tags.sql"
+        )
+    )]
+    async fn test_create_and_link_ignores_foreign_entry(pool: SqlitePool) {
+        create_and_link(&pool, 2, 100, &[create_tag("rust")])
+            .await
+            .unwrap();
+
+        let linked: Vec<Id> =
+            sqlx::query_scalar("SELECT tag_id FROM entry_tags WHERE entry_id = ?")
+                .bind(100)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+
+        assert_eq!(
+            linked,
+            Vec::<Id>::new(),
+            "user 2 must not attach tags to entry 100, which belongs to user 1"
+        );
+    }
 
     #[sqlx::test(
         migrations = "../../migrations",
