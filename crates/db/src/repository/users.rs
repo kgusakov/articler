@@ -1,3 +1,4 @@
+use const_format::formatcp;
 use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
 use super::{Db, Timestamp, USERS_TABLE};
@@ -18,7 +19,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    Ok(sqlx::query_as::<_, UserRow>(&format!("INSERT INTO {USERS_TABLE} (username, email, name, password_hash, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?) RETURNING *;"))
+    Ok(sqlx::query_as::<_, UserRow>(formatcp!("INSERT INTO {USERS_TABLE} (username, email, name, password_hash, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?) RETURNING *;"))
             .bind(&**username)
             .bind(email)
             .bind(name)
@@ -39,9 +40,8 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    let result = sqlx::query_as::<_, UserRow>(&format!(
-        "SELECT * FROM {} WHERE username = ? AND password_hash = ?",
-        super::USERS_TABLE
+    let result = sqlx::query_as::<_, UserRow>(formatcp!(
+        "SELECT * FROM {USERS_TABLE} WHERE username = ? AND password_hash = ?"
     ))
     .bind(username)
     .bind(password_hash)
@@ -58,7 +58,7 @@ where
     let mut conn = conn.acquire().await?;
 
     let result =
-        sqlx::query_as::<_, UserRow>(&format!("SELECT * FROM {USERS_TABLE} WHERE username = ?"))
+        sqlx::query_as::<_, UserRow>(formatcp!("SELECT * FROM {USERS_TABLE} WHERE username = ?"))
             .bind(username)
             .fetch_optional(&mut *conn)
             .await?;
@@ -71,7 +71,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
-    let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {USERS_TABLE}"))
+    let count: i64 = sqlx::query_scalar(formatcp!("SELECT COUNT(*) FROM {USERS_TABLE}"))
         .fetch_one(&mut *conn)
         .await?;
     Ok(count)

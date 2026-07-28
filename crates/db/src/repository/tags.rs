@@ -1,3 +1,4 @@
+use const_format::formatcp;
 use sqlx::{FromRow, QueryBuilder, Row, sqlite::SqliteRow};
 
 use super::{Db, ENTRIES_TABLE, ENTRIES_TAG_TABLE, SQLITE_LIMIT_VARIABLE_NUMBER, TAGS_TABLE};
@@ -31,7 +32,9 @@ where
 
     let mut tx = conn.begin().await?;
 
-    let mut tag_builder = QueryBuilder::new("INSERT INTO tags (user_id, label, slug) ");
+    let mut tag_builder = QueryBuilder::new(formatcp!(
+        "INSERT INTO {TAGS_TABLE} (user_id, label, slug) "
+    ));
     tag_builder.push_values(tags.iter(), |mut b, tag| {
         b.push_bind(user_id)
             .push_bind(&tag.label)
@@ -40,7 +43,7 @@ where
     tag_builder.push(" ON CONFLICT DO NOTHING");
     tag_builder.build().execute(&mut *tx).await?;
 
-    let mut insert_query = QueryBuilder::new(format!(
+    let mut insert_query = QueryBuilder::new(formatcp!(
         r"INSERT INTO {ENTRIES_TAG_TABLE} (entry_id, tag_id)
           SELECT e.id, t.id FROM {ENTRIES_TABLE} e, {TAGS_TABLE} t WHERE e.id = "
     ));
@@ -58,7 +61,7 @@ where
 
     insert_query.build().execute(&mut *tx).await?;
 
-    let mut get_tags = QueryBuilder::new(format!("SELECT * from {TAGS_TABLE} WHERE user_id = "));
+    let mut get_tags = QueryBuilder::new(formatcp!("SELECT * from {TAGS_TABLE} WHERE user_id = "));
     get_tags.push_bind(user_id);
     get_tags.push(" AND label IN (");
 
@@ -90,8 +93,8 @@ where
     let mut conn = conn.acquire().await?;
     let result_tags = create_and_link(&mut *conn, user_id, entry_id, tags).await?;
 
-    let mut builder = QueryBuilder::new(format!(
-        "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE id =",
+    let mut builder = QueryBuilder::new(formatcp!(
+        "DELETE FROM {ENTRIES_TAG_TABLE} WHERE entry_id IN (SELECT id FROM {ENTRIES_TABLE} WHERE id ="
     ));
 
     builder.push_bind(entry_id);
@@ -100,7 +103,7 @@ where
     builder.push_bind(user_id);
     builder.push(") ");
 
-    builder.push(format!(
+    builder.push(formatcp!(
         r"
          AND tag_id NOT IN (
             SELECT id FROM {TAGS_TABLE} t WHERE t.user_id = "
@@ -125,7 +128,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
-    Ok(sqlx::query_as::<_, TagRow>(&format!(
+    Ok(sqlx::query_as::<_, TagRow>(formatcp!(
         r"
         SELECT t.* FROM {TAGS_TABLE} t
         INNER JOIN {ENTRIES_TAG_TABLE} et ON et.entry_id = ? AND et.tag_id = t.id
@@ -144,7 +147,7 @@ where
 {
     let mut conn = conn.acquire().await?;
     Ok(
-        sqlx::query_as::<_, TagRow>(&format!("SELECT * FROM {TAGS_TABLE} t WHERE user_id = ?"))
+        sqlx::query_as::<_, TagRow>(formatcp!("SELECT * FROM {TAGS_TABLE} t WHERE user_id = ?"))
             .bind(user_id)
             .fetch_all(&mut *conn)
             .await?,
@@ -156,7 +159,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
-    Ok(sqlx::query_as::<_, TagRow>(&format!(
+    Ok(sqlx::query_as::<_, TagRow>(formatcp!(
         "DELETE FROM {TAGS_TABLE} WHERE user_id = ? AND label = ? RETURNING *",
     ))
     .bind(user_id)
@@ -174,7 +177,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
-    let mut builder = QueryBuilder::new(&format!("DELETE FROM {TAGS_TABLE} WHERE user_id ="));
+    let mut builder = QueryBuilder::new(formatcp!("DELETE FROM {TAGS_TABLE} WHERE user_id ="));
 
     builder.push_bind(user_id);
 
@@ -197,7 +200,7 @@ where
     C: sqlx::Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
-    Ok(sqlx::query_as::<_, TagRow>(&format!(
+    Ok(sqlx::query_as::<_, TagRow>(formatcp!(
         "DELETE FROM {TAGS_TABLE} WHERE user_id = ? AND id = ? RETURNING *",
     ))
     .bind(user_id)

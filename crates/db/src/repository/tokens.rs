@@ -1,3 +1,4 @@
+use const_format::formatcp;
 use sqlx::{prelude::*, sqlite::SqliteRow};
 
 use crate::error::Result;
@@ -17,7 +18,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    Ok(sqlx::query_as::<_, TokenRow>(&format!(
+    Ok(sqlx::query_as::<_, TokenRow>(formatcp!(
         "INSERT INTO {TOKENS_TABLE} (token, created_at, expires_at, user_id, client_id) VALUES(?, ?, strftime('%s', 'now') + ?, ?, ?) RETURNING *;"
     ))
     .bind(token)
@@ -35,7 +36,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    Ok(sqlx::query_as::<_, TokenRow>(&format!(
+    Ok(sqlx::query_as::<_, TokenRow>(formatcp!(
         "DELETE FROM {TOKENS_TABLE} WHERE token = ? RETURNING *"
     ))
     .bind(token)
@@ -49,7 +50,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    sqlx::query(&format!(
+    sqlx::query(formatcp!(
         "DELETE FROM {TOKENS_TABLE} WHERE expires_at <= strftime('%s', 'now');"
     ))
     .execute(&mut *conn)
@@ -65,7 +66,7 @@ where
     let mut conn = conn.acquire().await?;
 
     Ok(
-        sqlx::query_as::<_, TokenRow>(&format!("SELECT * FROM {TOKENS_TABLE} WHERE token = ?;"))
+        sqlx::query_as::<_, TokenRow>(formatcp!("SELECT * FROM {TOKENS_TABLE} WHERE token = ?;"))
             .bind(token)
             .fetch_optional(&mut *conn)
             .await?,

@@ -31,6 +31,7 @@ rand = "0.10.0"
 insta = "1.46.3"
 snafu = "0.9.0"
 argon2 = { version = "0.5.3", features = ["std"] }
+const_format = "0.2.36"
 
 helpers = { path = "crates/helpers" }
 db = { path = "crates/db" }

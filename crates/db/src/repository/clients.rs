@@ -1,4 +1,5 @@
 use crate::error::Result;
+use const_format::formatcp;
 use sqlx::{Error, Row, prelude::FromRow, sqlite::SqliteRow};
 
 use super::{CLIENTS_TABLE, Db, Timestamp};
@@ -17,7 +18,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    Ok(sqlx::query_as::<_, ClientRow>(&format!("INSERT INTO {CLIENTS_TABLE} (name, client_id, client_secret, user_id, created_at) VALUES(?, ?, ?, ?, ?) RETURNING *;"))
+    Ok(sqlx::query_as::<_, ClientRow>(formatcp!("INSERT INTO {CLIENTS_TABLE} (name, client_id, client_secret, user_id, created_at) VALUES(?, ?, ?, ?, ?) RETURNING *;"))
             .bind(**client_name)
             .bind(client_id)
             .bind(client_secret)
@@ -33,7 +34,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    let result = sqlx::query(&format!(
+    let result = sqlx::query(formatcp!(
         "DELETE FROM {CLIENTS_TABLE} WHERE user_id = ? AND id = ?"
     ))
     .bind(user_id)
@@ -55,7 +56,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    let result = sqlx::query_as::<_, ClientRow>(&format!(
+    let result = sqlx::query_as::<_, ClientRow>(formatcp!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? AND client_id = ? AND client_secret = ?"
     ))
     .bind(user_id)
@@ -77,7 +78,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    let result = sqlx::query_as::<_, ClientRow>(&format!(
+    let result = sqlx::query_as::<_, ClientRow>(formatcp!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE client_id = ? AND client_secret = ?"
     ))
     .bind(client_id)
@@ -98,7 +99,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    let result = sqlx::query_as::<_, ClientRow>(&format!(
+    let result = sqlx::query_as::<_, ClientRow>(formatcp!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? AND name = ?"
     ))
     .bind(user_id)
@@ -115,7 +116,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    let result = sqlx::query_as::<_, ClientRow>(&format!(
+    let result = sqlx::query_as::<_, ClientRow>(formatcp!(
         "SELECT * FROM {CLIENTS_TABLE} WHERE user_id = ? ORDER BY id;"
     ))
     .bind(user_id)

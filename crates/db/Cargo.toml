@@ -13,6 +13,7 @@ chrono.workspace = true
 types.workspace = true
 url.workspace = true
 snafu.workspace = true
+const_format.workspace = true
 indexmap = "2.12.1"
 
 [dev-dependencies]

@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use chrono::Utc;
+use const_format::formatcp;
 use indexmap::IndexMap;
 use sqlx::{
     Acquire, Database, Encode, FromRow, QueryBuilder, Row, Type, query_builder::Separated,
@@ -20,7 +21,7 @@ where
     C: Acquire<'c, Database = Db>,
 {
     let mut conn = conn.acquire().await?;
-    let mut q_builder = QueryBuilder::new(format!(
+    let mut q_builder = QueryBuilder::new(formatcp!(
         r"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e
         LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id
         LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"
@@ -31,7 +32,7 @@ where
         q_builder.push_bind(search.clone());
     }
 
-    q_builder.push(format!(
+    q_builder.push(formatcp!(
         r" WHERE e.id in (
             SELECT e2.id FROM {ENTRIES_TABLE} e2"
     ));
@@ -162,7 +163,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    let result: i32 = sqlx::query_scalar(&format!(
+    let result: i32 = sqlx::query_scalar(formatcp!(
         "SELECT EXISTS(SELECT 1 FROM {ENTRIES_TABLE} WHERE user_id = ? AND id = ?)",
     ))
     .bind(user_id)
@@ -179,7 +180,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    let result = sqlx::query(&format!(
+    let result = sqlx::query(formatcp!(
         r"DELETE FROM {ENTRIES_TAG_TABLE} WHERE tag_id = ? AND entry_id in (SELECT id FROM {ENTRIES_TABLE} WHERE id = ? AND user_id = ?)"
     ))
     .bind(tag_id)
@@ -198,7 +199,7 @@ where
     let mut conn = conn.acquire().await?;
 
     // TODO rewrite this funny stupid count
-    let mut q_builder = QueryBuilder::new(format!(
+    let mut q_builder = QueryBuilder::new(formatcp!(
         r"SELECT COUNT(DISTINCT e.id) FROM {ENTRIES_TABLE} as e LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id",
     ));
 
@@ -273,17 +274,17 @@ where
 
     let user_id = entry.user_id;
 
-    let id: i64 = sqlx::query_scalar(
+    let id: i64 = sqlx::query_scalar(formatcp!(
         r"
-        INSERT INTO entries (
+        INSERT INTO {ENTRIES_TABLE} (
             user_id, url, hashed_url, given_url, hashed_given_url, title, content, content_text, is_archived, archived_at,
             is_starred, starred_at, created_at, updated_at, mimetype,
             language, reading_time, domain_name, preview_picture,
             origin_url, published_at, published_by, is_public, uid
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
-        ",
-    )
+        "
+    ))
     .bind(entry.user_id)
     .bind(entry.url)
     .bind(entry.hashed_url)
@@ -315,12 +316,13 @@ where
         crate::repository::tags::create_and_link(&mut *tx, user_id, id, tags).await?;
     }
 
-    let entry = sqlx::query_as::<_, EntryRow>("SELECT * FROM entries WHERE id = ?")
-        .bind(id)
-        .fetch_one(&mut *tx)
-        .await?;
+    let entry =
+        sqlx::query_as::<_, EntryRow>(formatcp!("SELECT * FROM {ENTRIES_TABLE} WHERE id = ?"))
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await?;
 
-    let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(&format!(
+    let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(formatcp!(
         r"
         SELECT t.* FROM {ENTRIES_TAG_TABLE} as et
         LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
@@ -344,7 +346,7 @@ where
 
     let mut conn = conn.begin().await?;
 
-    let entry = sqlx::query_as::<_, EntryRow>(&format!(
+    let entry = sqlx::query_as::<_, EntryRow>(formatcp!(
         "SELECT * FROM {ENTRIES_TABLE} WHERE user_id = ? AND id = ?"
     ))
     .bind(user_id)
@@ -356,7 +358,7 @@ where
         return Ok(None);
     };
 
-    let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(&format!(
+    let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(formatcp!(
         r"
         SELECT t.* FROM {ENTRIES_TAG_TABLE} as et
         LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
@@ -378,7 +380,7 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    let mut query_builder = QueryBuilder::new(format!("UPDATE {ENTRIES_TABLE} SET "));
+    let mut query_builder = QueryBuilder::new(formatcp!("UPDATE {ENTRIES_TABLE} SET "));
 
     let mut separated = query_builder.separated(", ");
 
@@ -477,11 +479,13 @@ where
 {
     let mut conn = conn.acquire().await?;
 
-    let result = sqlx::query("DELETE FROM entries WHERE user_id = ? AND id = ?")
-        .bind(user_id)
-        .bind(id)
-        .execute(&mut *conn)
-        .await?;
+    let result = sqlx::query(formatcp!(
+        "DELETE FROM {ENTRIES_TABLE} WHERE user_id = ? AND id = ?"
+    ))
+    .bind(user_id)
+    .bind(id)
+    .execute(&mut *conn)
+    .await?;
 
     Ok(result.rows_affected() > 0)
 }
