@@ -19,7 +19,7 @@ use crate::{
 };
 use db::repository::{entries, tags};
 use dto::{
-    AddEntry, AddEntryResponse, DeleteEntryRequest, DeleteEntryResponse, Embedded, Entries,
+    AddEntry, AddEntryResponse, DeleteEntryRequest, DeleteEntryResponse, Detail, Embedded, Entries,
     EntriesRequest, EntryTags, Exists, Expect, Link, Links, UpdateEntry,
 };
 use helpers::{generate_uid, hash_url};
@@ -145,7 +145,6 @@ pub(crate) async fn entries(
         tags: request.tags,
         since: Some(request.since),
         public: request.public,
-        detail: Some(request.detail.into()),
         domain_name: request.domain_name,
         search: None,
     };
@@ -155,7 +154,18 @@ pub(crate) async fn entries(
     let count_without_paging = entries::count(&mut *tx, &params).await?;
 
     // TODO implement all needed request filters and etc
-    let entries = entries::find_all(&mut *tx, &params).await?;
+    let ents: Vec<Entry> = match request.detail {
+        Detail::Full => entries::find_all(&mut *tx, &params)
+            .await?
+            .into_iter()
+            .map(Entry::try_from)
+            .collect::<Result<_>>()?,
+        Detail::Metadata => entries::find_all_metadata(&mut *tx, &params)
+            .await?
+            .into_iter()
+            .map(Entry::try_from)
+            .collect::<Result<_>>()?,
+    };
 
     tx.commit().await?;
 
@@ -170,11 +180,6 @@ pub(crate) async fn entries(
         }
         .fail();
     }
-
-    let ents: Vec<Entry> = entries
-        .into_iter()
-        .map(Entry::try_from)
-        .collect::<Result<_>>()?;
 
     // TODO implement actual urls generating
     let url = Url::parse("http://example.com").context(UrlFormatSnafu)?;
@@ -566,7 +571,47 @@ mod dto {
                 given_url: try_parse_url(e.given_url)?,
                 hashed_given_url: e.hashed_given_url,
                 title: e.title,
-                content: e.content,
+                content: Some(e.content),
+                is_archived: e.is_archived,
+                archived_at: try_parse_timestamp_opt(e.archived_at)?,
+                is_starred: e.is_starred,
+                starred_at: try_parse_timestamp_opt(e.starred_at)?,
+                tags: tag_rows.into_iter().map(Tag::from).collect(),
+                created_at: try_parse_timestamp(e.created_at)?,
+                updated_at: try_parse_timestamp(e.updated_at)?,
+                // TODO implement annotations support
+                annotations: vec![],
+                mimetype: e.mimetype.unwrap_or(String::new()),
+                language: e.language,
+                reading_time: e.reading_time,
+                domain_name: e.domain_name,
+                preview_picture: try_parse_url(e.preview_picture)?,
+                origin_url: try_parse_url(e.origin_url)?,
+                published_at: try_parse_timestamp_opt(e.published_at)?,
+                // TODO this .map(to_string) look ugly
+                published_by: e
+                    .published_by
+                    .map(|s| s.split(',').map(std::borrow::ToOwned::to_owned).collect()),
+                is_public: e.is_public,
+                uid: e.uid,
+            })
+        }
+    }
+
+    impl TryFrom<entries::MetadataEntry> for Entry {
+        type Error = crate::error::Error;
+
+        fn try_from(
+            (e, tag_rows): entries::MetadataEntry,
+        ) -> std::result::Result<Self, Self::Error> {
+            Ok(Entry {
+                id: e.id,
+                url: Url::parse(&e.url).context(UrlFormatSnafu)?,
+                hashed_url: e.hashed_url,
+                given_url: try_parse_url(e.given_url)?,
+                hashed_given_url: e.hashed_given_url,
+                title: e.title,
+                content: None,
                 is_archived: e.is_archived,
                 archived_at: try_parse_timestamp_opt(e.archived_at)?,
                 is_starred: e.is_starred,
@@ -639,15 +684,6 @@ mod dto {
         #[default]
         #[serde(rename(deserialize = "full"))]
         Full,
-    }
-
-    impl From<Detail> for entries::Detail {
-        fn from(val: Detail) -> Self {
-            match val {
-                Detail::Full => entries::Detail::Full,
-                Detail::Metadata => entries::Detail::Metadata,
-            }
-        }
     }
 
     fn default_page() -> i64 {

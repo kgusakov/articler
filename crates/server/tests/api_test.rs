@@ -130,6 +130,26 @@ async fn get_entries(f: &str, #[ignore] pool: SqlitePool) {
 
 #[apply(formats)]
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
+async fn get_entries_metadata(f: &str, #[ignore] pool: SqlitePool) {
+    let app = init_app(pool).await;
+
+    let req = test::TestRequest::default()
+        .append_header((header::AUTHORIZATION, auhorization_header(&app).await))
+        .uri(&format!("/api/entries{f}?detail=metadata"))
+        .to_request();
+
+    let resp = test::call_and_read_body(&app, req).await;
+
+    let expected: Value = serde_json::from_str(include_str!("json/entries_metadata.json")).unwrap();
+
+    assert_json_eq!(
+        expected,
+        serde_json::from_str::<Value>(str::from_utf8(&resp).unwrap()).unwrap()
+    );
+}
+
+#[apply(formats)]
+#[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
 async fn entries_exists(f: &str, #[ignore] pool: SqlitePool) {
     let app = init_app(pool).await;
 

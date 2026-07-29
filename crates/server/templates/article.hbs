@@ -10,7 +10,7 @@
         </a>
         <div class="flex items-center gap-4">
             <form method="post" action="/do_favourite" hx-post="/do_favourite" hx-target="#main-block"
-                hx-swap="morph:innerHtml" hx-vals='{"source": "{{source}}"}' class="flex items-center">
+                hx-swap="morph:innerHTML" hx-vals='{"source": "{{source}}"}' class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <input type="hidden" name="starred" value="{{#unless is_starred}}true{{else}}false{{/unless}}" />
                 {{#if is_starred}}
@@ -24,7 +24,7 @@
                 {{/if}}
             </form>
             <form method="post" action="/do_archive" hx-post="/do_archive" hx-target="#main-block"
-                hx-swap="morph:innerHtml" hx-vals='{"source": "{{source}}"}' class="flex items-center">
+                hx-swap="morph:innerHTML" hx-vals='{"source": "{{source}}"}' class="flex items-center">
                 <input type="hidden" name="article_id" value="{{id}}" />
                 <input type="hidden" name="archived" value="{{#unless is_archived}}true{{else}}false{{/unless}}" />
                 {{#if is_archived}}
@@ -56,7 +56,7 @@
     <h1 class="text-3xl lg:text-4xl font-bold leading-tight mb-4 wrap-break-word">
         <span id="title-text">{{title}}</span>
 
-        <form id="title-input-form" hx-post="/do_edit_title" hx-target="#main-block" hx-swap="morph:innerHtml"
+        <form id="title-input-form" hx-post="/do_edit_title" hx-target="#main-block" hx-swap="morph:innerHTML"
             hx-vals='{"source": "{{source}}"}' hx-target-422="#title-edit-error" class="hidden w-full">
             <input type="hidden" name="article_id" value="{{id}}" />
             <input id="title-input" type="text" name="title" value="{{title}}"

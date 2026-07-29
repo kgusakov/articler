@@ -8,24 +8,61 @@ use sqlx::{
     sqlite::SqliteRow,
 };
 
-use super::{Db, ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE, Timestamp};
+use super::{Db, ENTRIES_TABLE, ENTRIES_TAG_TABLE, TAGS_TABLE, Timestamp, tags::TagRow};
 use crate::error::{NotSupportedYetSnafu, Result};
 use types::{Id, ReadingTime, SafeHtml, Title};
 
-pub type FullEntry = (EntryRow, Vec<crate::repository::tags::TagRow>);
+pub type FullEntry = (EntryRow, Vec<TagRow>);
+pub type MetadataEntry = (EntryMetadataRow, Vec<TagRow>);
 
-// TODO: split the method
-#[expect(clippy::too_many_lines)]
+const TAG_COLUMNS: &str = "t.id as tag_id, t.label as tag_label, t.slug as tag_slug";
+
+const ENTRY_METADATA_COLUMNS: &str = "e.id, e.user_id, e.url, e.hashed_url, e.given_url, \
+    e.hashed_given_url, e.title, e.is_archived, e.archived_at, e.is_starred, e.starred_at, \
+    e.created_at, e.updated_at, e.mimetype, e.language, e.reading_time, e.domain_name, \
+    e.preview_picture, e.origin_url, e.published_at, e.published_by, e.is_public, e.uid";
+
+const ENTRY_FULL_COLUMNS: &str = formatcp!("{ENTRY_METADATA_COLUMNS}, e.content, e.content_text");
+
+const FIND_ALL_FULL_SELECT: &str = formatcp!(
+    r"SELECT {ENTRY_FULL_COLUMNS}, {TAG_COLUMNS} FROM {ENTRIES_TABLE} as e
+        LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id
+        LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"
+);
+
+const FIND_ALL_METADATA_SELECT: &str = formatcp!(
+    r"SELECT {ENTRY_METADATA_COLUMNS}, {TAG_COLUMNS} FROM {ENTRIES_TABLE} as e
+        LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id
+        LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"
+);
+
 pub async fn find_all<'c, C>(conn: C, params: &FindParams) -> Result<Vec<FullEntry>>
 where
     C: Acquire<'c, Database = Db>,
 {
+    find_all_rows(conn, params, FIND_ALL_FULL_SELECT).await
+}
+
+pub async fn find_all_metadata<'c, C>(conn: C, params: &FindParams) -> Result<Vec<MetadataEntry>>
+where
+    C: Acquire<'c, Database = Db>,
+{
+    find_all_rows(conn, params, FIND_ALL_METADATA_SELECT).await
+}
+
+async fn find_all_rows<'c, C, R>(
+    conn: C,
+    params: &FindParams,
+    select: &'static str,
+) -> Result<Vec<(R, Vec<TagRow>)>>
+where
+    C: Acquire<'c, Database = Db>,
+    R: for<'r> FromRow<'r, SqliteRow>,
+{
+    ensure_supported(params)?;
+
     let mut conn = conn.acquire().await?;
-    let mut q_builder = QueryBuilder::new(formatcp!(
-        r"SELECT e.*, t.id as tag_id, t.label as tag_label, t.slug as tag_slug FROM {ENTRIES_TABLE} as e
-        LEFT JOIN {ENTRIES_TAG_TABLE} et on et.entry_id = e.id
-        LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"
-    ));
+    let mut q_builder = QueryBuilder::new(select);
 
     if let Some(ref search) = params.search {
         q_builder.push(" JOIN entries_fts fts ON fts.rowid = e.id AND entries_fts MATCH ");
@@ -44,11 +81,72 @@ where
     q_builder.push(" WHERE e2.user_id = ");
     q_builder.push_bind(params.user_id);
 
+    push_search_match(&mut q_builder, params);
+    push_predicates(&mut q_builder, params);
+    push_order(&mut q_builder, params);
+    push_limit(&mut q_builder, params);
+
+    q_builder.push(")");
+
+    push_order(&mut q_builder, params);
+
+    let raw_rows = q_builder.build().fetch_all(&mut *conn).await?;
+
+    let mut entrs = IndexMap::<i32, Vec<&SqliteRow>>::new();
+
+    for r in &raw_rows {
+        let id: i32 = r.try_get("id")?;
+        entrs.entry(id).and_modify(|v| v.push(r)).or_insert(vec![r]);
+    }
+
+    let mut entrs_with_relations = vec![];
+
+    for e in entrs {
+        let mut tags = vec![];
+
+        for r in &e.1 {
+            tags.push(TagRow {
+                id: r.try_get("tag_id")?,
+                user_id: r.try_get("user_id")?,
+                label: r.try_get("tag_label")?,
+                slug: r.try_get("tag_slug")?,
+            });
+        }
+
+        entrs_with_relations.push((R::from_row(e.1[0])?, tags));
+    }
+
+    Ok(entrs_with_relations)
+}
+
+fn ensure_supported(params: &FindParams) -> Result<()> {
+    // TODO implement domain_name filtering
+    if params.domain_name.is_some() {
+        return NotSupportedYetSnafu {
+            msg: "Domain filtering is not supported yet",
+        }
+        .fail();
+    }
+
+    // TODO implement tags filtering
+    if params.tags.is_some() {
+        return NotSupportedYetSnafu {
+            msg: "Tags filtering is not supported yet",
+        }
+        .fail();
+    }
+
+    Ok(())
+}
+
+fn push_search_match(q_builder: &mut QueryBuilder<Db>, params: &FindParams) {
     if let Some(ref search) = params.search {
         q_builder.push(" AND entries_fts MATCH ");
         q_builder.push_bind(search.clone());
     }
+}
 
+fn push_predicates(q_builder: &mut QueryBuilder<Db>, params: &FindParams) {
     if let Some(a) = params.archive {
         q_builder.push(" AND is_archived = ");
         q_builder.push_bind(a);
@@ -68,7 +166,9 @@ where
         q_builder.push(" AND updated_at > ");
         q_builder.push_bind(d);
     }
+}
 
+fn push_order(q_builder: &mut QueryBuilder<Db>, params: &FindParams) {
     if let Some(column) = &params.sort {
         q_builder.push(" ORDER BY ");
         q_builder.push(column.to_string());
@@ -80,7 +180,9 @@ where
     } else if params.search.is_some() {
         q_builder.push(" ORDER BY fts.rank");
     }
+}
 
+fn push_limit(q_builder: &mut QueryBuilder<Db>, params: &FindParams) {
     if let Some(pp) = params.per_page {
         q_builder.push(" LIMIT ");
         q_builder.push_bind(pp);
@@ -90,71 +192,6 @@ where
             q_builder.push_bind((p - 1) * pp);
         }
     }
-    q_builder.push(")");
-
-    if let Some(column) = &params.sort {
-        q_builder.push(" ORDER BY ");
-        q_builder.push(column.to_string());
-
-        if let Some(order) = &params.order {
-            q_builder.push(" ");
-            q_builder.push(order.to_string());
-        }
-    } else if params.search.is_some() {
-        q_builder.push(" ORDER BY fts.rank");
-    }
-
-    // TODO implement detail filtering
-    if params.detail == Some(Detail::Metadata) {
-        return NotSupportedYetSnafu {
-            msg: "Detail metadata mode is not supported yet",
-        }
-        .fail();
-    }
-
-    // TODO implement domain_name filtering
-    if params.domain_name.is_some() {
-        return NotSupportedYetSnafu {
-            msg: "Domain filtering is not supported yet",
-        }
-        .fail();
-    }
-
-    // TODO implement tags filtering
-    if params.tags.is_some() {
-        return NotSupportedYetSnafu {
-            msg: "Tags filtering is not supported yet",
-        }
-        .fail();
-    }
-
-    let raw_rows = q_builder.build().fetch_all(&mut *conn).await?;
-
-    let mut entrs = IndexMap::<i32, Vec<&SqliteRow>>::new();
-
-    for r in &raw_rows {
-        let id: i32 = r.try_get("id")?;
-        entrs.entry(id).and_modify(|v| v.push(r)).or_insert(vec![r]);
-    }
-
-    let mut entrs_with_relations = vec![];
-
-    for e in entrs {
-        let mut tags = vec![];
-
-        for r in &e.1 {
-            tags.push(crate::repository::tags::TagRow {
-                id: r.try_get("tag_id")?,
-                user_id: r.try_get("user_id")?,
-                label: r.try_get("tag_label")?,
-                slug: r.try_get("tag_slug")?,
-            });
-        }
-
-        entrs_with_relations.push((EntryRow::from_row(e.1[0])?, tags));
-    }
-
-    Ok(entrs_with_relations)
 }
 
 pub async fn exists_by_id<'c, C>(conn: C, user_id: Id, id: Id) -> Result<bool>
@@ -196,6 +233,8 @@ pub async fn count<'c, C>(conn: C, params: &FindParams) -> Result<i64>
 where
     C: Acquire<'c, Database = Db>,
 {
+    ensure_supported(params)?;
+
     let mut conn = conn.acquire().await?;
 
     // TODO rewrite this funny stupid count
@@ -210,54 +249,8 @@ where
     q_builder.push(" WHERE e.user_id = ");
     q_builder.push_bind(params.user_id);
 
-    if let Some(ref search) = params.search {
-        q_builder.push(" AND entries_fts MATCH ");
-        q_builder.push_bind(search.clone());
-    }
-
-    if let Some(a) = params.archive {
-        q_builder.push(" AND is_archived = ");
-        q_builder.push_bind(a);
-    }
-
-    if let Some(s) = params.starred {
-        q_builder.push(" AND is_starred = ");
-        q_builder.push_bind(s);
-    }
-
-    if let Some(p) = params.public {
-        q_builder.push(" AND is_public = ");
-        q_builder.push_bind(p);
-    }
-
-    if let Some(d) = params.since {
-        q_builder.push(" AND updated_at > ");
-        q_builder.push_bind(d);
-    }
-
-    // TODO implement detail filtering
-    if params.detail == Some(Detail::Metadata) {
-        return NotSupportedYetSnafu {
-            msg: "Detail metadata mode is not supported yet",
-        }
-        .fail();
-    }
-
-    // TODO implement domain_name filtering
-    if params.domain_name.is_some() {
-        return NotSupportedYetSnafu {
-            msg: "Domain filtering is not supported yet",
-        }
-        .fail();
-    }
-
-    // TODO implement tags filtering
-    if params.tags.is_some() {
-        return NotSupportedYetSnafu {
-            msg: "Tags filtering is not supported yet",
-        }
-        .fail();
-    }
+    push_search_match(&mut q_builder, params);
+    push_predicates(&mut q_builder, params);
 
     Ok(q_builder.build().fetch_one(&mut *conn).await?.get(0))
 }
@@ -322,7 +315,7 @@ where
             .fetch_one(&mut *tx)
             .await?;
 
-    let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(formatcp!(
+    let tags = sqlx::query_as::<_, TagRow>(formatcp!(
         r"
         SELECT t.* FROM {ENTRIES_TAG_TABLE} as et
         LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
@@ -358,7 +351,7 @@ where
         return Ok(None);
     };
 
-    let tags = sqlx::query_as::<_, crate::repository::tags::TagRow>(formatcp!(
+    let tags = sqlx::query_as::<_, TagRow>(formatcp!(
         r"
         SELECT t.* FROM {ENTRIES_TAG_TABLE} as et
         LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id
@@ -563,6 +556,95 @@ impl<'r> sqlx::FromRow<'r, SqliteRow> for EntryRow {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct EntryMetadataRow {
+    pub id: Id,
+    pub user_id: Id,
+    pub url: String,
+    pub hashed_url: Option<String>,
+    pub given_url: Option<String>,
+    pub hashed_given_url: Option<String>,
+    pub title: String,
+    pub is_archived: bool,
+    pub archived_at: Option<Timestamp>,
+    pub is_starred: bool,
+    pub starred_at: Option<Timestamp>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+    pub mimetype: Option<String>,
+    pub language: Option<String>,
+    pub reading_time: ReadingTime,
+    pub domain_name: String,
+    pub preview_picture: Option<String>,
+    pub origin_url: Option<String>,
+    pub published_at: Option<Timestamp>,
+    pub published_by: Option<String>,
+    pub is_public: Option<bool>,
+    pub uid: Option<String>,
+}
+
+impl<'r> sqlx::FromRow<'r, SqliteRow> for EntryMetadataRow {
+    fn from_row(
+        row: &'r sqlx::sqlite::SqliteRow,
+    ) -> std::result::Result<EntryMetadataRow, sqlx::Error> {
+        Ok(EntryMetadataRow {
+            id: row.try_get("id")?,
+            user_id: row.try_get("user_id")?,
+            url: row.try_get("url")?,
+            hashed_url: row.try_get("hashed_url")?,
+            given_url: row.try_get("given_url")?,
+            hashed_given_url: row.try_get("hashed_given_url")?,
+            title: row.try_get("title")?,
+            is_archived: row.try_get("is_archived")?,
+            archived_at: row.try_get("archived_at")?,
+            is_starred: row.try_get("is_starred")?,
+            starred_at: row.try_get("starred_at")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+            mimetype: row.try_get("mimetype")?,
+            language: row.try_get("language")?,
+            reading_time: row.try_get("reading_time")?,
+            domain_name: row.try_get("domain_name")?,
+            preview_picture: row.try_get("preview_picture")?,
+            origin_url: row.try_get("origin_url")?,
+            published_at: row.try_get("published_at")?,
+            published_by: row.try_get("published_by")?,
+            is_public: row.try_get("is_public")?,
+            uid: row.try_get("uid")?,
+        })
+    }
+}
+
+impl From<EntryRow> for EntryMetadataRow {
+    fn from(entry: EntryRow) -> Self {
+        Self {
+            id: entry.id,
+            user_id: entry.user_id,
+            url: entry.url,
+            hashed_url: entry.hashed_url,
+            given_url: entry.given_url,
+            hashed_given_url: entry.hashed_given_url,
+            title: entry.title,
+            is_archived: entry.is_archived,
+            archived_at: entry.archived_at,
+            is_starred: entry.is_starred,
+            starred_at: entry.starred_at,
+            created_at: entry.created_at,
+            updated_at: entry.updated_at,
+            mimetype: entry.mimetype,
+            language: entry.language,
+            reading_time: entry.reading_time,
+            domain_name: entry.domain_name,
+            preview_picture: entry.preview_picture,
+            origin_url: entry.origin_url,
+            published_at: entry.published_at,
+            published_by: entry.published_by,
+            is_public: entry.is_public,
+            uid: entry.uid,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct CreateEntry {
     pub user_id: Id,
@@ -681,15 +763,8 @@ pub struct FindParams {
     pub tags: Option<Vec<String>>,
     pub since: Option<Timestamp>,
     pub public: Option<bool>,
-    pub detail: Option<Detail>,
     pub domain_name: Option<String>,
     pub search: Option<String>,
-}
-
-#[derive(PartialEq)]
-pub enum Detail {
-    Full,
-    Metadata,
 }
 
 #[cfg(test)]
@@ -857,13 +932,13 @@ mod tests {
         assert_eq!(
             tags,
             vec![
-                crate::repository::tags::TagRow {
+                TagRow {
                     id: 1,
                     user_id: 1,
                     label: "label1".to_owned(),
                     slug: "slug1".to_owned(),
                 },
-                crate::repository::tags::TagRow {
+                TagRow {
                     id: 2,
                     user_id: 1,
                     label: "label2".to_owned(),

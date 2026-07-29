@@ -15,7 +15,8 @@ pub struct Entry {
     pub given_url: Option<Url>,
     pub hashed_given_url: Option<String>,
     pub title: String,
-    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
     #[serde_as(as = "BoolFromInt")]
     pub is_archived: bool,
     pub archived_at: Option<DateTime<Utc>>,

@@ -222,12 +222,12 @@ async fn main(
 ) -> Result<HttpResponse> {
     let mut tx = app.pool.begin().await?;
 
-    // TODO must load only metadata
-    let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut *tx, &entries_filter)
-        .await?
-        .into_iter()
-        .map(|e| e.0.into())
-        .collect();
+    let articles_metadata: Vec<ArticleMetadata> =
+        entries::find_all_metadata(&mut *tx, &entries_filter)
+            .await?
+            .into_iter()
+            .map(|e| e.0.into())
+            .collect();
 
     let context = ArticlesContext {
         articles: articles_metadata,
@@ -253,8 +253,7 @@ async fn partial_articles(
 
     let params = find_params_for_category(user_id, &category);
 
-    // TODO must load only metadata
-    let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut *tx, &params)
+    let articles_metadata: Vec<ArticleMetadata> = entries::find_all_metadata(&mut *tx, &params)
         .await?
         .into_iter()
         .map(|e| e.0.into())
@@ -529,7 +528,7 @@ async fn search(
     {
         let mut tx = app.pool.begin().await?;
 
-        let articles_metadata: Vec<ArticleMetadata> = entries::find_all(&mut *tx, &params)
+        let articles_metadata: Vec<ArticleMetadata> = entries::find_all_metadata(&mut *tx, &params)
             .await?
             .into_iter()
             .map(|e| e.0.into())
@@ -604,8 +603,7 @@ where
 
     let params = find_params_for_category(user_id, category);
 
-    // TODO must load only metadata
-    let articles: Vec<ArticleMetadata> = entries::find_all(&mut *conn, &params)
+    let articles: Vec<ArticleMetadata> = entries::find_all_metadata(&mut *conn, &params)
         .await?
         .into_iter()
         .map(|e| e.0.into())
@@ -658,7 +656,7 @@ mod dto {
     use actix_web::HttpRequest;
     use db::repository::{
         Db,
-        entries::{self, EntryRow, FindParams},
+        entries::{self, EntryMetadataRow, FindParams},
     };
     use serde::{Deserialize, Serialize};
     use types::{Id, ReadingTime};
@@ -739,8 +737,8 @@ mod dto {
         pub is_starred: bool,
     }
 
-    impl From<EntryRow> for ArticleMetadata {
-        fn from(entry: EntryRow) -> Self {
+    impl From<EntryMetadataRow> for ArticleMetadata {
+        fn from(entry: EntryMetadataRow) -> Self {
             Self {
                 id: entry.id,
                 title: entry.title,

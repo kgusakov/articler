@@ -96,7 +96,7 @@ pub async fn reload_articles(pool: &Pool<Sqlite>, username: &str) -> Result<()> 
         ..Default::default()
     };
 
-    let entries = entries::find_all(&mut tx, &params).await?;
+    let entries = entries::find_all_metadata(&mut tx, &params).await?;
 
     let proxy_scheme = match env::var("ALL_PROXY") {
         Ok(p) if !p.is_empty() => Some(p),
