@@ -36,6 +36,12 @@ const FIND_ALL_METADATA_SELECT: &str = formatcp!(
         LEFT JOIN {TAGS_TABLE} t on t.id = et.tag_id"
 );
 
+/// Search results are ranked title-first: any entry whose title matches is placed in a
+/// strictly better tier than body-only matches
+const SEARCH_ORDER_BY: &str = " ORDER BY \
+    CASE WHEN bm25(entries_fts, 1.0, 0.0) < 0 THEN 0 ELSE 1 END, \
+    bm25(entries_fts, 10.0, 1.0)";
+
 pub async fn find_all<'c, C>(conn: C, params: &FindParams) -> Result<Vec<FullEntry>>
 where
     C: Acquire<'c, Database = Db>,
@@ -178,7 +184,7 @@ fn push_order(q_builder: &mut QueryBuilder<Db>, params: &FindParams) {
             q_builder.push(order.to_string());
         }
     } else if params.search.is_some() {
-        q_builder.push(" ORDER BY fts.rank");
+        q_builder.push(SEARCH_ORDER_BY);
     }
 }
 
@@ -1413,6 +1419,164 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].0.url, "https://rank.com/2");
         assert_eq!(results[1].0.url, "https://rank.com/1");
+    }
+
+    fn rank_entry(n: u8, title: &str, body: &str) -> CreateEntry {
+        CreateEntry {
+            user_id: 1,
+            url: format!("https://title-rank.com/{n}"),
+            hashed_url: format!("title_rank_h{n}"),
+            given_url: format!("https://title-rank.com/{n}"),
+            hashed_given_url: format!("title_rank_gh{n}"),
+            title: Title::try_from(title.to_owned()).unwrap(),
+            content: SafeHtml::from(format!("<p>{body}</p>").as_str()),
+            content_text: body.to_owned(),
+            is_archived: false,
+            archived_at: None,
+            is_starred: false,
+            starred_at: None,
+            created_at: 1_700_000_000 + i64::from(n),
+            updated_at: 1_700_000_001 + i64::from(n),
+            mimetype: None,
+            language: None,
+            reading_time: 1,
+            domain_name: "title-rank.com".to_owned(),
+            preview_picture: None,
+            origin_url: None,
+            published_at: None,
+            published_by: None,
+            is_public: None,
+            uid: None,
+        }
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql")
+    )]
+    async fn test_find_all_search_ranks_title_above_body(pool: SqlitePool) {
+        create(
+            &pool,
+            rank_entry(
+                1,
+                "No match here",
+                "juniper juniper juniper juniper juniper juniper juniper juniper juniper juniper",
+            ),
+            &[],
+        )
+        .await
+        .unwrap();
+
+        create(
+            &pool,
+            rank_entry(2, "The juniper tree", "no match in the body"),
+            &[],
+        )
+        .await
+        .unwrap();
+
+        let results = find_all(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("juniper".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0.url, "https://title-rank.com/2");
+        assert_eq!(results[1].0.url, "https://title-rank.com/1");
+    }
+
+    /// `find_all_metadata` is what the web UI `/search` handler actually calls, so the
+    /// title-first ordering is pinned on that path too, not only on `find_all`.
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql")
+    )]
+    async fn test_find_all_metadata_search_ranks_title_above_body(pool: SqlitePool) {
+        create(
+            &pool,
+            rank_entry(
+                1,
+                "No match here",
+                "juniper juniper juniper juniper juniper juniper juniper juniper juniper juniper",
+            ),
+            &[],
+        )
+        .await
+        .unwrap();
+
+        create(
+            &pool,
+            rank_entry(2, "The juniper tree", "no match in the body"),
+            &[],
+        )
+        .await
+        .unwrap();
+
+        let results = find_all_metadata(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("juniper".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0.url, "https://title-rank.com/2");
+        assert_eq!(results[1].0.url, "https://title-rank.com/1");
+    }
+
+    #[sqlx::test(
+        migrations = "../../migrations",
+        fixtures("../../tests/fixtures/users.sql")
+    )]
+    async fn test_find_all_search_title_tier_ordered_by_relevance(pool: SqlitePool) {
+        create(
+            &pool,
+            rank_entry(
+                3,
+                "cactus cactus cactus plant",
+                "a single mention of cactus somewhere in this body of text about desert flora and gardening tips for arid climates",
+            ),
+            &[],
+        )
+        .await
+        .unwrap();
+
+        create(
+            &pool,
+            rank_entry(
+                4,
+                "the cactus guide",
+                "cactus cactus cactus cactus cactus cactus cactus cactus cactus cactus cactus cactus cactus cactus cactus",
+            ),
+            &[],
+        )
+        .await
+        .unwrap();
+
+        let results = find_all(
+            &pool,
+            &FindParams {
+                user_id: 1,
+                search: Some("cactus".to_owned()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0.url, "https://title-rank.com/3");
+        assert_eq!(results[1].0.url, "https://title-rank.com/4");
     }
 
     #[sqlx::test(
