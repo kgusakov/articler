@@ -1,6 +1,6 @@
 use actix_session::Session;
 use actix_web::{
-    HttpRequest, HttpResponse, Responder,
+    HttpRequest, HttpResponse, Responder, Route,
     http::header,
     mime,
     web::{self, Redirect, ServiceConfig, get, post},
@@ -41,6 +41,10 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/all", get().to(all))
         .route("/favourite", get().to(favourite))
         .route("/archive", get().to(archive))
+        .route("/unread/list", permanent_redirect("/"))
+        .route("/starred/list", permanent_redirect("/favourite"))
+        .route("/archive/list", permanent_redirect("/archive"))
+        .route("/all/list", permanent_redirect("/all"))
         .route("/article/{id}", get().to(article))
         .route("/clients", get().to(clients))
         .route("/do_create_client", post().to(do_create_client))
@@ -55,6 +59,10 @@ pub fn routes(cfg: &mut ServiceConfig) {
         .route("/partial/categories", get().to(partial_categories))
         .route("/partial/articles/{category}", get().to(partial_articles))
         .route("/search", get().to(search));
+}
+
+fn permanent_redirect(to: &'static str) -> Route {
+    get().to(move || async move { Redirect::to(to).permanent() })
 }
 
 async fn login(_session: Session, app: web::Data<AppState>) -> Result<HttpResponse> {

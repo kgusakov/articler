@@ -59,6 +59,31 @@ async fn index_without_auth_must_redirect_to_login(pool: SqlitePool) {
     assert_eq!(location, "/login");
 }
 
+#[sqlx::test(migrations = "../../migrations")]
+async fn wallabag_list_paths_redirect_to_pages(pool: SqlitePool) {
+    let app = init_ui_app(pool).await;
+
+    for (from, to) in [
+        ("/unread/list", "/"),
+        ("/starred/list", "/favourite"),
+        ("/archive/list", "/archive"),
+        ("/all/list", "/all"),
+    ] {
+        let req = test::TestRequest::get().uri(from).to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert_eq!(resp.status(), StatusCode::PERMANENT_REDIRECT, "{from}");
+
+        let location = resp
+            .headers()
+            .get(header::LOCATION)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert_eq!(location, to, "{from}");
+    }
+}
+
 #[sqlx::test(
     migrations = "../../migrations",
     fixtures("../tests/fixtures/users.sql")
