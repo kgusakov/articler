@@ -1,49 +1,14 @@
-use actix_http::{Request, StatusCode};
-use actix_service::Service;
-use actix_web::{
-    Error,
-    body::MessageBody,
-    cookie::{Cookie, Key},
-    dev::ServiceResponse,
-    http::header,
-    test, web,
-};
-use app_state::AppState;
-use article_scraper::Scraper;
+use actix_http::StatusCode;
+use actix_web::{http::header, test};
 use scraper::{Html, Selector};
-use server::app::{app, init_handlebars};
 use sqlx::SqlitePool;
-use std::{collections::HashSet, sync::Once};
+use std::collections::HashSet;
 
-static INIT: Once = Once::new();
-
-fn init() {
-    INIT.call_once(|| {
-        env_logger::init_from_env(env_logger::Env::new().default_filter_or("trace"));
-    });
-}
-
-async fn init_ui_app(
-    pool: SqlitePool,
-) -> impl Service<Request, Response = ServiceResponse<impl MessageBody>, Error = Error> {
-    init();
-
-    let cookie_key = Key::from(&[0u8; 64]);
-
-    test::init_service(app(
-        web::Data::new(AppState::new(
-            pool,
-            Scraper::new(None).unwrap(),
-            init_handlebars().unwrap(),
-        )),
-        cookie_key,
-    ))
-    .await
-}
+mod common;
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn index_without_auth_must_redirect_to_login(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let app = common::init_app(pool).await;
 
     // Step 1: Check that "/" redirects to "/login"
     let req = test::TestRequest::get().uri("/").to_request();
@@ -61,7 +26,7 @@ async fn index_without_auth_must_redirect_to_login(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn wallabag_list_paths_redirect_to_pages(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let app = common::init_app(pool).await;
 
     for (from, to) in [
         ("/unread/list", "/"),
@@ -89,7 +54,7 @@ async fn wallabag_list_paths_redirect_to_pages(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql")
 )]
 async fn login_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let app = common::init_app(pool).await;
 
     let req = test::TestRequest::get().uri("/login").to_request();
     let resp = test::call_service(&app, req).await;
@@ -133,7 +98,7 @@ async fn login_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql",)
 )]
 async fn do_login_with_correct_credentials(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let app = common::init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/do_login")
@@ -165,7 +130,7 @@ async fn do_login_with_correct_credentials(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql",)
 )]
 async fn do_login_with_incorrect_credentials(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let app = common::init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/do_login")
@@ -184,9 +149,7 @@ async fn do_login_with_incorrect_credentials(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn index_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/")
@@ -226,8 +189,7 @@ async fn index_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn article_links_on_index_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/")
@@ -254,9 +216,7 @@ async fn article_links_on_index_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_archive(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/do_archive")
@@ -282,8 +242,7 @@ async fn do_archive(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_archive_htmx(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/")
@@ -325,8 +284,7 @@ async fn do_archive_htmx(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_archive_htmx_from_article_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/article/1")
@@ -373,8 +331,7 @@ async fn do_archive_htmx_from_article_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_favourite_htmx_from_article_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/article/1")
@@ -427,8 +384,7 @@ async fn do_favourite_htmx_from_article_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_delete_htmx_from_article_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/article/1")
@@ -462,8 +418,7 @@ async fn do_delete_htmx_from_article_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_delete_with_back_location(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/article/1")
@@ -497,9 +452,7 @@ async fn do_delete_with_back_location(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_unarchive(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/do_archive")
@@ -528,9 +481,7 @@ async fn do_unarchive(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn all_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/all")
@@ -557,9 +508,7 @@ async fn all_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn favourite_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/favourite")
@@ -583,9 +532,7 @@ async fn favourite_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn archive_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/archive")
@@ -617,8 +564,7 @@ async fn archive_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn index_page_favourite_icons(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/")
@@ -652,8 +598,7 @@ async fn index_page_favourite_icons(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn favourite_page_favourite_icons(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/favourite")
@@ -681,8 +626,7 @@ async fn favourite_page_favourite_icons(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_favourite(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/do_favourite")
@@ -734,8 +678,7 @@ async fn do_favourite(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_favourite_htmx(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/")
@@ -784,8 +727,7 @@ async fn do_favourite_htmx(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_unfavourite(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/do_favourite")
@@ -834,8 +776,7 @@ async fn do_unfavourite(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn active_category_highlighting(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/")
@@ -891,8 +832,7 @@ async fn active_category_highlighting(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn article_page_not_found(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/article/999")
@@ -908,8 +848,7 @@ async fn article_page_not_found(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn article_page_unarchived_unstarred(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/article/1")
@@ -962,8 +901,7 @@ async fn article_page_unarchived_unstarred(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn article_page_archived_starred(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/article/4")
@@ -1014,8 +952,7 @@ async fn article_page_archived_starred(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_delete(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/article/1")
@@ -1049,8 +986,7 @@ async fn do_delete(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_delete_htmx(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/")
@@ -1089,7 +1025,7 @@ async fn do_delete_htmx(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn clients_without_auth_must_redirect_to_login(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let app = common::init_app(pool).await;
 
     let req = test::TestRequest::get().uri("/clients").to_request();
     let resp = test::call_service(&app, req).await;
@@ -1109,8 +1045,7 @@ async fn clients_without_auth_must_redirect_to_login(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql")
 )]
 async fn clients_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/clients")
@@ -1145,8 +1080,7 @@ async fn clients_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql")
 )]
 async fn logout_clears_session(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/")
@@ -1185,8 +1119,7 @@ async fn logout_clears_session(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql")
 )]
 async fn do_create_client(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/clients")
@@ -1247,8 +1180,7 @@ async fn do_create_client(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql")
 )]
 async fn do_create_client_with_empty_name_returns_error(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/do_create_client")
@@ -1267,8 +1199,7 @@ async fn do_create_client_with_empty_name_returns_error(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql")
 )]
 async fn do_client_delete(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/clients")
@@ -1342,7 +1273,7 @@ async fn do_client_delete(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_add(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let mock_server = wiremock::MockServer::start().await;
 
@@ -1355,8 +1286,6 @@ async fn do_add(pool: SqlitePool) {
         .await;
 
     let url = format!("{}/test-article", mock_server.uri());
-
-    let cookie = login("wallabag", "wallabag", &app).await;
 
     let req = test::TestRequest::post()
         .uri("/add")
@@ -1398,8 +1327,7 @@ async fn do_add(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_add_wrong_scheme(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/add")
@@ -1417,8 +1345,7 @@ async fn do_add_wrong_scheme(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_edit_title(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/article/1")
@@ -1464,8 +1391,7 @@ async fn do_edit_title(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_edit_title_htmx(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/")
@@ -1517,8 +1443,7 @@ async fn do_edit_title_htmx(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_edit_title_htmx_from_article_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/article/1")
@@ -1577,8 +1502,7 @@ async fn do_edit_title_htmx_from_article_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn do_edit_title_empty_returns_error(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/do_edit_title")
@@ -1600,8 +1524,7 @@ async fn do_edit_title_empty_returns_error(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn partial_articles_unread(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/partial/articles/unread")
@@ -1627,8 +1550,7 @@ async fn partial_articles_unread(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn partial_articles_all(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/partial/articles/all")
@@ -1657,8 +1579,7 @@ async fn partial_articles_all(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn partial_articles_favourite(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/partial/articles/favourite")
@@ -1684,8 +1605,7 @@ async fn partial_articles_favourite(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn partial_articles_archived(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/partial/articles/archived")
@@ -1711,8 +1631,7 @@ async fn partial_articles_archived(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn search_htmx_returns_partial_cards(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/search?q=content1")
@@ -1740,8 +1659,7 @@ async fn search_htmx_returns_partial_cards(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn search_htmx_with_category_filter(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/search?q=content&category=archived")
@@ -1765,8 +1683,7 @@ async fn search_htmx_with_category_filter(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn search_htmx_no_results(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/search?q=xyznotfound")
@@ -1789,8 +1706,7 @@ async fn search_htmx_no_results(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn search_full_page(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/search?q=content1")
@@ -1816,8 +1732,7 @@ async fn search_full_page(pool: SqlitePool) {
     fixtures("../tests/fixtures/users.sql", "../tests/fixtures/entries.sql")
 )]
 async fn search_full_page_with_category_filter(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
-    let cookie = login("wallabag", "wallabag", &app).await;
+    let (app, cookie) = common::authed_ui_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/search?q=content&category=favourite")
@@ -1841,7 +1756,7 @@ async fn search_full_page_with_category_filter(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn htmx_request_without_auth_returns_403_and_hx_redirect(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let app = common::init_app(pool).await;
 
     let req = test::TestRequest::post()
         .uri("/do_archive")
@@ -1859,7 +1774,7 @@ async fn htmx_request_without_auth_returns_403_and_hx_redirect(pool: SqlitePool)
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn page_request_without_auth_redirects_to_login(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let app = common::init_app(pool).await;
 
     let req = test::TestRequest::get().uri("/search?q=test").to_request();
     let resp = test::call_service(&app, req).await;
@@ -1877,7 +1792,7 @@ async fn page_request_without_auth_redirects_to_login(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn htmx_partial_categories_without_auth_returns_403_and_hx_redirect(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let app = common::init_app(pool).await;
 
     let req = test::TestRequest::get()
         .uri("/partial/categories")
@@ -1890,27 +1805,6 @@ async fn htmx_partial_categories_without_auth_returns_403_and_hx_redirect(pool: 
         resp.headers().get("HX-Redirect").unwrap().to_str().unwrap(),
         "/login"
     );
-}
-
-async fn login(
-    username: &str,
-    password: &str,
-    app: impl Service<Request, Response = ServiceResponse<impl MessageBody>, Error = Error>,
-) -> Cookie<'static> {
-    let req = test::TestRequest::post()
-        .uri("/do_login")
-        .set_form([("_username", username), ("_password", password)])
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-
-    assert_eq!(resp.status(), StatusCode::FOUND);
-    assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/");
-
-    resp.response()
-        .cookies()
-        .find(|c| c.name() == "id")
-        .unwrap()
-        .into_owned()
 }
 
 mod helpers {

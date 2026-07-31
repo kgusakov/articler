@@ -1,50 +1,16 @@
 // This tests checks if Android wallabag app can login correctly
-use std::sync::Once;
-
-use actix_http::{Request, StatusCode};
-use actix_web::{
-    Error,
-    body::MessageBody,
-    cookie::Key,
-    dev::{Service, ServiceResponse},
-    test,
-    web::{self},
-};
-use app_state::AppState;
-use article_scraper::Scraper;
+use actix_http::StatusCode;
+use actix_web::test;
 use regex::Regex;
-use server::app::{app, init_handlebars};
 use sqlx::SqlitePool;
 
-static INIT: Once = Once::new();
+mod common;
 
-fn init() {
-    INIT.call_once(|| {
-        env_logger::init_from_env(env_logger::Env::new().default_filter_or("trace"));
-    });
-}
-
-async fn init_ui_app(
-    pool: SqlitePool,
-) -> impl Service<Request, Response = ServiceResponse<impl MessageBody>, Error = Error> {
-    init();
-
-    let cookie_key = Key::from(&[0u8; 64]);
-
-    test::init_service(app(
-        web::Data::new(AppState::new(
-            pool,
-            Scraper::new(None).unwrap(),
-            init_handlebars().unwrap(),
-        )),
-        cookie_key,
-    ))
-    .await
-}
+use common::init_app;
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
 async fn android_app_login_flow(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let app = init_app(pool).await;
 
     // Step 1: Check that "/" redirects to "/login"
     let req = test::TestRequest::get().uri("/").to_request();
@@ -141,7 +107,7 @@ async fn android_app_login_flow(pool: SqlitePool) {
 
 #[sqlx::test(migrations = "../../migrations", fixtures("users", "entries"))]
 async fn android_app_create_client_flow(pool: SqlitePool) {
-    let app = init_ui_app(pool).await;
+    let app = init_app(pool).await;
 
     // Step 1: Check that "/" redirects to "/login"
     let req = test::TestRequest::get().uri("/").to_request();

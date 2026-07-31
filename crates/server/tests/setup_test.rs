@@ -1,37 +1,10 @@
-use actix_http::{Request, StatusCode};
-use actix_service::Service;
-use actix_web::{
-    Error, body::MessageBody, cookie::Key, dev::ServiceResponse, http::header, test, web,
-};
-use app_state::AppState;
-use article_scraper::Scraper;
-use server::app::{app, init_handlebars};
+use actix_http::StatusCode;
+use actix_web::{http::header, test};
 use sqlx::SqlitePool;
-use std::sync::Once;
 
-static INIT: Once = Once::new();
+mod common;
 
-fn init() {
-    INIT.call_once(|| {
-        env_logger::init_from_env(env_logger::Env::new().default_filter_or("trace"));
-    });
-}
-
-async fn init_app(
-    pool: SqlitePool,
-) -> impl Service<Request, Response = ServiceResponse<impl MessageBody>, Error = Error> {
-    init();
-    let cookie_key = Key::from(&[0u8; 64]);
-    test::init_service(app(
-        web::Data::new(AppState::new(
-            pool,
-            Scraper::new(None).unwrap(),
-            init_handlebars().unwrap(),
-        )),
-        cookie_key,
-    ))
-    .await
-}
+use common::init_app;
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn login_redirects_to_setup_when_no_users(pool: SqlitePool) {
