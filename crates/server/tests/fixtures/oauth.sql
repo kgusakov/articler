@@ -3,19 +3,19 @@ INSERT INTO users (id, username, email, name, password_hash, created_at, updated
     -- User for successful password grant test
     -- Password: "test_password_123"
     -- Hash generated with Argon2id
-    (99, 'oauth_test_user', 'oauth@test.com', 'OAuth Test User', '$argon2id$v=19$m=19456,t=2,p=1$iQa9d2zJwn5CM1kfTd2fmg$i6rkIFF8e1D0hBbDJcrFdKUeRsDoyTGEvn1z7L66/60', 1687895144, 1687895850),
+    (99, 'oauth_test_user', 'oauth@test.com', 'OAuth Test User', '$argon2id$v=19$m=8,t=1,p=1$1Xohw/wkkIT9Q7CJI32gXw$anfjRBgwsooqR7TjVnw4yBkcoCZLGNByv0wklD0xgWY', 1687895144, 1687895850),
 
     -- User for invalid credentials test
     -- Password: "correct_password"
-    (98, 'test_user_invalid', 'test@invalid.com', 'Test User Invalid', '$argon2id$v=19$m=19456,t=2,p=1$6jG+/nbMwdmvhLwJFE64pQ$+wcZ8ysDTTwgkVvryKcp4Q1gW/68Uf28vm9H916aYbU', 1687895144, 1687895850),
+    (98, 'test_user_invalid', 'test@invalid.com', 'Test User Invalid', '$argon2id$v=19$m=8,t=1,p=1$ouXuC/cqTcgGn4P8Nd4pUg$txXdf4od2EYxefbcC+y8S1XcTVdNSur2bIFyD/Woidg', 1687895144, 1687895850),
 
     -- User for invalid client test
     -- Password: "test_password"
-    (97, 'test_user_client', 'test@client.com', 'Test User Client', '$argon2id$v=19$m=19456,t=2,p=1$WfwIWgdRFNkzMSZo3MoDVA$fqQU3CaLM8euh/ZhCMsVVaqBDZh0nUbDHpRGFesc2a0', 1687895144, 1687895850),
+    (97, 'test_user_client', 'test@client.com', 'Test User Client', '$argon2id$v=19$m=8,t=1,p=1$L/RTPSHncE4kgC6n9RV4RA$QEWlQ3wPY0xWdjdZ63DFjW/358Eb8uDXZIWVzyD/R8w', 1687895144, 1687895850),
 
     -- User for refresh token test
     -- Password: "test_password"
-    (96, 'refresh_test_user', 'refresh@test.com', 'Refresh Test User', '$argon2id$v=19$m=19456,t=2,p=1$WfwIWgdRFNkzMSZo3MoDVA$fqQU3CaLM8euh/ZhCMsVVaqBDZh0nUbDHpRGFesc2a0', 1687895144, 1687895850),
+    (96, 'refresh_test_user', 'refresh@test.com', 'Refresh Test User', '$argon2id$v=19$m=8,t=1,p=1$L/RTPSHncE4kgC6n9RV4RA$QEWlQ3wPY0xWdjdZ63DFjW/358Eb8uDXZIWVzyD/R8w', 1687895144, 1687895850),
 
     -- User for invalid refresh token test
     (95, 'invalid_refresh_user', 'invalid@test.com', 'Invalid Refresh User', 'dummy_hash', 1687895144, 1687895850);

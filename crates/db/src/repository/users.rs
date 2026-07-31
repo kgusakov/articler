@@ -196,7 +196,7 @@ mod tests {
         assert_eq!(user.name, "Walla Baggger", "Name should match");
         assert_eq!(
             user.password_hash,
-            "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
+            "$argon2id$v=19$m=8,t=1,p=1$5V7kb5S8EESpCaaLF4s3TA$bN6hHgoZmmJidwt4WlRxJxeHJvjuocF2MM0pvpygBpM",
             "Password hash should match"
         );
 
@@ -213,7 +213,7 @@ mod tests {
             find_by_username_and_password(
                 &pool,
                 "wallabag",
-                "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
+                "$argon2id$v=19$m=8,t=1,p=1$5V7kb5S8EESpCaaLF4s3TA$bN6hHgoZmmJidwt4WlRxJxeHJvjuocF2MM0pvpygBpM",
             )
             .await
             .unwrap();
@@ -226,7 +226,7 @@ mod tests {
         assert_eq!(user.name, "Walla Baggger", "Name should match");
         assert_eq!(
             user.password_hash,
-            "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
+            "$argon2id$v=19$m=8,t=1,p=1$5V7kb5S8EESpCaaLF4s3TA$bN6hHgoZmmJidwt4WlRxJxeHJvjuocF2MM0pvpygBpM",
             "Password hash should match"
         );
 
@@ -243,7 +243,7 @@ mod tests {
             find_by_username_and_password(
                 &pool,
                 "nonexistent",
-                "$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg",
+                "$argon2id$v=19$m=8,t=1,p=1$5V7kb5S8EESpCaaLF4s3TA$bN6hHgoZmmJidwt4WlRxJxeHJvjuocF2MM0pvpygBpM",
             )
             .await
             .unwrap();

@@ -1,6 +1,6 @@
 INSERT INTO users (id, username, email, name, password_hash, created_at, updated_at) VALUES
-    (1, 'wallabag', 'wallabag@wallabag.io', 'Walla Baggger', '$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg', 1687895144, 1687895850),
-    (2, 'test_user_2', 'test2@example.com', 'Test User 2', '$argon2id$v=19$m=19456,t=2,p=1$hsWWj4oOAFTK2vLl7YjG0w$L+KcI0YL/8L8s2ZRRA9caoqEiyYE48Drm36y1KFk2bg', 1687895144, 1687895850);
+    (1, 'wallabag', 'wallabag@wallabag.io', 'Walla Baggger', '$argon2id$v=19$m=8,t=1,p=1$5V7kb5S8EESpCaaLF4s3TA$bN6hHgoZmmJidwt4WlRxJxeHJvjuocF2MM0pvpygBpM', 1687895144, 1687895850),
+    (2, 'test_user_2', 'test2@example.com', 'Test User 2', '$argon2id$v=19$m=8,t=1,p=1$5V7kb5S8EESpCaaLF4s3TA$bN6hHgoZmmJidwt4WlRxJxeHJvjuocF2MM0pvpygBpM', 1687895144, 1687895850);
 
 INSERT INTO clients (id, user_id, client_id, client_secret, name, created_at) VALUES
     (1, 1, 'client_1', 'secret_1', 'Client 1', 1687895200),
