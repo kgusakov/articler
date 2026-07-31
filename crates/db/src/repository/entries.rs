@@ -621,36 +621,6 @@ impl<'r> sqlx::FromRow<'r, SqliteRow> for EntryMetadataRow {
     }
 }
 
-impl From<EntryRow> for EntryMetadataRow {
-    fn from(entry: EntryRow) -> Self {
-        Self {
-            id: entry.id,
-            user_id: entry.user_id,
-            url: entry.url,
-            hashed_url: entry.hashed_url,
-            given_url: entry.given_url,
-            hashed_given_url: entry.hashed_given_url,
-            title: entry.title,
-            is_archived: entry.is_archived,
-            archived_at: entry.archived_at,
-            is_starred: entry.is_starred,
-            starred_at: entry.starred_at,
-            created_at: entry.created_at,
-            updated_at: entry.updated_at,
-            mimetype: entry.mimetype,
-            language: entry.language,
-            reading_time: entry.reading_time,
-            domain_name: entry.domain_name,
-            preview_picture: entry.preview_picture,
-            origin_url: entry.origin_url,
-            published_at: entry.published_at,
-            published_by: entry.published_by,
-            is_public: entry.is_public,
-            uid: entry.uid,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct CreateEntry {
     pub user_id: Id,
